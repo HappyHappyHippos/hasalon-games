@@ -51,7 +51,6 @@ function play(
       level,
       opts.snap,
       opts.serverAt,
-      60,
       opts.bits ?? 0,
       opts.controllable ?? true,
     );
@@ -65,7 +64,7 @@ describe('GunMayhemPredictor', () => {
     for (const state of [{ st: 8 }, { rt: 40 }, { k: 0 }]) {
       const predictor = new GunMayhemPredictor();
       expect(
-        predictor.update(1000, level, server(state), 1000, 60, IN_RIGHT, true),
+        predictor.update(1000, level, server(state), 1000, IN_RIGHT, true),
       ).toBeNull();
       expect(predictor.active).toBe(false);
     }
@@ -148,12 +147,12 @@ describe('GunMayhemPredictor', () => {
     predictor.recordInput(IN_RIGHT, 0);
 
     // First update seeds from the snapshot; the only history is stamped then.
-    const seeded = predictor.update(1000, level, snap, 1000, 60, IN_RIGHT, true);
+    const seeded = predictor.update(1000, level, snap, 1000, IN_RIGHT, true);
     expect(seeded).not.toBeNull();
     const x = seeded!.x;
 
     // A frame later, against the same snapshot, it must keep running forwards.
-    const next = predictor.update(1000 + TICK_MS, level, snap, 1000, 60, IN_RIGHT, true);
+    const next = predictor.update(1000 + TICK_MS, level, snap, 1000, IN_RIGHT, true);
     expect(next!.x).toBeGreaterThanOrEqual(x);
   });
 
@@ -166,7 +165,7 @@ describe('GunMayhemPredictor', () => {
     play(predictor, { frames: 20, hz: 60, start: 1000, snap, serverAt: 1000 });
 
     const shoved = server({ vx: -260 });
-    const body = predictor.update(1000 + 340, level, shoved, 1000 + 340, 60, 0, true);
+    const body = predictor.update(1000 + 340, level, shoved, 1000 + 340, 0, true);
 
     expect(body!.vx).toBeLessThan(-100);
   });

@@ -780,6 +780,38 @@ strong,
   gap: 7px;
 }
 
+/* Connection quality. Pushed to the bottom of the rail — glanceable, never
+   competing with the scores above it. */
+.netbadge {
+  margin-top: auto;
+  align-self: flex-start;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+}
+
+.netbadge__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+}
+.netbadge--ok .netbadge__dot {
+  background: var(--yellow);
+}
+.netbadge--bad .netbadge__dot {
+  background: var(--red);
+}
+
+.netbadge__jitter {
+  opacity: 0.65;
+}
+
 .hudcard {
   display: flex;
   align-items: center;

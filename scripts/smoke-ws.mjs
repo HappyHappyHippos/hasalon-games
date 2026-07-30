@@ -94,11 +94,41 @@ await next(
 );
 console.log('  ✓ guest ready broadcast reached host');
 
-const sentAt = Date.now();
-host.send(JSON.stringify({ t: 'ping', ts: sentAt }));
-await next(host, (m) => m.t === 'pong', 'pong');
-const rtt = Date.now() - sentAt;
-console.log(`  ✓ round-trip ${rtt}ms`);
+/**
+ * Latency, measured properly.
+ *
+ * A single sample tells you almost nothing — it is one draw from a distribution
+ * whose *shape* is what actually decides how the game feels. Jitter is what
+ * forces the client's buffer deeper, and the deeper that buffer the further
+ * behind everyone else you are watching. A link with 60 ms median and 40 ms of
+ * jitter plays worse than a steady 100 ms one.
+ */
+const PING_SAMPLES = 40;
+const rtts = [];
+for (let i = 0; i < PING_SAMPLES; i++) {
+  const sentAt = performance.now();
+  host.send(JSON.stringify({ t: 'ping', ts: sentAt }));
+  await next(host, (m) => m.t === 'pong', 'pong');
+  rtts.push(performance.now() - sentAt);
+  await new Promise((r) => setTimeout(r, 50));
+}
+
+const percentile = (values, p) => {
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.floor((sorted.length - 1) * p))];
+};
+
+const rtt = percentile(rtts, 0.5);
+const rttMin = Math.min(...rtts);
+const rttP95 = percentile(rtts, 0.95);
+// Mean absolute deviation from the median: the same quantity the client's
+// clock tracks and sizes its jitter buffer from.
+const jitter = rtts.reduce((sum, v) => sum + Math.abs(v - rtt), 0) / rtts.length;
+
+console.log(
+  `  ✓ round-trip min ${rttMin.toFixed(0)}ms / median ${rtt.toFixed(0)}ms / ` +
+    `p95 ${rttP95.toFixed(0)}ms, jitter ${jitter.toFixed(1)}ms`,
+);
 
 // ---------------------------------------------------------------------------
 // A match, and the reload that used to end it
@@ -208,6 +238,46 @@ if (!(movedAfter > 5)) {
 }
 console.log(`  ✓ guest still moves after reloading (${movedAfter.toFixed(0)}px)`);
 
+// ---------------------------------------------------------------------------
+// Snapshot cadence
+// ---------------------------------------------------------------------------
+
+/**
+ * How evenly the server is actually sending.
+ *
+ * Snapshots are the clock the whole client renders against, so unevenness here
+ * is unevenness on everyone's screen and no amount of client-side smoothing
+ * recovers it. Two numbers, and they mean different things:
+ *
+ * - `authored` compares the `st` stamps the server puts on the frames. This is
+ *   the tick loop's own pacing, with the network removed. It should be flat.
+ * - `arrival` compares when they actually landed here, so it also carries
+ *   whatever the network and the Railway proxy did in between.
+ */
+const SPACING_SAMPLES = 60;
+const authoredAt = [];
+const arrivedAt = [];
+while (arrivedAt.length < SPACING_SAMPLES) {
+  const message = await next(host, (m) => m.t === 'snapshot', 'snapshot');
+  authoredAt.push(message.st);
+  arrivedAt.push(performance.now());
+}
+
+const gaps = (stamps) => stamps.slice(1).map((v, i) => v - stamps[i]);
+const spread = (values) => {
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const variance = values.reduce((sum, v) => sum + (v - mean) ** 2, 0) / values.length;
+  return { mean, sd: Math.sqrt(variance) };
+};
+
+const authored = spread(gaps(authoredAt));
+const arrival = spread(gaps(arrivedAt));
+
+console.log(
+  `  ✓ snapshot cadence: authored ${authored.mean.toFixed(1)}±${authored.sd.toFixed(1)}ms, ` +
+    `arrived ${arrival.mean.toFixed(1)}±${arrival.sd.toFixed(1)}ms (target 33.3ms)`,
+);
+
 host.send(JSON.stringify({ t: 'leave' }));
 reloaded.send(JSON.stringify({ t: 'leave' }));
 host.close();
@@ -215,5 +285,17 @@ reloaded.close();
 
 console.log(`\nPASS — two clients shared a room over ${wsUrl.startsWith('wss') ? 'wss' : 'ws'}.`);
 if (rtt > 150) {
-  console.log(`NOTE: ${rtt}ms is high for a 60 Hz fighter. Check the deploy region.`);
+  console.log(`NOTE: median ${rtt.toFixed(0)}ms is high for a 60 Hz fighter. Check the deploy region.`);
+}
+if (jitter > 25) {
+  console.log(
+    `NOTE: ${jitter.toFixed(0)}ms of jitter forces a deep client buffer, which costs everyone ` +
+      'latency on each other. Worth more attention than the median.',
+  );
+}
+if (authored.sd > 4) {
+  console.log(
+    `NOTE: the server's own send spacing varies by ${authored.sd.toFixed(1)}ms. That is the tick ` +
+      'loop, not the network — it should be near zero.',
+  );
 }

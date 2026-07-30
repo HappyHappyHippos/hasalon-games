@@ -36,6 +36,7 @@ export function Screen({ room, mySeat, canvasRef, hud, controls }: Props): JSX.E
           <span className="rail__round">Round {round || 1}</span>
         </div>
         <div className="rail__list">{hud}</div>
+        <NetBadge />
       </aside>
 
       <div className="screenbox">
@@ -75,6 +76,33 @@ export function Screen({ room, mySeat, canvasRef, hud, controls }: Props): JSX.E
         )}
       </div>
     </main>
+  );
+}
+
+/**
+ * Connection quality, in the corner.
+ *
+ * "The game is laggy" and "my wifi is bad" are indistinguishable from the sofa,
+ * and only one of them is anyone's to fix. The banding is on the *delay* rather
+ * than the ping, because that is what players actually experience: how far
+ * behind the present everyone else is being drawn. A steady 90 ms link plays
+ * better than a jumpy 50 ms one, and this is the readout that says so.
+ */
+function NetBadge(): JSX.Element | null {
+  const net = useStore((s) => s.net);
+  if (net.rtt <= 0) return null;
+
+  const grade = net.delay > 130 ? 'bad' : net.delay > 80 ? 'ok' : 'good';
+
+  return (
+    <div
+      className={`netbadge netbadge--${grade}`}
+      title={`Ping ${net.rtt}ms · jitter ${net.jitter}ms · others drawn ${net.delay}ms behind`}
+    >
+      <span className="netbadge__dot" />
+      <span>{net.rtt}ms</span>
+      {net.jitter >= 8 && <span className="netbadge__jitter">±{net.jitter}</span>}
+    </div>
   );
 }
 

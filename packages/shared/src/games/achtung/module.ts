@@ -33,6 +33,10 @@ export const achtungModule: GameModule = {
       'First to the target score wins the match.',
     ],
     touchSupported: true,
+    // Snapshots carry the trail points accumulated since the last one, and
+    // `makeSnapshot` drains them as it builds. A skipped snapshot is a
+    // permanent gap in that curve, so slow sockets queue rather than drop.
+    droppableSnapshots: false,
   },
 
   defaultConfig(playerCount) {

@@ -34,6 +34,9 @@ export const gunMayhemModule: GameModule = {
       'Lose all your stocks and you are out. Last one standing wins the round.',
     ],
     touchSupported: true,
+    // Every snapshot is the whole world; skipping one for a backed-up socket
+    // costs that player nothing the next one doesn't immediately restore.
+    droppableSnapshots: true,
   },
 
   defaultConfig() {

@@ -9,6 +9,18 @@ export const localInput = { turn: 0 as TurnDir };
 const LEFT_KEYS = new Set(['ArrowLeft', 'KeyA']);
 const RIGHT_KEYS = new Set(['ArrowRight', 'KeyD']);
 
+/**
+ * Re-send the current steering this often, whether or not it changed.
+ *
+ * Sending only on change is the obvious design and it has no way to recover
+ * from a lost packet: drop the one message that says "stop turning" and the
+ * curve keeps turning until you press something else. There is no periodic
+ * state to correct it, because there was never meant to be another message.
+ * Five a second costs nothing and makes every input self-healing — the same
+ * fix Gun Mayhem's input already carries.
+ */
+const RESEND_MS = 200;
+
 export interface InputController {
   destroy(): void;
 }
@@ -93,8 +105,11 @@ export function attachInput(
   surface.addEventListener('pointerup', onPointerUp);
   surface.addEventListener('pointercancel', onPointerUp);
 
+  const resend = window.setInterval(() => onChange(localInput.turn), RESEND_MS);
+
   return {
     destroy(): void {
+      window.clearInterval(resend);
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);

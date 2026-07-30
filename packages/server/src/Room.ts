@@ -5,6 +5,7 @@ import {
   ROOM_MAX_PLAYERS,
   SNAPSHOT_EVERY,
   TICK_MS,
+  encode,
   isFaceIndex,
   isHatIndex,
   sanitizeName,
@@ -20,6 +21,7 @@ import {
   type ServerMessage,
 } from '@mg/shared';
 import type { Client } from './Client';
+import { serverNow } from './serverClock';
 
 /** How long a seat is held open for someone who dropped out. */
 const DISCONNECT_GRACE_MS = 60_000;
@@ -67,10 +69,14 @@ export class Room {
   private instance: GameInstance | null = null;
   /** The last snapshot actually sent, replayed to anyone joining mid-match. */
   private lastSnapshot: GameSnapshot | null = null;
+  /** When that snapshot was authored. Replayed with it, so it stays honest about its age. */
+  private lastSnapshotAt = 0;
   private timer: NodeJS.Timeout | null = null;
   private lastTickAt = 0;
   private accumulator = 0;
   private ticksSinceSnapshot = 0;
+  /** Wall-clock moment the next tick is *due*, so scheduling error can't accumulate. */
+  private nextTickAt = 0;
 
   paused = false;
   pausedBy: string | null = null;
@@ -363,10 +369,11 @@ export class Room {
     this.clearPause();
     this.ticksSinceSnapshot = 0;
     this.accumulator = 0;
-    this.lastTickAt = Date.now();
+    this.lastTickAt = serverNow();
+    this.nextTickAt = this.lastTickAt + TICK_MS;
 
     this.broadcast({ t: 'matchStarted', room: this.view() });
-    this.timer = setInterval(() => this.loop(), TICK_MS);
+    this.scheduleNext();
   }
 
   rematch(): void {
@@ -409,7 +416,8 @@ export class Room {
     this.paused = false;
     this.pausedBy = null;
     this.pausedAt = 0;
-    this.lastTickAt = Date.now();
+    this.lastTickAt = serverNow();
+    this.nextTickAt = this.lastTickAt + TICK_MS;
     this.accumulator = 0;
   }
 
@@ -423,27 +431,56 @@ export class Room {
     this.instance.applyInput(player.id, raw);
   }
 
-  private loop(): void {
+  /**
+   * Wake for the next tick *deadline*, not `TICK_MS` from whenever we happen to
+   * be now.
+   *
+   * `setInterval(loop, TICK_MS)` is the obvious version and it is subtly wrong:
+   * `TICK_MS` is 16.666…, libuv rounds the interval down to 16 ms, and the
+   * accumulator drains at the true 16.667. The two disagree by half a
+   * millisecond per tick, so the loop periodically runs two ticks in one wake
+   * or none at all, and snapshot spacing comes out uneven instead of a steady
+   * 33.3 ms. Clients interpolate between snapshots — uneven spacing is uneven
+   * motion, on everyone's screen, permanently.
+   *
+   * Deadlines here are always computed from the previous *ideal* deadline, so
+   * scheduling error corrects itself instead of accumulating.
+   */
+  private scheduleNext(): void {
+    if (!this.instance) return;
+    this.timer = setTimeout(this.tick, Math.max(0, this.nextTickAt - serverNow()));
+  }
+
+  private readonly tick = (): void => {
+    this.timer = null;
     const instance = this.instance;
+    // Stopped between being scheduled and firing; do not re-arm.
     if (!instance) return;
 
     if (this.paused) {
-      if (Date.now() - this.pausedAt > PAUSE_MAX_MS) {
+      if (serverNow() - this.pausedAt > PAUSE_MAX_MS) {
         this.clearPause();
         this.broadcastRoom();
       } else {
         // Hold the clock still so resuming doesn't owe the sim a backlog.
-        this.lastTickAt = Date.now();
+        this.lastTickAt = serverNow();
+        this.nextTickAt = this.lastTickAt + TICK_MS;
       }
+      this.scheduleNext();
       return;
     }
 
-    const now = Date.now();
+    const now = serverNow();
     let delta = now - this.lastTickAt;
     this.lastTickAt = now;
     // After a GC pause or a suspended process, catch up a little but never
     // try to replay seconds of simulation at once.
-    if (delta > 250) delta = 250;
+    if (delta > 250) {
+      delta = 250;
+      // The schedule is meaningless after a stall that long. Restart it from
+      // now rather than sprinting through a queue of missed deadlines.
+      this.nextTickAt = now;
+    }
     this.accumulator += delta;
 
     while (this.accumulator >= TICK_MS) {
@@ -462,13 +499,26 @@ export class Room {
         return;
       }
     }
-  }
+
+    this.nextTickAt += TICK_MS;
+    // If simulating cost longer than a tick, the next deadline is already in
+    // the past. Waking at delay 0 forever would just burn the event loop for a
+    // rate we have already proven we cannot hit, so give up the lost time.
+    const after = serverNow();
+    if (this.nextTickAt <= after) this.nextTickAt = after + TICK_MS;
+    this.scheduleNext();
+  };
 
   private broadcastSnapshot(): void {
     if (!this.instance) return;
     this.ticksSinceSnapshot = 0;
     this.lastSnapshot = this.instance.snapshot();
-    this.broadcast({ t: 'snapshot', snap: this.lastSnapshot });
+    this.lastSnapshotAt = serverNow();
+
+    // Encoded once for the whole room rather than once per recipient.
+    const encoded = encode({ t: 'snapshot', snap: this.lastSnapshot, st: this.lastSnapshotAt });
+    const droppable = this.module.meta.droppableSnapshots;
+    for (const p of this.players) p.client?.sendSnapshot(encoded, droppable);
   }
 
   private endMatch(winnerSeat: number | null): void {
@@ -489,7 +539,7 @@ export class Room {
 
   private stopLoop(): void {
     if (this.timer) {
-      clearInterval(this.timer);
+      clearTimeout(this.timer);
       this.timer = null;
     }
   }
@@ -531,7 +581,8 @@ export class Room {
   }
 
   broadcast(message: ServerMessage): void {
-    for (const p of this.players) p.client?.send(message);
+    const encoded = encode(message);
+    for (const p of this.players) p.client?.sendRaw(encoded);
   }
 
   broadcastRoom(): void {
@@ -549,7 +600,15 @@ export class Room {
   sendCatchUp(player: RoomPlayer): void {
     if (this.phase !== 'playing' || !this.instance) return;
     player.client?.send({ t: 'matchStarted', room: this.view() });
-    const snap = this.lastSnapshot ?? this.instance.snapshot();
-    player.client?.send({ t: 'snapshot', snap });
+
+    // Sent with the timestamp it was *authored*, not the one it is forwarded
+    // at. It is genuinely up to a snapshot interval old, and the joiner builds
+    // its playback timeline out of these — handing it a stale world stamped
+    // "now" would skew that timeline from the very first frame.
+    if (this.lastSnapshot) {
+      player.client?.send({ t: 'snapshot', snap: this.lastSnapshot, st: this.lastSnapshotAt });
+    } else {
+      player.client?.send({ t: 'snapshot', snap: this.instance.snapshot(), st: serverNow() });
+    }
   }
 }

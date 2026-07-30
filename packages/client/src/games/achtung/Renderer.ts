@@ -20,13 +20,6 @@ import { bracket, clamp, lerp, shortestAngle } from '../../game/interpolation';
 import { localInput } from './input';
 import { trailOps, type Point } from './trail';
 
-/**
- * How far behind real time remote curves are drawn. One snapshot interval plus
- * a little slack, so ordinary network jitter never leaves us with nothing to
- * interpolate towards.
- */
-const INTERP_DELAY_MS = SNAPSHOT_EVERY * TICK_MS + 22;
-
 /** Never predict further ahead than this, however bad the connection is. */
 const MAX_PREDICT_TICKS = 22;
 
@@ -35,6 +28,29 @@ const TRAIL_SCALE = 2;
 
 const ARENA_FILL = '#12141c';
 const ARENA_EDGE = '#2b3245';
+
+/**
+ * Which way a curve was last seen steering, recovered from the angle it swept
+ * between two snapshots.
+ *
+ * Half a snapshot's worth of turn is the threshold: below that the player is
+ * near enough to straight that guessing a direction would bend the curve the
+ * wrong way, and a straight guess is the safer error.
+ */
+function inferTurn(
+  previous: AchtungSnapshot | null,
+  player: SnapshotPlayer,
+  turnRate: number,
+): TurnDir {
+  if (!previous || turnRate <= 0) return 0;
+  const before = previous.players.find((p) => p.s === player.s);
+  if (!before || before.l !== 1) return 0;
+
+  const swept = shortestAngle(before.a, player.a);
+  const threshold = (turnRate * SNAPSHOT_EVERY) / 2;
+  if (Math.abs(swept) < threshold) return 0;
+  return swept > 0 ? 1 : -1;
+}
 
 interface DeathBurst {
   x: number;
@@ -110,7 +126,10 @@ export class AchtungRenderer {
   // -------------------------------------------------------------------------
 
   private frame(now: number): void {
-    const renderTime = now - INTERP_DELAY_MS;
+    // How far behind the present remote curves are drawn — set by the feed from
+    // measured jitter rather than a fixed constant, so a choppy connection
+    // deepens the buffer instead of leaving curves with nothing to reach for.
+    const renderTime = feed.renderTime(now);
     this.bake(renderTime);
 
     const { ctx } = this.stage;
@@ -245,6 +264,22 @@ export class AchtungRenderer {
     const toSnap = found.to?.snap;
     if (fromSnap.game !== 'achtung') return null;
 
+    // Nothing newer to interpolate towards — the next packet is late. Curves
+    // are the easiest thing in either game to carry forward: constant speed, a
+    // fixed turn rate, no collision to get wrong. Replaying the sim's own
+    // `advanceMotion` for the missing ticks lands very close to what the server
+    // will turn out to have done, and beats freezing the head and snapping it
+    // forward when the packet finally lands.
+    //
+    // Which way they are steering is *not* on the wire, so it is recovered from
+    // how far they turned between the previous snapshot and this one. Holding
+    // the last angle instead would straighten out anyone mid-turn — exactly the
+    // players whose position is hardest to guess.
+    const coastTicks = Math.min(Math.round(found.overshootMs / TICK_MS), MAX_PREDICT_TICKS);
+    const previous = coastTicks > 0 ? feed.entries[found.index - 1] : undefined;
+    const previousSnap = previous?.snap.game === 'achtung' ? previous.snap : null;
+    const turnRate = turnRateFor(this.context.settings);
+
     const heads = new Map<number, Motion>();
     for (const player of fromSnap.players) {
       const next =
@@ -253,7 +288,14 @@ export class AchtungRenderer {
           : undefined;
 
       if (!next || found.alpha === 0) {
-        heads.set(player.s, { x: player.x, y: player.y, angle: player.a });
+        const motion: Motion = { x: player.x, y: player.y, angle: player.a };
+        if (coastTicks > 0 && player.l === 1) {
+          const turn = inferTurn(previousSnap, player, turnRate);
+          for (let i = 0; i < coastTicks; i++) {
+            advanceMotion(motion, turn, player.v, turnRate);
+          }
+        }
+        heads.set(player.s, motion);
       } else {
         heads.set(player.s, {
           x: lerp(player.x, next.x, found.alpha),
