@@ -1,0 +1,70 @@
+# Restores "git push is the deploy" on a self-hosted box.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Two deploys racing would have them fighting over the same working copy and
+# the same container. Queue instead, and never cancel one mid-flight.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      # ~45s of this is app.test.ts driving real WebSockets. Worth it: it is
+      # the only thing here that exercises the wire protocol end to end.
+      - run: npm test
+
+  deploy:
+    needs: test
+    # Off until the box exists. Set the repository variable DEPLOY_ENABLED to
+    # `true` once the secrets below are in place; until then this job skips
+    # cleanly rather than failing every push on a missing host.
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build and restart on the box
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -eu
+            cd ~/hasalon-games
+            git fetch origin main
+            git reset --hard origin/main
+            docker compose -f deploy/docker-compose.yml up -d --build
+            docker image prune -f
+
+      # Liveness only. `/healthz` returns byte-identical JSON across builds, so
+      # it can tell you the service is up and cannot tell you *which* build is
+      # up — that mistake cost a previous session an hour of polling a stale
+      # instance. To check the version, probe the protocol: send a v-N `join`
+      # for a nonexistent room and see whether it answers NO_SUCH_ROOM (current)
+      # or BAD_VERSION (stale). `npm run smoke` does this properly.
+      - name: Verify the service is serving
+        run: |
+          set -eu
+          # The container restarts behind Caddy; give it a moment to come up.
+          for i in $(seq 1 30); do
+            if curl -fsS --max-time 5 "https://${{ secrets.DEPLOY_HOST_NAME }}/healthz" > /tmp/health; then
+              cat /tmp/health
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "healthz never came back" >&2
+          exit 1

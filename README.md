@@ -150,6 +150,14 @@ game-agnostic — `Room.ts` only ever talks to the `GameInstance` interface.
 Any host that runs a Docker image and supports WebSockets works. The image
 builds the client, bundles the server, and serves both on `PORT` (default 3000).
 
+> **Moving to Israel.** Every player is in Israel and Railway has no Middle East
+> region — EU West measures ~114 ms median round trip, against ~10–20 ms for a
+> box in-country. That gap is worth more than any netcode change, because
+> prediction and jitter buffering can only *hide* distance, never remove it.
+> [`deploy/README.md`](deploy/README.md) is the runbook for a self-hosted box
+> (Oracle Cloud's free Jerusalem region, or Vultr Tel Aviv); the Railway deploy
+> below stays up until that is proven.
+
 ### Live deployment (Railway)
 
 | | |
