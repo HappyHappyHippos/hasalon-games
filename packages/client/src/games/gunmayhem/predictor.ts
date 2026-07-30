@@ -84,6 +84,9 @@ export class GunMayhemPredictor {
   /** Set for the one frame in which the body had to be teleported. */
   resynced = false;
 
+  /** A jump predicted but not yet reported to the renderer. */
+  private jumped: 'ground' | 'air' | null = null;
+
   /** Whether the local character is currently simulated rather than followed. */
   get active(): boolean {
     return this.body !== null;
@@ -103,6 +106,17 @@ export class GunMayhemPredictor {
     this.inputs.length = 0;
     this.prevBits = 0;
     this.resynced = false;
+    this.jumped = null;
+  }
+
+  /**
+   * A jump predicted since the last call, and whether it was an air jump.
+   * Reading it clears it.
+   */
+  consumeJump(): 'ground' | 'air' | null {
+    const jumped = this.jumped;
+    this.jumped = null;
+    return jumped;
   }
 
   /** Called whenever the local button mask changes, so replays are faithful. */
@@ -124,7 +138,6 @@ export class GunMayhemPredictor {
     level: Level,
     server: GmSnapshotPlayer,
     serverAt: number,
-    rttMs: number,
     bits: number,
     controllable: boolean,
   ): MoveBody | null {
@@ -137,12 +150,12 @@ export class GunMayhemPredictor {
     }
 
     if (!this.body) {
-      this.seed(server, level, now, serverAt, rttMs, bits, controllable);
+      this.seed(server, level, now, serverAt, bits, controllable);
       return this.body;
     }
 
     this.advance(now, level, bits, controllable);
-    this.reconcile(server, serverAt, rttMs, level, now, bits, controllable);
+    this.reconcile(server, serverAt, level, now, bits, controllable);
     return this.body;
   }
 
@@ -167,7 +180,17 @@ export class GunMayhemPredictor {
       const tickBits = this.bitsAt(this.simTime, bits);
       const edges = tickBits & ~this.prevBits;
       this.prevBits = tickBits;
-      stepMovement(this.body!, toMoveInput(tickBits, edges, controllable), level, DT, this.mods);
+      const result = stepMovement(
+        this.body!,
+        toMoveInput(tickBits, edges, controllable),
+        level,
+        DT,
+        this.mods,
+      );
+      // The jump we just predicted. Held for the renderer so it can make the
+      // sound on the frame the character actually leaves the ground, rather
+      // than a round trip later when the server's event confirms it.
+      if (result.jumped) this.jumped = result.jumped;
       this.ageBuffs();
       this.stamp(this.simTime);
     }
@@ -204,7 +227,6 @@ export class GunMayhemPredictor {
   private reconcile(
     server: GmSnapshotPlayer,
     serverAt: number,
-    rttMs: number,
     level: Level,
     now: number,
     bits: number,
@@ -218,9 +240,13 @@ export class GunMayhemPredictor {
     // a 144 Hz player pulls at the same error five times over and oscillates.
     if (serverAt === this.reconciledAt) return;
 
-    // The snapshot describes the world about half a round trip before it
-    // reached us, so that is the moment of our own history to compare against.
-    const past = this.positionAt(serverAt - rttMs / 2);
+    // `serverAt` is when the server actually authored this snapshot, expressed
+    // on our clock, so it is directly the moment of our own history to compare
+    // against. It used to be estimated as `arrivalTime - rtt/2`, which folded
+    // every error in the RTT estimate into the comparison — and a comparison
+    // made against the wrong instant produces a correction that is wrong by
+    // however far we moved in the meantime.
+    const past = this.positionAt(serverAt);
     if (!past) return;
     this.reconciledAt = serverAt;
 
@@ -240,7 +266,7 @@ export class GunMayhemPredictor {
     const distance = Math.hypot(dx, dy);
 
     if (distance > HARD_RESYNC_DISTANCE) {
-      this.seed(server, level, now, serverAt, rttMs, bits, controllable);
+      this.seed(server, level, now, serverAt, bits, controllable);
       this.resynced = true;
       return;
     }
@@ -267,7 +293,6 @@ export class GunMayhemPredictor {
     level: Level,
     now: number,
     serverAt: number,
-    rttMs: number,
     bits: number,
     controllable: boolean,
   ): void {
@@ -287,16 +312,15 @@ export class GunMayhemPredictor {
 
     this.adoptBuffs(server);
 
-    const serverTime = serverAt - rttMs / 2;
-    const catchUp = clampInt(Math.round((now - serverTime) / TICK_MS), 0, MAX_CATCHUP_TICKS);
+    const catchUp = clampInt(Math.round((now - serverAt) / TICK_MS), 0, MAX_CATCHUP_TICKS);
 
     this.body = body;
-    this.positions = [{ at: serverTime, x: body.x, y: body.y, vx: body.vx, vy: body.vy }];
+    this.positions = [{ at: serverAt, x: body.x, y: body.y, vx: body.vx, vy: body.vy }];
 
-    let previous = this.bitsAt(serverTime, bits);
-    let at = serverTime;
+    let previous = this.bitsAt(serverAt, bits);
+    let at = serverAt;
     for (let i = 0; i < catchUp; i++) {
-      at = serverTime + (i + 1) * TICK_MS;
+      at = serverAt + (i + 1) * TICK_MS;
       const tickBits = this.bitsAt(at, bits);
       stepMovement(body, toMoveInput(tickBits, tickBits & ~previous, controllable), level, DT, this.mods);
       this.ageBuffs();

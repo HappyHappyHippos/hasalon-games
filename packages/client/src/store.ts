@@ -36,6 +36,21 @@ export interface Hud {
   players: HudPlayer[];
 }
 
+/**
+ * Connection quality, for the readout in the corner.
+ *
+ * Worth showing because "the game is laggy" and "my connection is bad" look
+ * identical from the sofa, and only one of them is worth reporting. `delay` is
+ * how far behind the present other players are being drawn — the number that
+ * actually decides how the match feels, and the one that grows when `jitter`
+ * does.
+ */
+export interface NetStats {
+  rtt: number;
+  jitter: number;
+  delay: number;
+}
+
 export const emptyHud: Hud = { phase: 'countdown', round: 0, countdown: 0, players: [] };
 
 /**
@@ -53,6 +68,7 @@ export interface AppState {
   pendingCode: string;
   busy: boolean;
   hud: Hud;
+  net: NetStats;
   matchWinnerSeat: number | null;
   /** Sound effects. Music is muted separately — most people want one, not both. */
   muted: boolean;
@@ -67,6 +83,7 @@ export interface AppState {
   setPendingCode(code: string): void;
   setBusy(busy: boolean): void;
   setHud(hud: Hud): void;
+  setNet(net: NetStats): void;
   setMuted(muted: boolean): void;
   setMusicMuted(muted: boolean): void;
   setMusicVolume(volume: number): void;
@@ -161,6 +178,7 @@ export const useStore = create<AppState>((set) => ({
   pendingCode: '',
   busy: false,
   hud: emptyHud,
+  net: { rtt: 0, jitter: 0, delay: 0 },
   matchWinnerSeat: null,
   muted: false,
   musicMuted: false,
@@ -185,6 +203,7 @@ export const useStore = create<AppState>((set) => ({
   setPendingCode: (pendingCode) => set({ pendingCode }),
   setBusy: (busy) => set({ busy }),
   setHud: (hud) => set({ hud }),
+  setNet: (net) => set({ net }),
   setMuted: (muted) => set({ muted }),
   setMusicMuted: (musicMuted) => set({ musicMuted }),
   setMusicVolume: (musicVolume) => set({ musicVolume }),

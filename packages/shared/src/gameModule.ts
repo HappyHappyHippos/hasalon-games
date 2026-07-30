@@ -33,6 +33,15 @@ export interface GameMeta {
   rules: string[];
   /** False for games that genuinely need a keyboard. */
   touchSupported: boolean;
+  /**
+   * True when every snapshot fully describes the world, so a backpressured
+   * socket can have one skipped and lose nothing — the next one supersedes it.
+   *
+   * False for games whose snapshots carry *incremental* state that is drained
+   * as it is sent (Achtung's trail points). There a dropped snapshot is a
+   * permanent hole in the world, so a slow socket has to be allowed to queue.
+   */
+  droppableSnapshots: boolean;
 }
 
 /**

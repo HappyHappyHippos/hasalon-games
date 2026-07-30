@@ -1,4 +1,4 @@
-import { SNAPSHOT_EVERY, TICK_MS, colorFor } from '@mg/shared';
+import { colorFor } from '@mg/shared';
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
@@ -25,20 +25,10 @@ import { bracket, lerp } from '../../game/interpolation';
 import { PositionSmoother } from '../../game/PositionSmoother';
 import { gmInput } from './input';
 import { GunMayhemPredictor } from './predictor';
+import { LocalShotFx } from './localFx';
 import { drawBackdrop, drawScenery } from './stageArt';
 import { drawSlash, drawWeapon, muzzleX, recoilStrength } from './weaponArt';
 
-/**
- * How far behind real time remote entities are drawn.
- *
- * Two whole snapshot intervals plus a margin. One interval plus a sliver was
- * the obvious choice and it is the wrong one: it leaves ~20 ms of slack, and
- * any packet later than that has nothing to interpolate towards, so every
- * remote player freezes for a frame and then jumps. Over a real network that
- * happens constantly. The cost is ~30 ms of extra latency on *other* people's
- * characters only — your own is predicted and unaffected.
- */
-const INTERP_DELAY_MS = SNAPSHOT_EVERY * TICK_MS * 2 + 20;
 const INK = '#14110f';
 
 interface Particle {
@@ -100,6 +90,8 @@ export class GunMayhemRenderer {
   private stage: CanvasStage;
   private context: GunMayhemRenderContext;
   private predictor = new GunMayhemPredictor();
+  /** Plays your own gunfire on the trigger press rather than the server's echo. */
+  private localFx = new LocalShotFx();
   /** Absorbs the jump when your own character changes which clock it is on. */
   private smoother = new PositionSmoother();
   private wasPredicting = false;
@@ -161,7 +153,12 @@ export class GunMayhemRenderer {
   // -------------------------------------------------------------------------
 
   private frame(now: number): void {
-    const renderTime = now - INTERP_DELAY_MS;
+    // How far behind the present remote entities are drawn. The feed sets this
+    // from measured jitter rather than a constant — on a clean link it is
+    // barely more than a snapshot interval, and it deepens on its own when the
+    // network gets choppy. Only *other* people's characters pay it; yours is
+    // predicted.
+    const renderTime = feed.renderTime(now);
     const latest = feed.latest;
     const latestSnap = latest?.snap;
     if (latestSnap && latestSnap.game === 'gunmayhem') {
@@ -196,8 +193,8 @@ export class GunMayhemRenderer {
       this.drawPowerups(view.latest, now);
       this.drawCrates(view.latest);
       this.drawBombs(view.latest, now);
-      this.drawBullets(view.latest, now, latest?.at ?? now);
-      this.drawPlayers(view, now, latest?.at ?? now);
+      this.drawBullets(view.latest, now, latest?.serverAt ?? now);
+      this.drawPlayers(view, now, latest?.serverAt ?? now);
     }
 
     this.drawParticles();
@@ -287,6 +284,28 @@ export class GunMayhemRenderer {
   // Entities
   // -------------------------------------------------------------------------
 
+  /**
+   * Everything a shot looks and sounds like, in one place.
+   *
+   * Called from two directions — the server's `shot` event for other people,
+   * and the local trigger press for your own — and they must be
+   * indistinguishable, or your gun would read differently from everyone else's.
+   */
+  private playShot(seat: number, kind: WeaponKind, x: number, y: number, dir: 1 | -1): void {
+    sfx.shoot(kind);
+    const strength = recoilStrength(kind);
+    this.swings.set(seat, { amount: 1, kind, hit: false });
+
+    // Muzzle flash and smoke, both scaled by how big the gun is.
+    const flashX = x + dir * (muzzleX(kind) - PLAYER_HALF_W);
+    this.spawnParticles(flashX, y, 4 + Math.round(strength * 8), '#fff3c4', dir * 260, 120 + strength * 220);
+    this.spawnParticles(flashX, y, 3, '#b9b3a6', dir * 90, 60);
+
+    // The heavy weapons thump the camera. The pistol and SMG do not, or
+    // full-auto fire would shake the screen continuously.
+    if (strength > 0.5) this.shake = Math.max(this.shake, strength * 9);
+  }
+
   private interpolate(renderTime: number): InterpolatedView | null {
     const found = bracket(feed.entries, renderTime);
     if (!found) return null;
@@ -296,13 +315,22 @@ export class GunMayhemRenderer {
     const toSnap = found.to?.snap;
     const next = toSnap && toSnap.game === 'gunmayhem' ? toSnap : null;
 
+    // Nothing newer to reach for: the next packet is late. Coast on last known
+    // velocity for a moment instead of freezing — a character stopped dead in
+    // mid-air and then teleporting is what reads as rubber-banding, and over
+    // ~100 ms a straight-line guess is usually indistinguishable from the truth.
+    // Ballistic only, deliberately: running real physics here would need level
+    // collision, and a wrong guess that tunnels through a platform looks far
+    // worse than one that drifts a few pixels.
+    const coast = found.overshootMs / 1000;
+
     const bodies = new Map<number, DrawnPlayer>();
     for (const player of fromSnap.players) {
       const after = next?.players.find((p) => p.s === player.s);
       const alpha = after ? found.alpha : 0;
       bodies.set(player.s, {
-        x: after ? lerp(player.x, after.x, alpha) : player.x,
-        y: after ? lerp(player.y, after.y, alpha) : player.y,
+        x: after ? lerp(player.x, after.x, alpha) : player.x + player.vx * coast,
+        y: after ? lerp(player.y, after.y, alpha) : player.y + player.vy * coast,
         facing: player.f,
         onGround: player.g === 1,
         vx: player.vx,
@@ -340,14 +368,14 @@ export class GunMayhemRenderer {
         // Prediction runs against the *newest* server state — it is simulating
         // forward from now, not from the delayed render time.
         const server = latest.players.find((p) => p.s === player.s) ?? player;
+        const controllable = latest.phase === 'playing';
         const predicted = this.predictor.update(
           now,
           this.level,
           server,
           latestAt,
-          feed.rttMs,
           gmInput.bits,
-          latest.phase === 'playing',
+          controllable,
         );
         if (predicted) {
           predicting = true;
@@ -359,6 +387,17 @@ export class GunMayhemRenderer {
             vx: predicted.vx,
             vy: predicted.vy,
           };
+
+          // Read after stepping, so the sound lands on the frame the character
+          // leaves the ground rather than the one after.
+          const jumped = this.predictor.consumeJump();
+          if (jumped) sfx.jump(jumped === 'air');
+
+          // Same idea for the gun. Both are drawn from the predicted body, so
+          // the flash is at the barrel the player can see, not where the server
+          // last reported them.
+          const shot = this.localFx.update(now, latest.tick, server, body, gmInput.bits, controllable);
+          if (shot) this.playShot(player.s, shot.kind, shot.x, shot.y, shot.dir);
         }
       }
       if (!body) {
@@ -873,18 +912,11 @@ export class GunMayhemRenderer {
     for (const event of snap.events) {
       switch (event.t) {
         case 'shot': {
-          sfx.shoot(event.kind);
-          const strength = recoilStrength(event.kind);
-          this.swings.set(event.seat, { amount: 1, kind: event.kind, hit: false });
-
-          // Muzzle flash and smoke, both scaled by how big the gun is.
-          const flashX = event.x + event.dir * (muzzleX(event.kind) - PLAYER_HALF_W);
-          this.spawnParticles(flashX, event.y, 4 + Math.round(strength * 8), '#fff3c4', event.dir * 260, 120 + strength * 220);
-          this.spawnParticles(flashX, event.y, 3, '#b9b3a6', event.dir * 90, 60);
-
-          // The heavy weapons thump the camera. The pistol and SMG do not, or
-          // full-auto fire would shake the screen continuously.
-          if (strength > 0.5) this.shake = Math.max(this.shake, strength * 9);
+          // Our own shots have already been drawn and heard, the instant the
+          // trigger went down. Drawing them again a round trip later is a
+          // double flash and a double bang.
+          if (event.seat === this.context.mySeat && this.localFx.consume(now)) break;
+          this.playShot(event.seat, event.kind, event.x, event.y, event.dir);
           break;
         }
         case 'stab': {
@@ -938,7 +970,12 @@ export class GunMayhemRenderer {
           this.shake = Math.max(this.shake, 10);
           break;
         case 'jump':
-          if (event.seat === this.context.mySeat) sfx.jump(event.double);
+          // Only other people's. Your own jump is predicted, so the character
+          // leaves the ground on the frame you press it — waiting a round trip
+          // to make the sound puts the two visibly out of step. `drawPlayers`
+          // plays yours off the prediction instead.
+          if (event.seat !== this.context.mySeat) break;
+          if (!this.predictor.active) sfx.jump(event.double);
           break;
         case 'pickup':
           sfx.pickup();

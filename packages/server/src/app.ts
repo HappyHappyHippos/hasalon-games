@@ -15,10 +15,16 @@ import { Client } from './Client';
 import { RoomManager } from './RoomManager';
 import type { Room, RoomPlayer } from './Room';
 import { serveStatic } from './static';
+import { serverNow } from './serverClock';
 
 /** Above this many messages per second a socket is assumed to be misbehaving. */
 const MAX_MESSAGES_PER_SECOND = 200;
-const HEARTBEAT_MS = 30_000;
+/**
+ * A socket that has silently died is detected somewhere between one and two of
+ * these. At 30 s that was up to a minute of a room broadcasting 30 snapshots a
+ * second into a hole, and up to a minute before the seat freed up.
+ */
+const HEARTBEAT_MS = 8_000;
 
 export interface AppOptions {
   /** Directory of the built client. Missing in dev, where Vite serves it. */
@@ -146,7 +152,9 @@ export function createApp(options: AppOptions): App {
         handleResume(client, message.v, message.code, message.playerId, message.token);
         return;
       case 'ping':
-        client.send({ t: 'pong', ts: message.ts, serverTime: Date.now() });
+        // Same clock as `snapshot.st`, or the client's offset estimate and its
+        // snapshot timeline would be measuring two different things.
+        client.send({ t: 'pong', ts: message.ts, serverTime: serverNow() });
         return;
       default:
         break;

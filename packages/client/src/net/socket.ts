@@ -10,10 +10,23 @@ import {
   type ServerMessage,
 } from '@mg/shared';
 import { feed } from './feed';
+import { clock } from './clock';
+import { delayed, readNetSim } from './netsim';
 import { sfx } from '../audio';
 import { loadSession, saveSession, useStore, type Hud, type HudPlayer } from '../store';
 
-const PING_INTERVAL_MS = 2000;
+/**
+ * Ping fast at first, then back off.
+ *
+ * The clock offset is only as good as the samples behind it, and until it is
+ * good the whole playback timeline is wrong. Waiting a full interval per sample
+ * meant the opening seconds of every match — the countdown and the first
+ * exchange — ran on an estimate that had barely converged. Twelve samples in
+ * the first three seconds fixes that, and costs a dozen 30-byte frames.
+ */
+const PING_FAST_INTERVAL_MS = 250;
+const PING_FAST_COUNT = 12;
+const PING_INTERVAL_MS = 1000;
 const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
 /** The HUD only needs a few updates a second; the canvas has the rest. */
@@ -30,7 +43,11 @@ class GameSocket {
   private reconnectAttempts = 0;
   private reconnectTimer: number | null = null;
   private pingTimer: number | null = null;
+  private pingsSent = 0;
   private lastHudAt = 0;
+  /** Dev only, via `?netsim=delay,jitter`. Null in production builds. */
+  private readonly netsim = readNetSim();
+  private sendDelayed: ((encoded: string) => void) | null = null;
   private closedByUs = false;
   private lastCountdown = 0;
 
@@ -47,6 +64,15 @@ class GameSocket {
 
     const ws = new WebSocket(socketUrl());
     this.ws = ws;
+
+    // A new socket may well have a different path and a different clock offset;
+    // carrying the old estimate over would place the first snapshots wrong.
+    clock.reset();
+    this.sendDelayed = this.netsim
+      ? delayed<string>(this.netsim, (encoded) => {
+          if (ws.readyState === WebSocket.OPEN) ws.send(encoded);
+        })
+      : null;
 
     ws.onopen = () => {
       this.reconnectAttempts = 0;
@@ -71,6 +97,10 @@ class GameSocket {
       this.startPinging();
     };
 
+    const deliver = this.netsim
+      ? delayed<ServerMessage>(this.netsim, (message) => this.handle(message))
+      : (message: ServerMessage) => this.handle(message);
+
     ws.onmessage = (event) => {
       let message: ServerMessage;
       try {
@@ -78,7 +108,7 @@ class GameSocket {
       } catch {
         return;
       }
-      this.handle(message);
+      deliver(message);
     };
 
     ws.onclose = () => {
@@ -105,20 +135,36 @@ class GameSocket {
 
   private startPinging(): void {
     this.stopPinging();
-    this.pingTimer = window.setInterval(() => {
-      this.raw({ t: 'ping', ts: performance.now() });
-    }, PING_INTERVAL_MS);
+    this.pingsSent = 0;
+
+    // Measure immediately rather than waiting out the first interval — the
+    // renderers are already drawing by then.
+    this.raw({ t: 'ping', ts: performance.now() });
+
+    const schedule = (): void => {
+      const interval =
+        this.pingsSent < PING_FAST_COUNT ? PING_FAST_INTERVAL_MS : PING_INTERVAL_MS;
+      this.pingTimer = window.setTimeout(() => {
+        this.pingsSent += 1;
+        this.raw({ t: 'ping', ts: performance.now() });
+        schedule();
+      }, interval);
+    };
+    schedule();
   }
 
   private stopPinging(): void {
     if (this.pingTimer !== null) {
-      window.clearInterval(this.pingTimer);
+      window.clearTimeout(this.pingTimer);
       this.pingTimer = null;
     }
   }
 
   private raw(message: ClientMessage): void {
-    if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(encode(message));
+    if (this.ws?.readyState !== WebSocket.OPEN) return;
+    const encoded = encode(message);
+    if (this.sendDelayed) this.sendDelayed(encoded);
+    else this.ws.send(encoded);
   }
 
   /** Send now if connected, otherwise once the socket opens. */
@@ -217,7 +263,7 @@ class GameSocket {
         return;
 
       case 'snapshot':
-        feed.push(message.snap);
+        feed.push(message.snap, message.st);
         this.mirrorHud(message.snap);
         return;
 
@@ -227,7 +273,7 @@ class GameSocket {
         return;
 
       case 'pong':
-        feed.observeRtt(performance.now() - message.ts);
+        clock.observe(message.ts, message.serverTime, performance.now());
         return;
 
       case 'error': {
@@ -251,6 +297,16 @@ class GameSocket {
     const isTransition = snap.events.length > 0;
     if (!isTransition && now - this.lastHudAt < HUD_INTERVAL_MS) return;
     this.lastHudAt = now;
+
+    // Rides the HUD throttle rather than getting its own path. These change
+    // slowly and are displayed as whole milliseconds; pushing them at the
+    // snapshot rate would re-render the tree 30 times a second to show the
+    // same number.
+    useStore.getState().setNet({
+      rtt: Math.round(feed.rttMs),
+      jitter: Math.round(feed.jitterMs),
+      delay: Math.round(feed.delayMs),
+    });
 
     const countdown =
       snap.phase === 'countdown' ? Math.ceil(snap.phaseTicks / TICK_RATE) : 0;

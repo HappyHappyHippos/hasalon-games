@@ -2,7 +2,7 @@ import type { GameConfig, GameId, GameSnapshot } from './gameModule';
 import type { RoomView } from './room';
 
 /** Bump when the message shapes change so stale tabs fail loudly, not weirdly. */
-export const PROTOCOL_VERSION = 3;
+export const PROTOCOL_VERSION = 4;
 
 export const WS_PATH = '/ws';
 
@@ -66,7 +66,15 @@ export type ServerMessage =
   /** Sent once on a successful create/join/resume. */
   | { t: 'welcome'; room: RoomView; playerId: string; token: string; seat: number }
   | { t: 'room'; room: RoomView }
-  | { t: 'snapshot'; snap: GameSnapshot }
+  /**
+   * `st` is when the server *authored* this snapshot, on the same clock as
+   * `pong.serverTime`. The client places snapshots on a timeline built from
+   * these rather than from arrival time — otherwise playback speed tracks
+   * packet delivery speed, and every millisecond of network jitter becomes a
+   * millisecond of warped motion. A snapshot replayed to a late joiner keeps
+   * its original `st`, because it genuinely is that old.
+   */
+  | { t: 'snapshot'; snap: GameSnapshot; st: number }
   /** Seats are assigned; `room.players[].seat` carries who is where. */
   | { t: 'matchStarted'; room: RoomView }
   | { t: 'matchEnded'; room: RoomView; winnerSeat: number | null }
