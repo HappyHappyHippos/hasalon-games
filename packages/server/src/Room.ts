@@ -12,6 +12,7 @@ import {
   type GameId,
   type GameInstance,
   type GameModule,
+  type GameSnapshot,
   type Identity,
   type PlayerView,
   type RoomPhase,
@@ -64,6 +65,8 @@ export class Room {
   private settingsByGame: Record<GameId, GameConfig>;
 
   private instance: GameInstance | null = null;
+  /** The last snapshot actually sent, replayed to anyone joining mid-match. */
+  private lastSnapshot: GameSnapshot | null = null;
   private timer: NodeJS.Timeout | null = null;
   private lastTickAt = 0;
   private accumulator = 0;
@@ -160,6 +163,10 @@ export class Room {
     player.disconnectedAt = null;
     this.emptySince = null;
 
+    // The socket that reconnected is a fresh controller — most importantly its
+    // input sequence counter has restarted — so the sim must forget the old one.
+    this.instance?.resetInput(player.id);
+
     client.roomCode = this.code;
     client.playerId = player.id;
     return player;
@@ -170,8 +177,9 @@ export class Room {
     if (!player) return;
     player.client = null;
     player.disconnectedAt = Date.now();
-    // Freeze their controls rather than yanking them out of a live round.
-    this.instance?.applyInput(player.id, null);
+    // Let go of their buttons rather than yanking them out of a live round —
+    // otherwise someone who drops mid-sprint keeps running for the full grace.
+    this.instance?.resetInput(player.id);
     this.resumeIfPausedBy(player.id);
     this.reassignHostIfNeeded();
     this.updateEmptiness();
@@ -309,24 +317,42 @@ export class Room {
   }
 
   /**
-   * Same seats, same settings, round one again. Distinct from `rematch`, which
-   * drops everyone back to the lobby — this is the "that round was a write-off"
+   * Same settings, round one again. Distinct from `rematch`, which drops
+   * everyone back to the lobby — this is the "that round was a write-off"
    * button, and it works both mid-match and from the match-over card.
+   *
+   * Existing players keep their seats, in order, and anyone who has been
+   * watching gets any seat that is left. Seats are otherwise only handed out at
+   * `start`, so without this someone who lost their session mid-match — or who
+   * followed the link late — would spectate with dead controls until the whole
+   * match ended, with no way for the host to let them in.
    */
   restart(): boolean {
+    const max = this.module.meta.maxPlayers;
     const seated = this.players
-      .filter((p) => p.seat >= 0)
+      .filter((p) => p.seat >= 0 && p.client !== null)
       .sort((a, b) => a.seat - b.seat);
+    for (const p of this.players) {
+      if (seated.length >= max) break;
+      if (p.seat < 0 && p.client !== null) seated.push(p);
+    }
     if (seated.length < this.module.meta.minPlayers) return false;
 
     this.stopLoop();
-    for (const p of seated) p.score = 0;
+    for (const p of this.players) {
+      p.seat = -1;
+      p.score = 0;
+    }
+    seated.forEach((p, i) => {
+      p.seat = i;
+    });
     this.beginMatch(seated);
     return true;
   }
 
   /** The half of starting a match that `start` and `restart` agree on. */
   private beginMatch(seated: RoomPlayer[]): void {
+    this.lastSnapshot = null;
     this.instance = this.module.create(
       seated.map((p) => ({ id: p.id, name: p.name, colorIndex: p.colorIndex })),
       this.settings,
@@ -346,6 +372,7 @@ export class Room {
   rematch(): void {
     this.stopLoop();
     this.instance = null;
+    this.lastSnapshot = null;
     this.phase = 'lobby';
     this.clearPause();
     for (const p of this.players) {
@@ -440,7 +467,8 @@ export class Room {
   private broadcastSnapshot(): void {
     if (!this.instance) return;
     this.ticksSinceSnapshot = 0;
-    this.broadcast({ t: 'snapshot', snap: this.instance.snapshot() });
+    this.lastSnapshot = this.instance.snapshot();
+    this.broadcast({ t: 'snapshot', snap: this.lastSnapshot });
   }
 
   private endMatch(winnerSeat: number | null): void {
@@ -510,11 +538,18 @@ export class Room {
     this.broadcast({ t: 'room', room: this.view() });
   }
 
-  /** Bring a (re)joining socket fully up to date in one go. */
+  /**
+   * Bring a (re)joining socket fully up to date in one go.
+   *
+   * This replays the *last broadcast* snapshot rather than taking a fresh one.
+   * `snapshot()` drains the event queue, so asking for one here would quietly
+   * steal that tick's hits, deaths and shots from everyone else's next packet —
+   * one person reconnecting would eat another person's kill effects.
+   */
   sendCatchUp(player: RoomPlayer): void {
-    if (this.phase === 'playing' && this.instance) {
-      player.client?.send({ t: 'matchStarted', room: this.view() });
-      player.client?.send({ t: 'snapshot', snap: this.instance.snapshot() });
-    }
+    if (this.phase !== 'playing' || !this.instance) return;
+    player.client?.send({ t: 'matchStarted', room: this.view() });
+    const snap = this.lastSnapshot ?? this.instance.snapshot();
+    player.client?.send({ t: 'snapshot', snap });
   }
 }

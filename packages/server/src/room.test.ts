@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { GameConfig, Identity, ServerMessage } from '@mg/shared';
-import { Room } from './Room';
+import { TICK_MS } from '@mg/shared';
+import type { GameConfig, GameInstance, GameSnapshot, Identity, ServerMessage } from '@mg/shared';
+import { COUNTDOWN_TICKS, IN_RIGHT } from '@mg/shared/gunmayhem';
+import { Room, type RoomPlayer } from './Room';
 import { Client } from './Client';
 
 /** Nobody here is testing hats, so they stay at the default. */
@@ -372,5 +374,163 @@ describe('Room restart', () => {
 
     expect(room.restart()).toBe(false);
     expect(room.phase).toBe('lobby');
+  });
+
+  it('deals in anyone who was left watching', () => {
+    // Seats are otherwise only handed out at `start`, so someone who lost their
+    // session mid-match — or followed the link late — would sit out with dead
+    // controls until the whole match ended. Restart is the way back in.
+    const room = new Room('TEST');
+    room.setGame('gunmayhem');
+    const a = room.addPlayer(fakeClient(), identity('A', 0))!;
+    const b = room.addPlayer(fakeClient(), identity('B', 1))!;
+    room.setReady(a, true);
+    room.setReady(b, true);
+    expect(room.start()).toBe(true);
+
+    const latecomer = room.addPlayer(fakeClient(), identity('C', 2))!;
+    expect(latecomer.seat).toBe(-1);
+
+    expect(room.restart()).toBe(true);
+    expect(a.seat).toBe(0);
+    expect(b.seat).toBe(1);
+    expect(latecomer.seat).toBe(2);
+
+    room.dispose();
+  });
+
+  it('does not seat someone who has disconnected', () => {
+    const room = new Room('TEST');
+    room.setGame('gunmayhem');
+    const a = room.addPlayer(fakeClient(), identity('A', 0))!;
+    const b = room.addPlayer(fakeClient(), identity('B', 1))!;
+    const ghostClient = fakeClient();
+    const ghost = room.addPlayer(ghostClient, identity('C', 2))!;
+    room.setReady(a, true);
+    room.setReady(b, true);
+    expect(room.start()).toBe(true);
+
+    room.detach(ghostClient);
+    expect(room.restart()).toBe(true);
+    expect(ghost.seat).toBe(-1);
+
+    room.dispose();
+  });
+});
+
+describe('Room input handover', () => {
+  /** A started Gun Mayhem match; `p` is seat 0. */
+  function match(): { room: Room; client: ReturnType<typeof fakeClient>; p: RoomPlayer } {
+    const room = new Room('TEST');
+    room.setGame('gunmayhem');
+    const client = fakeClient();
+    const p = room.addPlayer(client, identity('A', 0))!;
+    const b = room.addPlayer(fakeClient(), identity('B', 1))!;
+    room.setReady(p, true);
+    room.setReady(b, true);
+    expect(room.start()).toBe(true);
+    return { room, client, p };
+  }
+
+  /**
+   * Read a seat's position out of the last broadcast snapshot. Deliberately not
+   * `instance.snapshot()`, which drains the event queue and would change the
+   * behaviour the last test here is checking.
+   */
+  function playerX(room: Room, seat: number): number {
+    const snap = (room as unknown as { lastSnapshot: GameSnapshot | null }).lastSnapshot;
+    if (!snap || snap.game !== 'gunmayhem') throw new Error('no gunmayhem snapshot yet');
+    const player = snap.players.find((p) => p.s === seat);
+    if (!player) throw new Error(`nobody in seat ${seat}`);
+    return player.x;
+  }
+
+  /** Nobody can act during the countdown, so every test here has to clear it. */
+  function skipCountdown(room: Room): void {
+    vi.advanceTimersByTime((COUNTDOWN_TICKS + 6) * TICK_MS);
+    const snap = (room as unknown as { lastSnapshot: GameSnapshot | null }).lastSnapshot;
+    expect(snap?.phase).toBe('playing');
+  }
+
+  it('lets go of a disconnected player’s buttons', () => {
+    vi.useFakeTimers();
+    try {
+      const { room, client, p } = match();
+      skipCountdown(room);
+
+      // Hold right, and confirm they really are running before we cut them off.
+      room.input(p, { seq: 1, bits: IN_RIGHT });
+      const start = playerX(room, p.seat);
+      vi.advanceTimersByTime(300);
+      const running = playerX(room, p.seat);
+      expect(running).toBeGreaterThan(start + 20);
+
+      room.detach(client);
+      vi.advanceTimersByTime(300);
+      const coasted = playerX(room, p.seat);
+      vi.advanceTimersByTime(300);
+
+      // Friction stops them within a few frames. Before the fix the held mask
+      // survived the disconnect and they ran for the full 60-second grace.
+      expect(playerX(room, p.seat) - coasted).toBeLessThan(1);
+      expect(coasted - running).toBeLessThan(running - start);
+
+      room.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('accepts input from a reconnected client that restarted its sequence', () => {
+    vi.useFakeTimers();
+    try {
+      const { room, client, p } = match();
+      skipCountdown(room);
+
+      for (let seq = 1; seq <= 50; seq++) room.input(p, { seq, bits: IN_RIGHT });
+      vi.advanceTimersByTime(300);
+
+      room.detach(client);
+      expect(room.resumePlayer(fakeClient(), p.id, p.token)).not.toBeNull();
+      vi.advanceTimersByTime(300);
+      const restingAt = playerX(room, p.seat);
+
+      // A reloaded client counts from one again. That used to be indistinguishable
+      // from a stale packet, and every input was dropped for the rest of the match.
+      room.input(p, { seq: 1, bits: IN_RIGHT });
+      vi.advanceTimersByTime(300);
+
+      expect(playerX(room, p.seat)).toBeGreaterThan(restingAt + 20);
+
+      room.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('replays the last broadcast on catch-up rather than taking a fresh snapshot', () => {
+    vi.useFakeTimers();
+    try {
+      const { room } = match();
+      vi.advanceTimersByTime(200);
+
+      const instance = (room as unknown as { instance: GameInstance }).instance;
+      const spy = vi.spyOn(instance, 'snapshot');
+
+      const observer = fakeClient();
+      const watcher = room.addPlayer(observer, identity('D', 3))!;
+      room.sendCatchUp(watcher);
+
+      // Taking a fresh snapshot here drains the pending events, so that tick's
+      // hits, deaths and shots would never reach anybody else.
+      expect(spy).not.toHaveBeenCalled();
+
+      const snapshots = observer.sent.filter((m) => m.t === 'snapshot');
+      expect(snapshots).toHaveLength(1);
+
+      room.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

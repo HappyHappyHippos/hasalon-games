@@ -19,8 +19,17 @@ import {
 
 /** Past this much disagreement we stop nudging and just resynchronise. */
 const HARD_RESYNC_DISTANCE = 70;
-/** Fraction of a small error corrected per reconcile — invisible, but it adds up. */
-const SOFT_CORRECTION = 0.12;
+/** Fraction of a small error corrected per snapshot — invisible, but it adds up. */
+const SOFT_CORRECTION = 0.25;
+/**
+ * Velocity we never predicted, past which we take the server's word for it.
+ *
+ * Measured against our *own* history at the same moment, so honest prediction
+ * noise sits near zero and this only fires on something the sim did to us
+ * without a hitstun to announce it: gun recoil, the knife's lunge, a shield
+ * popping. Those used to drift until the position check tripped and teleported.
+ */
+const VELOCITY_RESYNC = 45;
 const MAX_CATCHUP_TICKS = 22;
 const HISTORY_MS = 1500;
 
@@ -28,6 +37,8 @@ interface Stamped {
   at: number;
   x: number;
   y: number;
+  vx: number;
+  vy: number;
 }
 
 /**
@@ -44,7 +55,13 @@ interface Stamped {
  * server (`stepMovement`), so the local simulation and the authoritative one
  * agree to within floating-point noise and a small correction each snapshot.
  *
- * Powerups are the one thing that could break that agreement, so they get the
+ * Two things follow from prediction and interpolation being different clocks —
+ * the predicted body is at *now*, the interpolated one is a snapshot interval
+ * plus half a round trip in the past — and both are handled elsewhere, in the
+ * renderer: switching between them, and every teleport this class performs, is
+ * smoothed out visually rather than drawn as a jump.
+ *
+ * Powerups are the one thing that could break the agreement, so they get the
  * same treatment as everything else: the buff timers arrive on the snapshot and
  * go through the shared `movementMods` helper. We never guess at them.
  */
@@ -53,12 +70,19 @@ export class GunMayhemPredictor {
   private prevBits = 0;
   private accumulator = 0;
   private lastFrameAt = 0;
+  /** Wall-clock moment the predicted body has been simulated up to. */
+  private simTime = 0;
+  /** `serverAt` of the snapshot we last corrected against. */
+  private reconciledAt = 0;
   /** Buffs as of the last snapshot, aged forward one tick per predicted tick. */
   private buffs: GmBuffs = emptyBuffs();
   private mods: MoveMods = movementMods(emptyBuffs());
 
   private positions: Stamped[] = [];
   private inputs: Array<{ at: number; bits: number }> = [];
+
+  /** Set for the one frame in which the body had to be teleported. */
+  resynced = false;
 
   /** Whether the local character is currently simulated rather than followed. */
   get active(): boolean {
@@ -70,12 +94,15 @@ export class GunMayhemPredictor {
     this.positions.length = 0;
     this.accumulator = 0;
     this.lastFrameAt = 0;
+    this.simTime = 0;
+    this.reconciledAt = 0;
   }
 
   reset(): void {
     this.stop();
     this.inputs.length = 0;
     this.prevBits = 0;
+    this.resynced = false;
   }
 
   /** Called whenever the local button mask changes, so replays are faithful. */
@@ -87,6 +114,10 @@ export class GunMayhemPredictor {
   /**
    * Advance and correct. Returns the body to draw, or null when the server is
    * in charge and the caller should fall back to interpolation.
+   *
+   * `controllable` mirrors the server's own phase gate: outside the playing
+   * phase it ignores every button, so predicting through a countdown would
+   * disagree with it by the whole length of the stage.
    */
   update(
     now: number,
@@ -95,7 +126,10 @@ export class GunMayhemPredictor {
     serverAt: number,
     rttMs: number,
     bits: number,
+    controllable: boolean,
   ): MoveBody | null {
+    this.resynced = false;
+
     const serverInCharge = server.st > 0 || server.rt > 0 || server.k <= 0;
     if (serverInCharge) {
       this.stop();
@@ -103,32 +137,41 @@ export class GunMayhemPredictor {
     }
 
     if (!this.body) {
-      this.seed(server, level, now, serverAt, rttMs);
+      this.seed(server, level, now, serverAt, rttMs, bits, controllable);
       return this.body;
     }
 
-    this.advance(now, level, bits);
-    this.reconcile(server, serverAt, rttMs, level, now);
+    this.advance(now, level, bits, controllable);
+    this.reconcile(server, serverAt, rttMs, level, now, bits, controllable);
     return this.body;
   }
 
-  private advance(now: number, level: Level, bits: number): void {
-    if (this.lastFrameAt === 0) this.lastFrameAt = now;
+  private advance(now: number, level: Level, bits: number, controllable: boolean): void {
+    if (this.lastFrameAt === 0) {
+      this.lastFrameAt = now;
+      this.simTime = now;
+    }
     // A backgrounded tab can produce an enormous delta; cap it rather than
     // simulating several seconds in one frame.
-    const delta = Math.min(now - this.lastFrameAt, 250);
+    const delta = Math.min(Math.max(now - this.lastFrameAt, 0), 250);
     this.lastFrameAt = now;
     this.accumulator += delta;
 
     while (this.accumulator >= TICK_MS) {
       this.accumulator -= TICK_MS;
-      const edges = bits & ~this.prevBits;
-      this.prevBits = bits;
-      stepMovement(this.body!, toMoveInput(bits, edges), level, DT, this.mods);
+      this.simTime += TICK_MS;
+      // Replay the recorded timeline rather than sampling the live mask once
+      // per frame. The server ORs rising edges, so it sees a tap that begins
+      // and ends between two frames; sampling would miss it, and a jump the
+      // server took and we did not is a resync every time.
+      const tickBits = this.bitsAt(this.simTime, bits);
+      const edges = tickBits & ~this.prevBits;
+      this.prevBits = tickBits;
+      stepMovement(this.body!, toMoveInput(tickBits, edges, controllable), level, DT, this.mods);
       this.ageBuffs();
-      this.positions.push({ at: now, x: this.body!.x, y: this.body!.y });
+      this.stamp(this.simTime);
     }
-    this.trim(this.positions, now);
+    this.trim(this.positions, this.simTime);
   }
 
   /**
@@ -164,9 +207,22 @@ export class GunMayhemPredictor {
     rttMs: number,
     level: Level,
     now: number,
+    bits: number,
+    controllable: boolean,
   ): void {
     const body = this.body;
     if (!body) return;
+
+    // Once per snapshot, not once per frame. Correcting every frame against the
+    // same stale sample makes the correction strength depend on the monitor —
+    // a 144 Hz player pulls at the same error five times over and oscillates.
+    if (serverAt === this.reconciledAt) return;
+
+    // The snapshot describes the world about half a round trip before it
+    // reached us, so that is the moment of our own history to compare against.
+    const past = this.positionAt(serverAt - rttMs / 2);
+    if (!past) return;
+    this.reconciledAt = serverAt;
 
     // Buffs are authoritative and coarse — seconds long — so just take the
     // server's word for them every snapshot rather than trying to predict a
@@ -179,19 +235,26 @@ export class GunMayhemPredictor {
     const serverFuel = server.jp ?? 0;
     if (Math.abs(serverFuel - body.jetpack) > 6) body.jetpack = serverFuel;
 
-    // The snapshot describes the world about half a round trip before it
-    // reached us, so that is the moment of our own history to compare against.
-    const past = this.positionAt(serverAt - rttMs / 2);
-    if (!past) return;
-
     const dx = server.x - past.x;
     const dy = server.y - past.y;
     const distance = Math.hypot(dx, dy);
 
     if (distance > HARD_RESYNC_DISTANCE) {
-      this.seed(server, level, now, serverAt, rttMs);
+      this.seed(server, level, now, serverAt, rttMs, bits, controllable);
+      this.resynced = true;
       return;
     }
+
+    // Applied as the *difference* against our own velocity at that moment, so
+    // everything we did predict since — gravity, friction, the jump we are in
+    // the middle of — survives, and only the impulse we missed is added.
+    const dvx = server.vx - past.vx;
+    const dvy = server.vy - past.vy;
+    if (Math.hypot(dvx, dvy) > VELOCITY_RESYNC) {
+      body.vx += dvx;
+      body.vy += dvy;
+    }
+
     if (distance > 1) {
       body.x += dx * SOFT_CORRECTION;
       body.y += dy * SOFT_CORRECTION;
@@ -205,6 +268,8 @@ export class GunMayhemPredictor {
     now: number,
     serverAt: number,
     rttMs: number,
+    bits: number,
+    controllable: boolean,
   ): void {
     const body: MoveBody = {
       x: server.x,
@@ -225,25 +290,44 @@ export class GunMayhemPredictor {
     const serverTime = serverAt - rttMs / 2;
     const catchUp = clampInt(Math.round((now - serverTime) / TICK_MS), 0, MAX_CATCHUP_TICKS);
 
-    let previous = this.bitsAt(serverTime);
+    this.body = body;
+    this.positions = [{ at: serverTime, x: body.x, y: body.y, vx: body.vx, vy: body.vy }];
+
+    let previous = this.bitsAt(serverTime, bits);
+    let at = serverTime;
     for (let i = 0; i < catchUp; i++) {
-      const at = serverTime + i * TICK_MS;
-      const bits = this.bitsAt(at);
-      stepMovement(body, toMoveInput(bits, bits & ~previous), level, DT, this.mods);
+      at = serverTime + (i + 1) * TICK_MS;
+      const tickBits = this.bitsAt(at, bits);
+      stepMovement(body, toMoveInput(tickBits, tickBits & ~previous, controllable), level, DT, this.mods);
       this.ageBuffs();
-      previous = bits;
+      previous = tickBits;
+      this.stamp(at);
     }
 
-    this.body = body;
     this.prevBits = previous;
     this.accumulator = 0;
-    this.lastFrameAt = now;
-    this.positions = [{ at: now, x: body.x, y: body.y }];
+    // Both clocks are set to the moment actually simulated, not to `now`. Any
+    // remainder is owed to the next frame's delta, which is capped like every
+    // other one — the catch-up clamp above exists precisely so a long stall is
+    // never replayed in a single frame.
+    this.lastFrameAt = at;
+    this.simTime = at;
+    this.reconciledAt = serverAt;
+  }
+
+  private stamp(at: number): void {
+    const body = this.body!;
+    this.positions.push({ at, x: body.x, y: body.y, vx: body.vx, vy: body.vy });
   }
 
   private positionAt(time: number): Stamped | null {
-    if (this.positions.length === 0) return null;
-    let best = this.positions[0]!;
+    // Nothing reaching that far back. Skipping the correction beats measuring
+    // the error against a *newer* sample — which is what this used to do, right
+    // after a resync, and it dragged the body backwards every time.
+    const first = this.positions[0];
+    if (!first || first.at > time) return null;
+
+    let best = first;
     for (const entry of this.positions) {
       if (entry.at <= time) best = entry;
       else break;
@@ -251,8 +335,12 @@ export class GunMayhemPredictor {
     return best;
   }
 
-  private bitsAt(time: number): number {
-    let bits = 0;
+  /** The mask held at `time`, or `fallback` when history does not reach it. */
+  private bitsAt(time: number, fallback: number): number {
+    const first = this.inputs[0];
+    if (!first || first.at > time) return fallback;
+
+    let bits = first.bits;
     for (const entry of this.inputs) {
       if (entry.at <= time) bits = entry.bits;
       else break;
@@ -265,14 +353,16 @@ export class GunMayhemPredictor {
   }
 }
 
-function toMoveInput(bits: number, edges: number): MoveInput {
+function toMoveInput(bits: number, edges: number, controllable: boolean): MoveInput {
+  // Mirrors the server's `stepBodies`: outside the playing phase every button
+  // is ignored, not merely the `controllable` flag.
   return {
-    left: (bits & IN_LEFT) !== 0,
-    right: (bits & IN_RIGHT) !== 0,
-    down: (bits & IN_DOWN) !== 0,
-    jumpPressed: (edges & IN_JUMP) !== 0,
-    jumpHeld: (bits & IN_JUMP) !== 0,
-    controllable: true,
+    left: controllable && (bits & IN_LEFT) !== 0,
+    right: controllable && (bits & IN_RIGHT) !== 0,
+    down: controllable && (bits & IN_DOWN) !== 0,
+    jumpPressed: controllable && (edges & IN_JUMP) !== 0,
+    jumpHeld: controllable && (bits & IN_JUMP) !== 0,
+    controllable,
   };
 }
 

@@ -43,6 +43,17 @@ export interface GameMeta {
 export interface GameInstance {
   /** `raw` comes straight off the wire; the module validates it. */
   applyInput(playerId: string, raw: unknown): void;
+  /**
+   * Drop everything the sim remembers about this player's controller: held
+   * buttons, pending edges, and whatever sequence numbers the module uses to
+   * discard stale packets.
+   *
+   * Called when a socket goes away and when one comes back. A reconnecting
+   * client is a *new* controller — its sequence counter restarts from zero, and
+   * a module that kept the old high-water mark would silently discard every
+   * input the player sent from then on.
+   */
+  resetInput(playerId: string): void;
   stepTick(): void;
   /** Builds the wire snapshot and drains any events accumulated since the last call. */
   snapshot(): GameSnapshot;

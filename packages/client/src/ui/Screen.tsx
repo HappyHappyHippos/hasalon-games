@@ -56,7 +56,14 @@ export function Screen({ room, mySeat, canvasRef, hud, controls }: Props): JSX.E
         )}
 
         {spectating && (
-          <div className="spectating">Watching — you&apos;re in the next match</div>
+          <div className="spectating">
+            <strong>Watching</strong>
+            <span>
+              {isHost
+                ? 'You have no seat in this match — “Restart match” in the menu deals you in.'
+                : 'You have no seat in this match. The host can deal you in with “Restart match”, or you’re in the next one.'}
+            </span>
+          </div>
         )}
 
         {room.paused && room.phase === 'playing' && (
