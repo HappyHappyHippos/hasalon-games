@@ -7,6 +7,12 @@
  * both. Run it after any deploy that touches hosting, the proxy, or the wire
  * protocol.
  *
+ * It then plays a round and reloads one of them mid-match. That is a regression
+ * test with a name: a reloading client starts its input sequence over, and the
+ * server used to read that as a stream of stale packets and ignore the player
+ * for the rest of the match — they could see everyone moving, and could not
+ * move themselves.
+ *
  *   npm run smoke                          # against production
  *   npm run smoke -- http://localhost:3000 # against a local `npm start`
  *
@@ -73,7 +79,7 @@ guest.send(JSON.stringify({ t: 'join', v: PROTOCOL_VERSION, code, identity: iden
 
 // The join must reach the guest *and* be broadcast to the host — one-way would
 // still look like a pass if we only checked the guest.
-const [, roomView] = await Promise.all([
+const [welcomeGuest, roomView] = await Promise.all([
   next(guest, (m) => m.t === 'welcome', 'guest welcome'),
   next(host, (m) => m.t === 'room' && m.room.players.length === 2, 'host sees both players'),
 ]);
@@ -94,10 +100,118 @@ await next(host, (m) => m.t === 'pong', 'pong');
 const rtt = Date.now() - sentAt;
 console.log(`  ✓ round-trip ${rtt}ms`);
 
-host.send(JSON.stringify({ t: 'leave' }));
-guest.send(JSON.stringify({ t: 'leave' }));
-host.close();
+// ---------------------------------------------------------------------------
+// A match, and the reload that used to end it
+// ---------------------------------------------------------------------------
+
+host.send(JSON.stringify({ t: 'ready', ready: true }));
+await next(host, (m) => m.t === 'room' && m.room.players.every((p) => p.ready), 'both ready');
+host.send(JSON.stringify({ t: 'start' }));
+const started = await next(host, (m) => m.t === 'matchStarted', 'match started');
+const guestSeat = started.room.players.find((p) => p.name === 'SmokeGuest')?.seat ?? -1;
+if (guestSeat < 0) throw new Error('guest was not seated');
+console.log(`  ✓ match started, guest in seat ${guestSeat}`);
+
+const ARENA_MIDDLE = 640;
+const IN_LEFT = 1;
+const IN_RIGHT = 2;
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/** The guest's own record from the next snapshot to arrive. */
+async function seatState(ws) {
+  const { snap } = await next(ws, (m) => m.t === 'snapshot', 'snapshot');
+  const me = snap.players.find((p) => p.s === guestSeat);
+  if (!me) throw new Error(`guest is not in snapshot for seat ${guestSeat}`);
+  return me;
+}
+
+/** Falling off the stage would stop them moving for reasons of its own. */
+function assertOnStage(me, when) {
+  if (me.rt > 0) throw new Error(`guest is respawning ${when} — the run went off the stage`);
+  if (me.k <= 0) throw new Error(`guest is out of stocks ${when}`);
+}
+
+/**
+ * Let go and wait for friction, so the next measurement is of new input rather
+ * than of momentum left over from the last one. Without this the check passes
+ * even when every input is being discarded — the character is simply coasting.
+ */
+async function comeToRest(ws, seq) {
+  ws.send(JSON.stringify({ t: 'input', i: { seq, bits: 0 } }));
+  await wait(400);
+  return seatState(ws);
+}
+
+/**
+ * Hold a direction and report how far the seat actually travelled. Always runs
+ * towards the middle of the arena: a short run off the edge kills you, and a
+ * character parked against a wall cannot move at all — both would read as the
+ * bug this is here to detect.
+ */
+async function run(ws, seqFrom) {
+  const before = await seatState(ws);
+  assertOnStage(before, 'before the run');
+  const bits = before.x > ARENA_MIDDLE ? IN_LEFT : IN_RIGHT;
+
+  for (let i = 0; i < 12; i++) {
+    ws.send(JSON.stringify({ t: 'input', i: { seq: seqFrom + i, bits } }));
+    await wait(20);
+  }
+
+  const after = await seatState(ws);
+  assertOnStage(after, 'after the run');
+  return Math.abs(after.x - before.x);
+}
+
+// Wait out the countdown — nobody can act during it, so moving before it ends
+// proves nothing.
+await next(
+  guest,
+  (m) => m.t === 'snapshot' && m.snap.phase === 'playing',
+  'countdown to finish',
+);
+
+const movedBefore = await run(guest, 1);
+if (!(movedBefore > 5)) throw new Error(`guest did not move before reload (${movedBefore})`);
+console.log(`  ✓ guest moved ${movedBefore.toFixed(0)}px under their own input`);
+
+// Stand still, at a sequence number well above anything the new page will send.
+const rested = await comeToRest(guest, 500);
+assertOnStage(rested, 'at rest');
+
+// Now the actual regression: a reload. The tab keeps its session and resumes
+// the same seat, but the page is new, so its input sequence starts over. That
+// used to look exactly like a stale packet — every input silently discarded,
+// the player frozen in place while everyone else moved normally.
 guest.close();
+const reloaded = await connect('guest-reloaded');
+reloaded.send(
+  JSON.stringify({
+    t: 'resume',
+    v: PROTOCOL_VERSION,
+    code,
+    playerId: welcomeGuest.playerId,
+    token: welcomeGuest.token,
+  }),
+);
+await next(reloaded, (m) => m.t === 'welcome', 'resume welcome');
+console.log(`  ✓ guest resumed their seat after a reload (at rest, x=${rested.x.toFixed(0)})`);
+
+// Sequence numbers 1..12, far below the 500 the old page reached.
+const movedAfter = await run(reloaded, 1);
+if (!(movedAfter > 5)) {
+  throw new Error(
+    `guest is frozen after reloading (moved ${movedAfter.toFixed(1)}px) — ` +
+      'the server is still discarding their input as stale',
+  );
+}
+console.log(`  ✓ guest still moves after reloading (${movedAfter.toFixed(0)}px)`);
+
+host.send(JSON.stringify({ t: 'leave' }));
+reloaded.send(JSON.stringify({ t: 'leave' }));
+host.close();
+reloaded.close();
 
 console.log(`\nPASS — two clients shared a room over ${wsUrl.startsWith('wss') ? 'wss' : 'ws'}.`);
 if (rtt > 150) {

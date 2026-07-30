@@ -26,8 +26,15 @@ const BUTTONS: PadButton[] = [
  *
  * Deliberately HTML rather than canvas: it styles like the rest of the site and
  * the browser handles hit-testing. The pointer bookkeeping matters — a platform
- * fighter needs several buttons at once, so each pointer is tracked separately
- * and a finger sliding off a button releases it.
+ * fighter needs several buttons at once, so each pointer is captured by the
+ * button it started on and holds it until that finger lifts. Sliding off does
+ * *not* release, which is what you want at speed: fingers wander, and a jump
+ * that cuts out because your thumb drifted 3 mm is worse than one that does not.
+ *
+ * Every path out of "held" is covered, because a stuck direction is
+ * indistinguishable from the game being broken: lifting, cancellation, losing
+ * capture (which fires without a `pointerup` when the browser takes the gesture
+ * back), and unmount.
  */
 export function TouchPad({ onButton }: Props): JSX.Element {
   const held = useRef(new Map<number, number>());
@@ -43,6 +50,10 @@ export function TouchPad({ onButton }: Props): JSX.Element {
 
   const press = (event: React.PointerEvent<HTMLButtonElement>, bit: number): void => {
     event.preventDefault();
+    // A finger that slides from one button to another arrives here with a
+    // pointer id already spoken for. Let go of the old bit rather than
+    // overwriting the entry and leaving it held for good.
+    release(event);
     event.currentTarget.setPointerCapture?.(event.pointerId);
     held.current.set(event.pointerId, bit);
     onButton(bit, true);
@@ -66,6 +77,7 @@ export function TouchPad({ onButton }: Props): JSX.Element {
           onPointerDown={(event) => press(event, button.bit)}
           onPointerUp={release}
           onPointerCancel={release}
+          onLostPointerCapture={release}
           onContextMenu={(event) => event.preventDefault()}
         >
           {button.label}

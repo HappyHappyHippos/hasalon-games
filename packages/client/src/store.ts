@@ -38,6 +38,12 @@ export interface Hud {
 
 export const emptyHud: Hud = { phase: 'countdown', round: 0, countdown: 0, players: [] };
 
+/**
+ * On-screen controls. `auto` asks the device; the other two are the escape
+ * hatch for when it answers wrongly — see `useTouchControls`.
+ */
+export type TouchControlsMode = 'auto' | 'on' | 'off';
+
 export interface AppState {
   status: ConnectionStatus;
   room: RoomView | null;
@@ -52,6 +58,7 @@ export interface AppState {
   muted: boolean;
   musicMuted: boolean;
   musicVolume: number;
+  touchControls: TouchControlsMode;
 
   setStatus(status: ConnectionStatus): void;
   setRoom(room: RoomView | null): void;
@@ -63,6 +70,7 @@ export interface AppState {
   setMuted(muted: boolean): void;
   setMusicMuted(muted: boolean): void;
   setMusicVolume(volume: number): void;
+  setTouchControls(mode: TouchControlsMode): void;
   onWelcome(room: RoomView, playerId: string): void;
   onMatchEnded(room: RoomView, winnerSeat: number | null): void;
   reset(): void;
@@ -70,6 +78,12 @@ export interface AppState {
 
 /** Name and colour are yours everywhere, so they live in localStorage. */
 const IDENTITY_KEY = 'mg.identity';
+
+/**
+ * So does the controls override: it is a property of the device you are on, and
+ * someone who had to turn it on once should never have to find it again.
+ */
+const TOUCH_KEY = 'mg.touchControls';
 
 /**
  * The seat, however, belongs to *this tab*.
@@ -99,6 +113,16 @@ function loadIdentity(): Identity {
     // Corrupt or unavailable storage — fall through to the default.
   }
   return { name: '', colorIndex: 0, hat: 0, face: 0 };
+}
+
+function loadTouchControls(): TouchControlsMode {
+  try {
+    const raw = localStorage.getItem(TOUCH_KEY);
+    if (raw === 'on' || raw === 'off' || raw === 'auto') return raw;
+  } catch {
+    // Storage disabled — detection alone decides.
+  }
+  return 'auto';
 }
 
 export function saveSession(session: Session | null): void {
@@ -141,6 +165,7 @@ export const useStore = create<AppState>((set) => ({
   muted: false,
   musicMuted: false,
   musicVolume: 0.4,
+  touchControls: loadTouchControls(),
 
   setStatus: (status) => set({ status }),
   setRoom: (room) => set({ room }),
@@ -163,6 +188,15 @@ export const useStore = create<AppState>((set) => ({
   setMuted: (muted) => set({ muted }),
   setMusicMuted: (musicMuted) => set({ musicMuted }),
   setMusicVolume: (musicVolume) => set({ musicVolume }),
+
+  setTouchControls: (touchControls) => {
+    try {
+      localStorage.setItem(TOUCH_KEY, touchControls);
+    } catch {
+      // Not fatal — it just won't be remembered next visit.
+    }
+    set({ touchControls });
+  },
 
   onWelcome: (room, playerId) =>
     set({ room, playerId, error: null, busy: false, matchWinnerSeat: null }),

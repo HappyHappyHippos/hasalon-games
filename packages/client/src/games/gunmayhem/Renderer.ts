@@ -22,12 +22,23 @@ import { sfx } from '../../audio';
 import { CanvasStage } from '../../game/CanvasStage';
 import { drawFace, drawHat, hatRise } from '../../game/appearance';
 import { bracket, lerp } from '../../game/interpolation';
+import { PositionSmoother } from '../../game/PositionSmoother';
 import { gmInput } from './input';
 import { GunMayhemPredictor } from './predictor';
 import { drawBackdrop, drawScenery } from './stageArt';
 import { drawSlash, drawWeapon, muzzleX, recoilStrength } from './weaponArt';
 
-const INTERP_DELAY_MS = SNAPSHOT_EVERY * TICK_MS + 22;
+/**
+ * How far behind real time remote entities are drawn.
+ *
+ * Two whole snapshot intervals plus a margin. One interval plus a sliver was
+ * the obvious choice and it is the wrong one: it leaves ~20 ms of slack, and
+ * any packet later than that has nothing to interpolate towards, so every
+ * remote player freezes for a frame and then jumps. Over a real network that
+ * happens constantly. The cost is ~30 ms of extra latency on *other* people's
+ * characters only — your own is predicted and unaffected.
+ */
+const INTERP_DELAY_MS = SNAPSHOT_EVERY * TICK_MS * 2 + 20;
 const INK = '#14110f';
 
 interface Particle {
@@ -68,6 +79,14 @@ interface DrawnPlayer {
   vy: number;
 }
 
+interface InterpolatedView {
+  /** Newest snapshot: world entities and the input to prediction. */
+  latest: GunMayhemSnapshot;
+  /** The snapshot `bodies` were interpolated from, and their matching state. */
+  delayed: GunMayhemSnapshot;
+  bodies: Map<number, DrawnPlayer>;
+}
+
 /** A gunshot or knife swing in progress, purely for animation. */
 interface Swing {
   /** 1 at the moment of firing, decaying to 0. */
@@ -81,6 +100,9 @@ export class GunMayhemRenderer {
   private stage: CanvasStage;
   private context: GunMayhemRenderContext;
   private predictor = new GunMayhemPredictor();
+  /** Absorbs the jump when your own character changes which clock it is on. */
+  private smoother = new PositionSmoother();
+  private wasPredicting = false;
 
   private raf = 0;
   private level: Level = getLevel('salon');
@@ -112,6 +134,8 @@ export class GunMayhemRenderer {
   start(): void {
     this.stage.attach();
     this.predictor.reset();
+    this.smoother.reset();
+    this.wasPredicting = false;
     const loop = (now: number): void => {
       this.frame(now);
       this.raf = requestAnimationFrame(loop);
@@ -123,6 +147,8 @@ export class GunMayhemRenderer {
     cancelAnimationFrame(this.raf);
     this.stage.detach();
     this.predictor.reset();
+    this.smoother.reset();
+    this.wasPredicting = false;
   }
 
   /** Called by the screen whenever the local button mask changes. */
@@ -164,10 +190,13 @@ export class GunMayhemRenderer {
 
     const view = this.interpolate(renderTime);
     if (view) {
-      this.drawPowerups(view.snap, now);
-      this.drawCrates(view.snap);
-      this.drawBombs(view.snap, now);
-      this.drawBullets(view.snap, now, latest?.at ?? now);
+      // Bullets are extrapolated forward from the newest snapshot rather than
+      // interpolated — they are fast enough that drawing them late reads as lag
+      // — so the world entities all stay on the latest one.
+      this.drawPowerups(view.latest, now);
+      this.drawCrates(view.latest);
+      this.drawBombs(view.latest, now);
+      this.drawBullets(view.latest, now, latest?.at ?? now);
       this.drawPlayers(view, now, latest?.at ?? now);
     }
 
@@ -258,9 +287,7 @@ export class GunMayhemRenderer {
   // Entities
   // -------------------------------------------------------------------------
 
-  private interpolate(
-    renderTime: number,
-  ): { snap: GunMayhemSnapshot; bodies: Map<number, DrawnPlayer> } | null {
+  private interpolate(renderTime: number): InterpolatedView | null {
     const found = bracket(feed.entries, renderTime);
     if (!found) return null;
 
@@ -283,37 +310,47 @@ export class GunMayhemRenderer {
       });
     }
 
-    const latest = feed.latest?.snap;
-    const snap = latest && latest.game === 'gunmayhem' ? latest : fromSnap;
-    return { snap, bodies };
+    const newest = feed.latest?.snap;
+    const latest = newest && newest.game === 'gunmayhem' ? newest : fromSnap;
+    // `delayed` is the snapshot the bodies came from. Everything a character is
+    // drawn *with* — stocks, respawn timer, invulnerability, jetpack — has to
+    // be read from it too. Reading those from `latest` mixes a position from
+    // one moment with the state from ~90 ms later, which is how a respawning
+    // player ended up drawn streaking from the blast zone to their spawn point.
+    return { latest, delayed: fromSnap, bodies };
   }
 
-  private drawPlayers(
-    view: { snap: GunMayhemSnapshot; bodies: Map<number, DrawnPlayer> },
-    now: number,
-    latestAt: number,
-  ): void {
-    const { snap, bodies } = view;
+  private drawPlayers(view: InterpolatedView, now: number, latestAt: number): void {
+    const { latest, delayed, bodies } = view;
 
-    for (const player of snap.players) {
-      // Out of the game, or waiting to drop back in.
-      if (player.k <= 0 && player.rt <= 0 && !bodies.has(player.s)) continue;
-      if (player.rt > 0) continue;
-      if (player.k <= 0) continue;
-
+    for (const player of delayed.players) {
       const isLocal = player.s === this.context.mySeat;
+
+      // Out of the game, or waiting to drop back in.
+      const gone = player.rt > 0 || player.k <= 0;
+      if (gone) {
+        if (isLocal) this.releaseLocalBody();
+        continue;
+      }
+
       let body = bodies.get(player.s);
+      let predicting = false;
 
       if (isLocal && !this.context.paused) {
+        // Prediction runs against the *newest* server state — it is simulating
+        // forward from now, not from the delayed render time.
+        const server = latest.players.find((p) => p.s === player.s) ?? player;
         const predicted = this.predictor.update(
           now,
           this.level,
-          player,
+          server,
           latestAt,
           feed.rttMs,
           gmInput.bits,
+          latest.phase === 'playing',
         );
         if (predicted) {
+          predicting = true;
           body = {
             x: predicted.x,
             y: predicted.y,
@@ -324,7 +361,19 @@ export class GunMayhemRenderer {
           };
         }
       }
-      if (!body) continue;
+      if (!body) {
+        if (isLocal) this.releaseLocalBody();
+        continue;
+      }
+
+      if (isLocal) {
+        // Changing which clock the body came from, and every resync, moves it
+        // for reasons that are not motion. Slide instead of teleporting.
+        const jumped = predicting !== this.wasPredicting || this.predictor.resynced;
+        this.wasPredicting = predicting;
+        const drawn = this.smoother.apply(body.x, body.y, now, jumped);
+        body = { ...body, x: drawn.x, y: drawn.y };
+      }
 
       // Ground effects run whether or not the character is drawn this frame,
       // otherwise the invulnerability blink would strobe the dust too.
@@ -336,6 +385,12 @@ export class GunMayhemRenderer {
 
       this.drawCharacter(player, body, isLocal, now);
     }
+  }
+
+  /** Your character stopped being drawn; nothing to smooth from when it returns. */
+  private releaseLocalBody(): void {
+    this.smoother.reset();
+    this.wasPredicting = false;
   }
 
   /**

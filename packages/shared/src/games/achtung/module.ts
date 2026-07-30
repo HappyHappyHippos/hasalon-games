@@ -70,6 +70,12 @@ export const achtungModule: GameModule = {
         applyInput(state, playerId, parseTurn(raw));
       },
 
+      resetInput(playerId) {
+        // The whole controller is one value, so letting go is just steering
+        // straight — the curve keeps moving, as it always does.
+        applyInput(state, playerId, 0);
+      },
+
       stepTick() {
         pending.push(...stepTick(state));
       },

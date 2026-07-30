@@ -24,6 +24,15 @@ class SnapshotFeed {
   rttMs = 60;
 
   push(snap: GameSnapshot): void {
+    // Ticks that are not newer are dropped rather than appended. The socket
+    // delivers in order, but the room also replays its last snapshot to anyone
+    // joining or reconnecting mid-match, and it sends one extra when a match
+    // ends. Either would land as a second entry for a tick already in the
+    // buffer, and interpolation reads a repeated tick as a moment where nothing
+    // moved — a visible stall, then a sprint to catch up.
+    const previous = this.latest;
+    if (previous && snap.tick <= previous.snap.tick) return;
+
     this.entries.push({ snap, at: performance.now() });
     if (this.entries.length > MAX_ENTRIES) this.entries.shift();
   }

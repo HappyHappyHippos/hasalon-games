@@ -6,6 +6,14 @@ import { sfx } from '../audio';
 import { music } from '../music';
 import { Button } from './Button';
 import { Toggle } from './Toggle';
+import { useHasTouch } from './useTouchControls';
+import type { TouchControlsMode } from '../store';
+
+const TOUCH_MODES: Array<{ mode: TouchControlsMode; label: string }> = [
+  { mode: 'auto', label: 'Auto' },
+  { mode: 'on', label: 'On' },
+  { mode: 'off', label: 'Off' },
+];
 
 /**
  * The one menu. Sound, match control, and how to play — all behind a single
@@ -26,6 +34,9 @@ export function OptionsMenu(): JSX.Element {
   const setMusicMuted = useStore((s) => s.setMusicMuted);
   const musicVolume = useStore((s) => s.musicVolume);
   const setMusicVolume = useStore((s) => s.setMusicVolume);
+  const touchControls = useStore((s) => s.touchControls);
+  const setTouchControls = useStore((s) => s.setTouchControls);
+  const hasTouch = useHasTouch();
 
   // Escape is the reflex for "get this off my screen", and it should also be
   // able to *open* the menu — that's the fast way to pause without hunting for
@@ -122,6 +133,38 @@ export function OptionsMenu(): JSX.Element {
               }}
             />
           </label>
+        </section>
+
+        <section className="options__section">
+          <h3 className="eyebrow">Controls</h3>
+          <div className="options__choice">
+            <span className="toggle__label">On-screen controls</span>
+            <div className="options__segmented">
+              {TOUCH_MODES.map(({ mode, label }) => (
+                <button
+                  key={mode}
+                  type="button"
+                  className={`seg${touchControls === mode ? ' seg--on' : ''}`}
+                  aria-pressed={touchControls === mode}
+                  onClick={() => {
+                    sfx.click();
+                    setTouchControls(mode);
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <p className="muted small">
+            {touchControls === 'auto'
+              ? hasTouch
+                ? 'Auto: this device looks like a touchscreen, so the pad is shown.'
+                : 'Auto: no touchscreen detected. Turn them On if you are on a phone and cannot see the buttons.'
+              : touchControls === 'on'
+                ? 'Always shown, whatever the browser reports about this device.'
+                : 'Never shown. Keyboard only.'}
+          </p>
         </section>
 
         {inMatch && (

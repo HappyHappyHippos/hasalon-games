@@ -891,19 +891,24 @@ strong,
 
 /* Gun Mayhem's gamepad */
 
+/* Whether the pad exists at all is decided in React (`useTouchControls`), not
+   here. It used to be gated on `(hover: none) and (pointer: coarse)`, which is
+   false on Android the moment "Desktop site" is on — controls simply gone, with
+   no way to get them back. CSS cannot be overridden by a setting; React can. */
 .pad {
   position: absolute;
   inset: 0;
-  display: none;
   pointer-events: none;
 }
 
 .pad__btn {
   position: absolute;
   pointer-events: auto;
-  border: 3px solid rgba(255, 255, 255, 0.5);
-  background: rgba(20, 17, 15, 0.42);
-  color: rgba(255, 255, 255, 0.85);
+  border: 3px solid rgba(255, 255, 255, 0.72);
+  background: rgba(20, 17, 15, 0.6);
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   font-family: var(--font-display);
   font-weight: 800;
   font-size: 15px;
@@ -912,7 +917,9 @@ strong,
   -webkit-tap-highlight-color: transparent;
 }
 .pad__btn:active {
-  background: rgba(255, 210, 63, 0.55);
+  background: rgba(255, 210, 63, 0.7);
+  color: var(--ink);
+  text-shadow: none;
 }
 
 .pad__btn--left {
@@ -1057,17 +1064,31 @@ strong,
   font-weight: 800;
 }
 
+/* Sitting out is the one state people mistake for the game being broken, so it
+   says why rather than just that. */
 .spectating {
   position: absolute;
   top: 12px;
   left: 50%;
   transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  max-width: min(420px, calc(100% - 24px));
+  text-align: center;
   background: var(--surface);
   border: 2.5px solid var(--ink);
-  border-radius: 999px;
-  padding: 5px 14px;
+  border-radius: 16px;
+  padding: 6px 16px;
   font-size: 13px;
   font-weight: 600;
+}
+
+.spectating span {
+  font-weight: 500;
+  font-size: 12px;
+  opacity: 0.75;
 }
 
 /* ==========================================================================
@@ -1254,6 +1275,42 @@ strong,
   gap: 6px;
 }
 
+/* Three-way setting, laid out like the toggles it sits beside. */
+.options__choice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.options__segmented {
+  display: flex;
+  flex: none;
+  gap: 4px;
+  padding: 3px;
+  border: var(--outline);
+  border-radius: 999px;
+  background: var(--paper);
+}
+
+.seg {
+  padding: 5px 13px;
+  border: 2.5px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  cursor: pointer;
+}
+.seg--on {
+  border-color: var(--ink);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
 .chip {
   display: grid;
   place-items: center;
@@ -1281,11 +1338,49 @@ strong,
    ========================================================================== */
 
 @media (hover: none) and (pointer: coarse) {
-  .pad {
-    display: block;
-  }
   .touchsurface__hint {
     display: block;
+  }
+}
+
+/* A landscape phone is barely 350px tall inside the bezel. The pad has to shrink
+   with it or the upper buttons sit on top of the action. */
+@media (max-height: 460px) {
+  .pad__btn {
+    font-size: 13px;
+  }
+  .pad__btn--left,
+  .pad__btn--right {
+    width: 62px;
+    height: 62px;
+    bottom: 12px;
+  }
+  .pad__btn--right {
+    left: 82px;
+  }
+  .pad__btn--down {
+    width: 52px;
+    height: 44px;
+    left: 47px;
+    bottom: 78px;
+  }
+  .pad__btn--jump {
+    width: 74px;
+    height: 74px;
+    bottom: 12px;
+    font-size: 14px;
+  }
+  .pad__btn--shoot {
+    width: 64px;
+    height: 64px;
+    right: 94px;
+    bottom: 22px;
+  }
+  .pad__btn--bomb {
+    width: 58px;
+    height: 50px;
+    bottom: 92px;
+    font-size: 11px;
   }
 }
 

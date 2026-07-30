@@ -7,6 +7,7 @@ import {
   defaultConfig,
   makeSnapshot,
   matchWinner,
+  resetInput,
   stepTick,
 } from './sim';
 import type { GmEvent, GunMayhemConfig, LevelId } from './types';
@@ -75,6 +76,10 @@ export const gunMayhemModule: GameModule = {
         if (!Number.isFinite(seq) || !Number.isFinite(bits)) return;
         // Only the six documented buttons; ignore anything else on the wire.
         applyInput(state, playerId, seq | 0, (bits | 0) & 0b111111);
+      },
+
+      resetInput(playerId) {
+        resetInput(state, playerId);
       },
 
       stepTick() {

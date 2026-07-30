@@ -7,6 +7,7 @@ import { GunMayhemRenderer } from './Renderer';
 import { attachGunMayhemInput, type InputController } from './input';
 import { TouchPad } from './TouchPad';
 import { Screen } from '../../ui/Screen';
+import { useShowTouchControls } from '../../ui/useTouchControls';
 
 interface Props {
   room: RoomView;
@@ -17,6 +18,7 @@ export function GunMayhemScreen({ room, mySeat }: Props): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rendererRef = useRef<GunMayhemRenderer | null>(null);
   const inputRef = useRef<InputController | null>(null);
+  const showTouch = useShowTouchControls();
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -33,8 +35,10 @@ export function GunMayhemScreen({ room, mySeat }: Props): JSX.Element {
     rendererRef.current = renderer;
     renderer.start();
 
-    const input = attachGunMayhemInput((bits, seq) => {
-      renderer.noteInput(bits);
+    const input = attachGunMayhemInput((bits, seq, changed) => {
+      // Only real button changes are edges worth replaying in prediction; the
+      // periodic repeat of an unchanged mask is purely a delivery guarantee.
+      if (changed) renderer.noteInput(bits);
       socket.sendInput({ seq, bits });
     });
     inputRef.current = input;
@@ -82,7 +86,7 @@ export function GunMayhemScreen({ room, mySeat }: Props): JSX.Element {
       mySeat={mySeat}
       canvasRef={canvasRef}
       hud={<GunMayhemHud room={room} mySeat={mySeat} />}
-      controls={mySeat >= 0 ? <TouchPad onButton={onPadButton} /> : null}
+      controls={mySeat >= 0 && showTouch ? <TouchPad onButton={onPadButton} /> : null}
     />
   );
 }

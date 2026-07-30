@@ -215,21 +215,35 @@ function resetToSpawn(state: GunMayhemState, player: GmPlayer, index: number): v
  * Record an input. Rising edges are ORed into `pendingPress` rather than
  * applied immediately, so a tap shorter than one tick still fires — with a
  * plain held-state model, press-then-release between two ticks would vanish.
+ *
+ * The sequence number only guards against stale and duplicated packets. It is
+ * deliberately *not* asked to detect a reconnect: a client that reloads starts
+ * counting from zero again, and guessing at how far backwards a legitimate
+ * restart may jump gets it wrong in exactly the case that matters — every input
+ * silently discarded for the rest of the match. `resetInput` handles that, and
+ * the room calls it whenever a socket comes or goes.
  */
 export function applyInput(state: GunMayhemState, playerId: string, seq: number, bits: number): void {
   const player = state.players.find((p) => p.id === playerId);
   if (!player) return;
-
-  // Ignore stale or duplicated inputs, but accept a large jump backwards: that
-  // means the player reconnected and their client started counting again.
-  const isNewer = seq > player.ackSeq;
-  const isRestart = seq < player.ackSeq - 600;
-  if (!isNewer && !isRestart) return;
-  if (isRestart) player.heldBits = 0;
+  if (seq <= player.ackSeq) return;
 
   player.pendingPress |= bits & ~player.heldBits;
   player.heldBits = bits;
   player.ackSeq = seq;
+}
+
+/**
+ * Forget this player's controller entirely. Their character keeps its position
+ * and momentum — it is only the buttons that let go, so someone whose laptop
+ * shut mid-sprint stops running instead of jogging off the stage.
+ */
+export function resetInput(state: GunMayhemState, playerId: string): void {
+  const player = state.players.find((p) => p.id === playerId);
+  if (!player) return;
+  player.heldBits = 0;
+  player.pendingPress = 0;
+  player.ackSeq = 0;
 }
 
 // ---------------------------------------------------------------------------

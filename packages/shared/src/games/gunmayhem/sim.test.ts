@@ -15,7 +15,14 @@ import {
   ROUND_OVER_TICKS,
   SHIELD_TICKS,
 } from './constants';
-import { applyInput, createState, defaultConfig, makeSnapshot, stepTick } from './sim';
+import {
+  applyInput,
+  createState,
+  defaultConfig,
+  makeSnapshot,
+  resetInput,
+  stepTick,
+} from './sim';
 import { WEAPONS } from './weapons';
 import { LEVELS, LEVEL_IDS, levelIsSane } from './levels';
 import {
@@ -147,6 +154,81 @@ describe('determinism', () => {
     };
 
     expect(play()).toBe(play());
+  });
+});
+
+describe('input', () => {
+  it('ignores stale and duplicated sequence numbers', () => {
+    const state = makeState(2);
+    skipCountdown(state);
+
+    applyInput(state, 'p0', 10, IN_RIGHT);
+    expect(state.players[0]!.heldBits).toBe(IN_RIGHT);
+
+    // A packet from before the one we already applied, and a repeat of it.
+    applyInput(state, 'p0', 9, 0);
+    applyInput(state, 'p0', 10, 0);
+    expect(state.players[0]!.heldBits).toBe(IN_RIGHT);
+  });
+
+  it('accepts input again after a reset, even at a lower sequence number', () => {
+    // This is the reload case, and it used to lock a player out of the match
+    // completely: their client starts counting from one again while the sim
+    // still holds the old high-water mark, so every packet looks stale.
+    const state = makeState(2);
+    skipCountdown(state);
+
+    for (let i = 1; i <= 50; i++) applyInput(state, 'p0', i, IN_RIGHT);
+    const before = state.players[0]!.x;
+    run(state, 20);
+    expect(state.players[0]!.x).toBeGreaterThan(before);
+
+    resetInput(state, 'p0');
+    expect(state.players[0]!.heldBits).toBe(0);
+
+    applyInput(state, 'p0', 1, IN_RIGHT);
+    expect(state.players[0]!.heldBits).toBe(IN_RIGHT);
+
+    const resumed = state.players[0]!.x;
+    run(state, 20);
+    expect(state.players[0]!.x).toBeGreaterThan(resumed);
+  });
+
+  it('lets go of the buttons on reset without moving the character', () => {
+    const state = makeState(2);
+    skipCountdown(state);
+
+    applyInput(state, 'p0', 1, IN_RIGHT | IN_SHOOT);
+    run(state, 20);
+    const { x, y } = state.players[0]!;
+
+    // Someone whose laptop shut mid-sprint stops running; they do not teleport.
+    resetInput(state, 'p0');
+    expect(state.players[0]!.x).toBe(x);
+    expect(state.players[0]!.y).toBe(y);
+    expect(state.players[0]!.pendingPress).toBe(0);
+
+    run(state, 40);
+    // Friction bleeds off the momentum they had rather than holding the run.
+    expect(Math.abs(state.players[0]!.vx)).toBeLessThan(1);
+  });
+
+  it('treats a repeated identical mask as no new press', () => {
+    // The client re-sends its mask a few times a second so a packet lost during
+    // a reconnect cannot leave the server on a stale one. Repeats must be inert.
+    const state = makeState(2);
+    skipCountdown(state);
+
+    applyInput(state, 'p0', 1, IN_JUMP);
+    expect(state.players[0]!.pendingPress & IN_JUMP).toBe(IN_JUMP);
+    stepTick(state);
+    expect(state.players[0]!.pendingPress).toBe(0);
+
+    const jumpsLeft = state.players[0]!.jumpsLeft;
+    for (let i = 2; i <= 10; i++) applyInput(state, 'p0', i, IN_JUMP);
+    expect(state.players[0]!.pendingPress & IN_JUMP).toBe(0);
+    run(state, 10);
+    expect(state.players[0]!.jumpsLeft).toBe(jumpsLeft);
   });
 });
 
