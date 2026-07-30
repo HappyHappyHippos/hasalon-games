@@ -1,0 +1,28 @@
+# Rename `app` to something unique before the first deploy.
+app = "hasalon"
+primary_region = "ams"
+
+[build]
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  # Fly keeps a machine awake while WebSockets are connected, so this only
+  # stops it once the last player has left.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  # Rooms live in memory. Keep exactly one machine, or two friends can land on
+  # different machines and never see each other. See the README before scaling.
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "10s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  memory = "256mb"
+  cpu_kind = "shared"
+  cpus = 1

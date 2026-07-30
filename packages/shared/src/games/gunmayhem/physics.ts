@@ -1,0 +1,274 @@
+import {
+  AIR_ACCEL,
+  AIR_FRICTION,
+  AIR_JUMP_VELOCITY,
+  COYOTE_TICKS,
+  DROP_THROUGH_TICKS,
+  FAST_FALL_SPEED,
+  GRAVITY,
+  GROUND_ACCEL,
+  GROUND_FRICTION,
+  JETPACK_MAX_RISE,
+  JETPACK_THRUST,
+  JUMP_BUFFER_TICKS,
+  JUMP_VELOCITY,
+  MAX_FALL_SPEED,
+  MAX_JUMPS,
+  PLAYER_HALF_H,
+  PLAYER_HALF_W,
+  RUN_SPEED,
+  TURN_ACCEL,
+} from './constants';
+import type { Level, Platform } from './types';
+
+/**
+ * The movement half of Gun Mayhem, kept separate from the rest of the
+ * simulation because the *client runs this too*.
+ *
+ * Prediction replays the local player's inputs through this exact function, so
+ * anything that changes here changes both sides at once. Nothing in this file
+ * may read from the RNG or from any state outside the body it is given.
+ *
+ * Powerups reach this file as a `MoveMods` argument and nothing else. They are
+ * never read off a player, because the client predictor does not have a player
+ * — it has a snapshot. Both sides derive their mods from the same pure helper
+ * (`powerups.ts:movementMods`) so they cannot disagree.
+ */
+
+export interface MoveBody {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  facing: 1 | -1;
+  onGround: boolean;
+  jumpsLeft: number;
+  coyote: number;
+  jumpBuffer: number;
+  dropThrough: number;
+  /**
+   * Jetpack thrust ticks remaining. Body state rather than a buff timer,
+   * because it is spent by holding the button, not by time passing — which also
+   * means the predictor has to know about it.
+   */
+  jetpack: number;
+}
+
+export interface MoveInput {
+  left: boolean;
+  right: boolean;
+  down: boolean;
+  /** True only on the tick the jump button went down. */
+  jumpPressed: boolean;
+  /** Jump held right now, as opposed to newly pressed. Drives the jetpack. */
+  jumpHeld: boolean;
+  /** False during hitstun — you keep your momentum but lose the controls. */
+  controllable: boolean;
+}
+
+export interface MoveResult {
+  jumped: 'ground' | 'air' | null;
+  landed: boolean;
+}
+
+/** Everything a powerup is allowed to change about how a body moves. */
+export interface MoveMods {
+  /** Multiplies top running speed. */
+  speedMul: number;
+  /** Multiplies acceleration and the turnaround rate, but never friction. */
+  accelMul: number;
+  /** Multiplies gravity — below 1 is a feather fall. */
+  gravityMul: number;
+  /** Added to `MAX_JUMPS`, so 1 turns the double jump into a triple. */
+  extraJumps: number;
+}
+
+export const NO_MODS: MoveMods = {
+  speedMul: 1,
+  accelMul: 1,
+  gravityMul: 1,
+  extraJumps: 0,
+};
+
+export function stepMovement(
+  body: MoveBody,
+  input: MoveInput,
+  level: Level,
+  dt: number,
+  mods: MoveMods = NO_MODS,
+): MoveResult {
+  const result: MoveResult = { jumped: null, landed: false };
+
+  // --- timers -------------------------------------------------------------
+  if (input.jumpPressed) body.jumpBuffer = JUMP_BUFFER_TICKS;
+  else if (body.jumpBuffer > 0) body.jumpBuffer -= 1;
+  if (body.coyote > 0) body.coyote -= 1;
+  if (body.dropThrough > 0) body.dropThrough -= 1;
+
+  // --- horizontal ---------------------------------------------------------
+  const dir = input.controllable ? (input.right ? 1 : 0) - (input.left ? 1 : 0) : 0;
+  const accel = (body.onGround ? GROUND_ACCEL : AIR_ACCEL) * mods.accelMul;
+  const friction = body.onGround ? GROUND_FRICTION : AIR_FRICTION;
+  const runSpeed = RUN_SPEED * mods.speedMul;
+
+  if (dir !== 0) {
+    body.facing = dir > 0 ? 1 : -1;
+    const target = dir * runSpeed;
+    // Three different rates, depending on what you are asking for:
+    //
+    //   - already going faster than a run, in that direction: friction, so
+    //     holding *into* your own knockback bleeds it off slowly.
+    //   - moving the other way: TURN_ACCEL, so a pivot is sharp. This is what
+    //     keeps deliberately-slow acceleration from feeling unresponsive, and
+    //     it is also how you fight back against knockback.
+    //   - otherwise: plain acceleration, the visible ramp up to speed.
+    const movingFasterThanRun = Math.abs(body.vx) > runSpeed && Math.sign(body.vx) === dir;
+    const turning = body.vx !== 0 && Math.sign(body.vx) !== dir;
+    const rate = movingFasterThanRun ? friction : turning ? TURN_ACCEL * mods.accelMul : accel;
+    body.vx = approach(body.vx, target, rate * dt);
+  } else {
+    body.vx = approach(body.vx, 0, friction * dt);
+  }
+
+  // --- jumping ------------------------------------------------------------
+  if (body.jumpBuffer > 0 && input.controllable) {
+    if (body.onGround || body.coyote > 0) {
+      body.vy = JUMP_VELOCITY;
+      body.onGround = false;
+      body.coyote = 0;
+      body.jumpBuffer = 0;
+      body.jumpsLeft = MAX_JUMPS - 1 + mods.extraJumps;
+      result.jumped = 'ground';
+    } else if (body.jumpsLeft > 0) {
+      body.vy = AIR_JUMP_VELOCITY;
+      body.jumpsLeft -= 1;
+      body.jumpBuffer = 0;
+      result.jumped = 'air';
+    }
+  }
+
+  // --- dropping through a ledge -------------------------------------------
+  if (input.controllable && input.down && body.onGround) {
+    const under = platformUnder(body, level);
+    if (under?.oneWay) {
+      body.dropThrough = DROP_THROUGH_TICKS;
+      body.onGround = false;
+      body.coyote = 0;
+    }
+  }
+
+  // --- gravity ------------------------------------------------------------
+  const maxFall = input.controllable && input.down ? FAST_FALL_SPEED : MAX_FALL_SPEED;
+  body.vy += GRAVITY * mods.gravityMul * dt;
+  if (body.vy > maxFall) body.vy = maxFall;
+
+  // --- jetpack ------------------------------------------------------------
+  // Applied after gravity so the two fight over the same tick, and `onGround`
+  // here is still last tick's value, which is what we want: you cannot thrust
+  // while standing on something.
+  if (input.controllable && input.jumpHeld && body.jetpack > 0 && !body.onGround) {
+    body.vy -= JETPACK_THRUST * dt;
+    if (body.vy < -JETPACK_MAX_RISE) body.vy = -JETPACK_MAX_RISE;
+    body.jetpack -= 1;
+  }
+
+  // --- move and collide ---------------------------------------------------
+  body.onGround = false;
+
+  body.x += body.vx * dt;
+  resolveHorizontal(body, level);
+
+  const prevBottom = body.y + PLAYER_HALF_H;
+  body.y += body.vy * dt;
+  result.landed = resolveVertical(body, level, prevBottom);
+
+  if (body.onGround) {
+    body.jumpsLeft = MAX_JUMPS + mods.extraJumps;
+    body.coyote = COYOTE_TICKS;
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Collision
+// ---------------------------------------------------------------------------
+
+function resolveHorizontal(body: MoveBody, level: Level): void {
+  for (const platform of level.platforms) {
+    // One-way ledges never block sideways movement.
+    if (platform.oneWay || !overlaps(body, platform)) continue;
+
+    if (body.vx > 0) body.x = platform.x - PLAYER_HALF_W;
+    else if (body.vx < 0) body.x = platform.x + platform.w + PLAYER_HALF_W;
+    body.vx = 0;
+  }
+}
+
+function resolveVertical(body: MoveBody, level: Level, prevBottom: number): boolean {
+  let landed = false;
+
+  for (const platform of level.platforms) {
+    if (!overlaps(body, platform)) continue;
+
+    if (platform.oneWay) {
+      // Only catch someone falling onto the top face from clear above.
+      if (body.vy <= 0 || body.dropThrough > 0) continue;
+      if (prevBottom > platform.y + 2) continue;
+      land(body, platform);
+      landed = true;
+      continue;
+    }
+
+    if (body.vy > 0 && prevBottom <= platform.y + 2) {
+      land(body, platform);
+      landed = true;
+    } else if (body.vy < 0) {
+      body.y = platform.y + platform.h + PLAYER_HALF_H;
+      body.vy = 0;
+    }
+  }
+
+  return landed;
+}
+
+function land(body: MoveBody, platform: Platform): void {
+  body.y = platform.y - PLAYER_HALF_H;
+  body.vy = 0;
+  body.onGround = true;
+}
+
+function overlaps(body: MoveBody, platform: Platform): boolean {
+  return (
+    body.x + PLAYER_HALF_W > platform.x &&
+    body.x - PLAYER_HALF_W < platform.x + platform.w &&
+    body.y + PLAYER_HALF_H > platform.y &&
+    body.y - PLAYER_HALF_H < platform.y + platform.h
+  );
+}
+
+/** The platform a standing player is resting on, if any. */
+export function platformUnder(body: MoveBody, level: Level): Platform | null {
+  const feet = body.y + PLAYER_HALF_H;
+  for (const platform of level.platforms) {
+    const horizontallyOver =
+      body.x + PLAYER_HALF_W > platform.x && body.x - PLAYER_HALF_W < platform.x + platform.w;
+    if (horizontallyOver && Math.abs(feet - platform.y) <= 3) return platform;
+  }
+  return null;
+}
+
+/** Bullets stop on solid geometry but fly straight through one-way ledges. */
+export function blocksBullets(platform: Platform): boolean {
+  return !platform.oneWay;
+}
+
+export function pointInPlatform(x: number, y: number, platform: Platform): boolean {
+  return x > platform.x && x < platform.x + platform.w && y > platform.y && y < platform.y + platform.h;
+}
+
+function approach(value: number, target: number, maxDelta: number): number {
+  if (value < target) return Math.min(value + maxDelta, target);
+  if (value > target) return Math.max(value - maxDelta, target);
+  return value;
+}

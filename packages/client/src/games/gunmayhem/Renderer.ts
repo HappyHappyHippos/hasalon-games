@@ -1,0 +1,1035 @@
+import { SNAPSHOT_EVERY, TICK_MS, colorFor } from '@mg/shared';
+import {
+  ARENA_HEIGHT,
+  ARENA_WIDTH,
+  BOMB_SIZE,
+  CRATE_SIZE,
+  GM_POWERUPS,
+  PLAYER_HALF_H,
+  PLAYER_HALF_W,
+  POWERUP_SIZE,
+  RUN_SPEED,
+  WEAPONS,
+  getLevel,
+  type GmBuffKind,
+  type GmSnapshotPlayer,
+  type GunMayhemSnapshot,
+  type Level,
+  type WeaponKind,
+} from '@mg/shared/gunmayhem';
+import { feed } from '../../net/feed';
+import { sfx } from '../../audio';
+import { CanvasStage } from '../../game/CanvasStage';
+import { drawFace, drawHat, hatRise } from '../../game/appearance';
+import { bracket, lerp } from '../../game/interpolation';
+import { gmInput } from './input';
+import { GunMayhemPredictor } from './predictor';
+import { drawBackdrop, drawScenery } from './stageArt';
+import { drawSlash, drawWeapon, muzzleX, recoilStrength } from './weaponArt';
+
+const INTERP_DELAY_MS = SNAPSHOT_EVERY * TICK_MS + 22;
+const INK = '#14110f';
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  maxLife: number;
+  color: string;
+  size: number;
+}
+
+interface FloatingText {
+  x: number;
+  y: number;
+  text: string;
+  color: string;
+  life: number;
+}
+
+export interface GunMayhemRenderContext {
+  mySeat: number;
+  colorBySeat: Record<number, number>;
+  nameBySeat: Record<number, string>;
+  hatBySeat: Record<number, number>;
+  faceBySeat: Record<number, number>;
+  /** The server has frozen the tick; predicting through that only drifts. */
+  paused: boolean;
+}
+
+interface DrawnPlayer {
+  x: number;
+  y: number;
+  facing: 1 | -1;
+  onGround: boolean;
+  vx: number;
+  vy: number;
+}
+
+/** A gunshot or knife swing in progress, purely for animation. */
+interface Swing {
+  /** 1 at the moment of firing, decaying to 0. */
+  amount: number;
+  kind: WeaponKind;
+  /** Only meaningful for the knife. */
+  hit: boolean;
+}
+
+export class GunMayhemRenderer {
+  private stage: CanvasStage;
+  private context: GunMayhemRenderContext;
+  private predictor = new GunMayhemPredictor();
+
+  private raf = 0;
+  private level: Level = getLevel('salon');
+  private seenEventTick = -1;
+  private particles: Particle[] = [];
+  private floaters: FloatingText[] = [];
+  private shake = 0;
+  /** Per-seat firing animation, decayed every frame. */
+  private swings = new Map<number, Swing>();
+  /** Per-seat landing squash, so touching down has some weight to it. */
+  private squash = new Map<number, number>();
+  private wasAirborne = new Map<number, boolean>();
+  /**
+   * Per-seat stride clock, advanced by distance covered rather than by time.
+   * Per seat and not shared, or four players would advance it four times a
+   * frame and all run in lockstep.
+   */
+  private stridePhase = new Map<number, number>();
+
+  constructor(canvas: HTMLCanvasElement, context: GunMayhemRenderContext) {
+    this.stage = new CanvasStage(canvas, ARENA_WIDTH, ARENA_HEIGHT);
+    this.context = context;
+  }
+
+  setContext(context: GunMayhemRenderContext): void {
+    this.context = context;
+  }
+
+  start(): void {
+    this.stage.attach();
+    this.predictor.reset();
+    const loop = (now: number): void => {
+      this.frame(now);
+      this.raf = requestAnimationFrame(loop);
+    };
+    this.raf = requestAnimationFrame(loop);
+  }
+
+  stop(): void {
+    cancelAnimationFrame(this.raf);
+    this.stage.detach();
+    this.predictor.reset();
+  }
+
+  /** Called by the screen whenever the local button mask changes. */
+  noteInput(bits: number): void {
+    this.predictor.recordInput(bits, performance.now());
+  }
+
+  // -------------------------------------------------------------------------
+  // Frame
+  // -------------------------------------------------------------------------
+
+  private frame(now: number): void {
+    const renderTime = now - INTERP_DELAY_MS;
+    const latest = feed.latest;
+    const latestSnap = latest?.snap;
+    if (latestSnap && latestSnap.game === 'gunmayhem') {
+      this.level = getLevel(latestSnap.levelId);
+      if (latestSnap.tick > this.seenEventTick) {
+        this.consumeEvents(latestSnap, now);
+        this.seenEventTick = latestSnap.tick;
+      }
+    }
+
+    const { ctx } = this.stage;
+    this.stage.begin(INK);
+
+    // Screen shake, applied inside the letterbox transform so it never reveals
+    // the bars at the edges.
+    if (this.shake > 0.2) {
+      const amount = this.shake;
+      ctx.translate((Math.random() - 0.5) * amount, (Math.random() - 0.5) * amount);
+      this.shake *= 0.88;
+    }
+
+    this.decaySwings();
+
+    this.drawBackground(now);
+    this.drawPlatforms();
+
+    const view = this.interpolate(renderTime);
+    if (view) {
+      this.drawPowerups(view.snap, now);
+      this.drawCrates(view.snap);
+      this.drawBombs(view.snap, now);
+      this.drawBullets(view.snap, now, latest?.at ?? now);
+      this.drawPlayers(view, now, latest?.at ?? now);
+    }
+
+    this.drawParticles();
+    this.drawFloaters();
+  }
+
+  // -------------------------------------------------------------------------
+  // Stage
+  // -------------------------------------------------------------------------
+
+  private drawBackground(now: number): void {
+    const { ctx } = this.stage;
+    const palette = this.level.palette;
+
+    ctx.fillStyle = palette.sky;
+    ctx.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
+
+    // A wash of the level's accent from the top, rather than a disc — a hard
+    // circle behind the action reads as a muddy blob and fights the sprites.
+    const wash = ctx.createLinearGradient(0, 0, 0, ARENA_HEIGHT * 0.7);
+    wash.addColorStop(0, hexToRgba(palette.accent, 0.16));
+    wash.addColorStop(1, hexToRgba(palette.accent, 0));
+    ctx.fillStyle = wash;
+    ctx.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT * 0.7);
+
+    // An optional painted backdrop goes over the sky and under everything else.
+    // It is decoration: when it has not loaded — which is the normal case unless
+    // assets have been dropped into `public/stages` — the procedural bands below
+    // carry the stage on their own, exactly as they always did.
+    const hasBackdrop = drawBackdrop(ctx, this.level.id, now);
+
+    // Two slow parallax bands so the stage has depth without stealing focus.
+    // Skipped under a backdrop, which already supplies the depth.
+    if (!hasBackdrop) {
+      const drift = Math.sin(now / 6000) * 18;
+      ctx.fillStyle = palette.far;
+      ctx.beginPath();
+      ctx.ellipse(300 + drift, 640, 420, 230, 0, 0, Math.PI * 2);
+      ctx.ellipse(1000 - drift, 680, 460, 240, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = palette.near;
+      ctx.beginPath();
+      ctx.ellipse(640 + drift * 0.5, 780, 620, 210, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    drawScenery(ctx, this.level, now);
+  }
+
+  private drawPlatforms(): void {
+    const { ctx } = this.stage;
+    const palette = this.level.palette;
+
+    for (const platform of this.level.platforms) {
+      ctx.fillStyle = palette.platform;
+      roundRect(ctx, platform.x, platform.y, platform.w, platform.h, 5);
+      ctx.fill();
+
+      // Lit top face, so which side you can land on is obvious at a glance.
+      ctx.fillStyle = palette.platformTop;
+      roundRect(ctx, platform.x, platform.y, platform.w, Math.min(6, platform.h), 3);
+      ctx.fill();
+
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = INK;
+      roundRect(ctx, platform.x, platform.y, platform.w, platform.h, 5);
+      ctx.stroke();
+
+      // Dashes under one-way ledges: the visual language for "you can pass".
+      if (platform.oneWay) {
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = palette.platformTop;
+        ctx.lineWidth = 2;
+        ctx.setLineDash([7, 7]);
+        ctx.beginPath();
+        ctx.moveTo(platform.x + 4, platform.y + platform.h + 4);
+        ctx.lineTo(platform.x + platform.w - 4, platform.y + platform.h + 4);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Entities
+  // -------------------------------------------------------------------------
+
+  private interpolate(
+    renderTime: number,
+  ): { snap: GunMayhemSnapshot; bodies: Map<number, DrawnPlayer> } | null {
+    const found = bracket(feed.entries, renderTime);
+    if (!found) return null;
+
+    const fromSnap = found.from.snap;
+    if (fromSnap.game !== 'gunmayhem') return null;
+    const toSnap = found.to?.snap;
+    const next = toSnap && toSnap.game === 'gunmayhem' ? toSnap : null;
+
+    const bodies = new Map<number, DrawnPlayer>();
+    for (const player of fromSnap.players) {
+      const after = next?.players.find((p) => p.s === player.s);
+      const alpha = after ? found.alpha : 0;
+      bodies.set(player.s, {
+        x: after ? lerp(player.x, after.x, alpha) : player.x,
+        y: after ? lerp(player.y, after.y, alpha) : player.y,
+        facing: player.f,
+        onGround: player.g === 1,
+        vx: player.vx,
+        vy: player.vy,
+      });
+    }
+
+    const latest = feed.latest?.snap;
+    const snap = latest && latest.game === 'gunmayhem' ? latest : fromSnap;
+    return { snap, bodies };
+  }
+
+  private drawPlayers(
+    view: { snap: GunMayhemSnapshot; bodies: Map<number, DrawnPlayer> },
+    now: number,
+    latestAt: number,
+  ): void {
+    const { snap, bodies } = view;
+
+    for (const player of snap.players) {
+      // Out of the game, or waiting to drop back in.
+      if (player.k <= 0 && player.rt <= 0 && !bodies.has(player.s)) continue;
+      if (player.rt > 0) continue;
+      if (player.k <= 0) continue;
+
+      const isLocal = player.s === this.context.mySeat;
+      let body = bodies.get(player.s);
+
+      if (isLocal && !this.context.paused) {
+        const predicted = this.predictor.update(
+          now,
+          this.level,
+          player,
+          latestAt,
+          feed.rttMs,
+          gmInput.bits,
+        );
+        if (predicted) {
+          body = {
+            x: predicted.x,
+            y: predicted.y,
+            facing: predicted.facing,
+            onGround: predicted.onGround,
+            vx: predicted.vx,
+            vy: predicted.vy,
+          };
+        }
+      }
+      if (!body) continue;
+
+      // Ground effects run whether or not the character is drawn this frame,
+      // otherwise the invulnerability blink would strobe the dust too.
+      this.updateGroundEffects(player, body);
+      if (player.jp > 0 && body.vy < -40) this.emitJetpackFlame(body);
+
+      // Blink while invulnerable so it reads as "cannot be hit".
+      if (player.iv > 0 && Math.floor(now / 70) % 2 === 0) continue;
+
+      this.drawCharacter(player, body, isLocal, now);
+    }
+  }
+
+  /**
+   * Landing squash and skid dust. Both are derived from the body rather than
+   * from events, because the server does not send a "you are skidding" message
+   * and does not need to — the client can see it.
+   */
+  private updateGroundEffects(player: GmSnapshotPlayer, body: DrawnPlayer): void {
+    const airborne = !body.onGround;
+    const wasAirborne = this.wasAirborne.get(player.s) ?? false;
+    this.wasAirborne.set(player.s, airborne);
+
+    const current = this.squash.get(player.s) ?? 0;
+    if (wasAirborne && !airborne) {
+      this.squash.set(player.s, 1);
+      this.spawnParticles(body.x, body.y + PLAYER_HALF_H, 6, '#e6e0d4', 0, 130);
+      sfx.land();
+    } else if (current > 0) {
+      this.squash.set(player.s, Math.max(0, current - 0.09));
+    }
+
+    // Skid: on the ground, moving fast, and being asked to go the other way.
+    // Only the local player's intent is known, so this reads velocity sign
+    // changes instead — good enough, and it works for everyone.
+    if (!airborne && Math.abs(body.vx) > RUN_SPEED * 0.55 && Math.random() < 0.25) {
+      this.particles.push({
+        x: body.x - Math.sign(body.vx) * 6,
+        y: body.y + PLAYER_HALF_H - 1,
+        vx: -body.vx * 0.12,
+        vy: -30 - Math.random() * 40,
+        life: 1,
+        maxLife: 0.25,
+        color: '#d8d2c6',
+        size: 1.5 + Math.random() * 2,
+      });
+    }
+  }
+
+  private emitJetpackFlame(body: DrawnPlayer): void {
+    this.particles.push({
+      x: body.x + (Math.random() - 0.5) * 8,
+      y: body.y + PLAYER_HALF_H - 2,
+      vx: (Math.random() - 0.5) * 60,
+      vy: 120 + Math.random() * 120,
+      life: 1,
+      maxLife: 0.22,
+      color: Math.random() < 0.5 ? '#ff8b3d' : '#ffd23f',
+      size: 2 + Math.random() * 2.5,
+    });
+  }
+
+  private drawCharacter(
+    player: GmSnapshotPlayer,
+    body: DrawnPlayer,
+    isLocal: boolean,
+    now: number,
+  ): void {
+    const { ctx } = this.stage;
+    const color = colorFor(this.context.colorBySeat[player.s] ?? player.s);
+    const w = PLAYER_HALF_W;
+    const h = PLAYER_HALF_H;
+    // A top hat is taller than the gap the labels were spaced for, so both the
+    // damage label and the marker move up by however far the hat sticks out.
+    const lift = hatClearance(this.context.hatBySeat[player.s] ?? 0);
+
+    const speed = Math.abs(body.vx);
+    const swing = this.swings.get(player.s);
+    const recoil = swing ? swing.amount : 0;
+    const invisible = (player.bf?.invis ?? 0) > 0;
+
+    ctx.save();
+
+    // Invisible players are drawn faintly rather than not at all: you still
+    // need to see yourself, and a ghost is more readable than a hole.
+    if (invisible) ctx.globalAlpha = isLocal ? 0.55 : 0.12;
+
+    ctx.translate(body.x, body.y);
+
+    if (isLocal) this.drawSelfMarker(color, h, lift, now);
+
+    ctx.scale(body.facing, 1);
+
+    // Squash and stretch. Landing compresses, rising stretches — cheap, and it
+    // is most of what makes a jump feel like it has weight.
+    const landSquash = this.squash.get(player.s) ?? 0;
+    const stretch = body.onGround ? 0 : clamp(-body.vy / 1400, -0.12, 0.14);
+    const scaleY = 1 + stretch - landSquash * 0.28;
+    const scaleX = 1 - stretch * 0.7 + landSquash * 0.3;
+    ctx.translate(0, h - h * scaleY);
+    ctx.scale(scaleX, scaleY);
+
+    // Lean into the run, and back into a gunshot.
+    const lean = clamp(body.vx / RUN_SPEED, -1, 1) * 0.12 - recoil * 0.18;
+    ctx.rotate(lean * body.facing);
+
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = INK;
+    ctx.lineJoin = 'round';
+
+    this.drawLegs(player.s, body, speed, h);
+
+    // Body.
+    ctx.fillStyle = color;
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = INK;
+    roundRect(ctx, -w, -h + 4, w * 2, h * 2 - 14, 8);
+    ctx.fill();
+    ctx.stroke();
+
+    // Helmet.
+    ctx.fillStyle = shade(color, -0.25);
+    ctx.beginPath();
+    ctx.moveTo(-w, -h + 12);
+    ctx.arc(0, -h + 12, w, Math.PI, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // The context is already flipped for facing, so both of these draw as
+    // though looking right and land on the leading side either way.
+    //
+    // Two different origins: the hat sits on the crown of the helmet, but the
+    // face goes on the strip of body *below* the helmet rim — drawn any higher
+    // it would be dark ink on the dark helmet and effectively invisible.
+    ctx.save();
+    ctx.translate(0, -h + 17);
+    drawFace(ctx, this.context.faceBySeat[player.s] ?? 0, w * 0.8);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(0, -h + 12);
+    drawHat(ctx, this.context.hatBySeat[player.s] ?? 0, color, w);
+    ctx.restore();
+
+    this.drawArmedHand(player.w, color, w, recoil, swing);
+
+    ctx.restore();
+
+    if ((player.bf?.shield ?? 0) > 0) this.drawShieldBubble(body, now);
+    this.drawBuffGlyphs(player, body, lift, now);
+    this.drawNameplate(player, body, lift);
+  }
+
+  /** Bobbing triangle over your own character, so you can always find yourself. */
+  private drawSelfMarker(color: string, h: number, lift: number, now: number): void {
+    const { ctx } = this.stage;
+    ctx.save();
+    ctx.fillStyle = color;
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 2.5;
+    const bob = Math.sin(now / 220) * 2;
+    // Sits above the damage label, which is itself above the head.
+    ctx.beginPath();
+    ctx.moveTo(0, -h - 34 - lift + bob);
+    ctx.lineTo(-7, -h - 46 - lift + bob);
+    ctx.lineTo(7, -h - 46 - lift + bob);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
+   * Legs. The stride is driven by how fast you are actually moving rather than
+   * by the wall clock, which is the whole point — acceleration is deliberately
+   * slow enough to see now, and the legs are what makes it visible.
+   */
+  private drawLegs(seat: number, body: DrawnPlayer, speed: number, h: number): void {
+    const { ctx } = this.stage;
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+
+    if (!body.onGround) {
+      // Tucked while rising, reaching while falling.
+      const tuck = body.vy < 0 ? -5 : 3;
+      ctx.beginPath();
+      ctx.moveTo(-5, h - 10);
+      ctx.lineTo(-7, h + tuck);
+      ctx.moveTo(5, h - 10);
+      ctx.lineTo(7, h - tuck);
+      ctx.stroke();
+      return;
+    }
+
+    if (speed < 20) {
+      ctx.beginPath();
+      ctx.moveTo(-5, h - 10);
+      ctx.lineTo(-5, h);
+      ctx.moveTo(5, h - 10);
+      ctx.lineTo(5, h);
+      ctx.stroke();
+      return;
+    }
+
+    // Phase advances with distance covered, so the stride speeds up as you do.
+    const phase = (this.stridePhase.get(seat) ?? 0) + (speed / RUN_SPEED) * 0.42;
+    this.stridePhase.set(seat, phase % (Math.PI * 2));
+    const stride = Math.sin(phase) * 6 * Math.min(1, speed / RUN_SPEED);
+    const lift = Math.abs(Math.cos(phase)) * 3;
+    ctx.beginPath();
+    ctx.moveTo(-5, h - 10);
+    ctx.lineTo(-5 + stride, h - (stride > 0 ? lift : 0));
+    ctx.moveTo(5, h - 10);
+    ctx.lineTo(5 - stride, h - (stride < 0 ? lift : 0));
+    ctx.stroke();
+  }
+
+  /**
+   * The weapon, plus an arm to hold it — the gun used to float unattached next
+   * to the torso, which is most of why it read as a stray rectangle.
+   */
+  private drawArmedHand(
+    kind: WeaponKind,
+    color: string,
+    w: number,
+    recoil: number,
+    swing: Swing | undefined,
+  ): void {
+    const { ctx } = this.stage;
+    const shoulderX = w - 6;
+    const shoulderY = -2;
+
+    ctx.save();
+    ctx.translate(shoulderX, shoulderY);
+
+    // Knife swings overhead and down; guns stay level and kick back.
+    if (kind === 'knife' && swing) {
+      ctx.rotate((1 - swing.amount) * 0.9 - 0.45);
+    } else {
+      ctx.rotate(-recoil * 0.35);
+    }
+
+    // Arm first, so the weapon sits on top of it.
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-4, 0);
+    ctx.lineTo(8, 1);
+    ctx.stroke();
+    ctx.strokeStyle = shade(color, 0.1);
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.moveTo(-4, 0);
+    ctx.lineTo(8, 1);
+    ctx.stroke();
+
+    drawWeapon(ctx, kind, recoil);
+
+    if (kind === 'knife' && swing) {
+      drawSlash(ctx, WEAPONS.knife.melee?.reach ?? 26, 1 - swing.amount, swing.hit);
+    }
+
+    ctx.restore();
+  }
+
+  private drawShieldBubble(body: DrawnPlayer, now: number): void {
+    const { ctx } = this.stage;
+    const pulse = 1 + Math.sin(now / 140) * 0.04;
+    ctx.save();
+    ctx.translate(body.x, body.y);
+    ctx.scale(pulse, pulse);
+    ctx.strokeStyle = GM_POWERUPS.shield.color;
+    ctx.fillStyle = hexToRgba(GM_POWERUPS.shield.color, 0.16);
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, PLAYER_HALF_H + 8, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
+   * Active buffs as a row of glyphs under the feet.
+   *
+   * Deliberately on the canvas and not in the React HUD: these timers change
+   * every tick, and the zustand store is only for slow-changing data.
+   */
+  private drawBuffGlyphs(
+    player: GmSnapshotPlayer,
+    body: DrawnPlayer,
+    lift: number,
+    now: number,
+  ): void {
+    const active = player.bf ? (Object.keys(player.bf) as GmBuffKind[]) : [];
+    const hasJetpack = player.jp > 0;
+    if (active.length === 0 && !hasJetpack) return;
+
+    const { ctx } = this.stage;
+    const glyphs = active.map((kind) => GM_POWERUPS[kind]);
+    if (hasJetpack) glyphs.push(GM_POWERUPS.jetpack);
+
+    const spacing = 15;
+    const startX = body.x - ((glyphs.length - 1) * spacing) / 2;
+    const y = body.y + PLAYER_HALF_H + 14;
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = '800 13px Rubik Variable, system-ui, sans-serif';
+    glyphs.forEach((def, index) => {
+      const x = startX + index * spacing;
+      ctx.fillStyle = def.color;
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(x, y, 7, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = INK;
+      ctx.fillText(def.icon, x, y + 0.5);
+    });
+    ctx.restore();
+    void lift;
+    void now;
+  }
+
+  private drawNameplate(player: GmSnapshotPlayer, body: DrawnPlayer, lift: number): void {
+    const { ctx } = this.stage;
+    const damage = player.d;
+    // Damage colours from white through yellow to red as you get launchier.
+    const heat = Math.min(1, damage / 160);
+    const color = `rgb(255, ${Math.round(255 - heat * 190)}, ${Math.round(255 - heat * 225)})`;
+
+    // Above the head, and above the hat: below the feet it would sit inside
+    // whatever platform they are standing on.
+    const y = body.y - PLAYER_HALF_H - 10 - lift;
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.font = '800 18px Rubik Variable, system-ui, sans-serif';
+    ctx.lineWidth = 5;
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = INK;
+    ctx.fillStyle = color;
+    const label = `${Math.round(damage)}%`;
+    ctx.strokeText(label, body.x, y);
+    ctx.fillText(label, body.x, y);
+    ctx.restore();
+  }
+
+  private drawBullets(snap: GunMayhemSnapshot, now: number, latestAt: number): void {
+    const { ctx } = this.stage;
+    // Bullets are fast enough that a 30 Hz snapshot rate shows as stepping;
+    // nudging them along their own velocity smooths that out.
+    const ahead = Math.min(0.05, Math.max(0, (now - latestAt) / 1000));
+
+    for (const bullet of snap.bullets) {
+      const x = bullet.x + bullet.vx * ahead;
+      const y = bullet.y + bullet.vy * ahead;
+      const color = colorFor(this.context.colorBySeat[bullet.o] ?? bullet.o);
+      const big = bullet.k === 'rocket' || bullet.k === 'sniper';
+
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.rotate(Math.atan2(bullet.vy, bullet.vx));
+
+      ctx.globalAlpha = 0.55;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = big ? 4 : 2.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-(big ? 26 : 16), 0);
+      ctx.lineTo(0, 0);
+      ctx.stroke();
+
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = big ? '#fff3c4' : color;
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 2;
+      roundRect(ctx, -4, -(big ? 4 : 2.5), big ? 14 : 9, big ? 8 : 5, 3);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  private drawBombs(snap: GunMayhemSnapshot, now: number): void {
+    const { ctx } = this.stage;
+    for (const bomb of snap.bombs) {
+      ctx.save();
+      ctx.translate(bomb.x, bomb.y);
+      ctx.fillStyle = '#2b2b33';
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, BOMB_SIZE / 2 + 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      // Fuse spark.
+      ctx.fillStyle = Math.floor(now / 90) % 2 === 0 ? '#ffd23f' : '#ff8b3d';
+      ctx.beginPath();
+      ctx.arc(4, -BOMB_SIZE / 2 - 3, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  /**
+   * Powerups. Bobbing and haloed, so they never get confused with a weapon
+   * crate — the crate is a brown box that fell out of the sky, this is a
+   * coloured coin hovering in place.
+   */
+  private drawPowerups(snap: GunMayhemSnapshot, now: number): void {
+    const { ctx } = this.stage;
+    const half = POWERUP_SIZE / 2;
+
+    for (const powerup of snap.powerups) {
+      const def = GM_POWERUPS[powerup.k];
+      const bob = Math.sin(now / 320 + powerup.i) * 4;
+
+      ctx.save();
+      ctx.translate(powerup.x, powerup.y + bob);
+
+      // Halo, so it catches the eye across a busy stage.
+      const halo = ctx.createRadialGradient(0, 0, half * 0.5, 0, 0, half * 2.1);
+      halo.addColorStop(0, hexToRgba(def.color, 0.4));
+      halo.addColorStop(1, hexToRgba(def.color, 0));
+      ctx.fillStyle = halo;
+      ctx.beginPath();
+      ctx.arc(0, 0, half * 2.1, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = def.color;
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, half, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = INK;
+      ctx.font = '800 16px Rubik Variable, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(def.icon, 0, 1);
+      ctx.restore();
+    }
+  }
+
+  private drawCrates(snap: GunMayhemSnapshot): void {
+    const { ctx } = this.stage;
+    const half = CRATE_SIZE / 2;
+
+    for (const crate of snap.crates) {
+      ctx.save();
+      ctx.translate(crate.x, crate.y);
+
+      ctx.fillStyle = '#c98a4b';
+      ctx.strokeStyle = INK;
+      ctx.lineWidth = 3;
+      roundRect(ctx, -half, -half, CRATE_SIZE, CRATE_SIZE, 5);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(-half, -half);
+      ctx.lineTo(half, half);
+      ctx.moveTo(half, -half);
+      ctx.lineTo(-half, half);
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      ctx.fillStyle = INK;
+      ctx.font = '800 15px Rubik Variable, system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(WEAPONS[crate.w].icon, 0, 1);
+      ctx.restore();
+    }
+  }
+
+  // -------------------------------------------------------------------------
+  // Effects
+  // -------------------------------------------------------------------------
+
+  private consumeEvents(snap: GunMayhemSnapshot, now: number): void {
+    for (const event of snap.events) {
+      switch (event.t) {
+        case 'shot': {
+          sfx.shoot(event.kind);
+          const strength = recoilStrength(event.kind);
+          this.swings.set(event.seat, { amount: 1, kind: event.kind, hit: false });
+
+          // Muzzle flash and smoke, both scaled by how big the gun is.
+          const flashX = event.x + event.dir * (muzzleX(event.kind) - PLAYER_HALF_W);
+          this.spawnParticles(flashX, event.y, 4 + Math.round(strength * 8), '#fff3c4', event.dir * 260, 120 + strength * 220);
+          this.spawnParticles(flashX, event.y, 3, '#b9b3a6', event.dir * 90, 60);
+
+          // The heavy weapons thump the camera. The pistol and SMG do not, or
+          // full-auto fire would shake the screen continuously.
+          if (strength > 0.5) this.shake = Math.max(this.shake, strength * 9);
+          break;
+        }
+        case 'stab': {
+          sfx.stab(event.hit);
+          this.swings.set(event.seat, { amount: 1, kind: 'knife', hit: event.hit });
+          if (event.hit) {
+            this.spawnParticles(event.x + event.dir * 20, event.y, 10, '#fff3c4', event.dir * 220, 200);
+            this.shake = Math.max(this.shake, 6);
+          } else {
+            this.spawnParticles(event.x + event.dir * 20, event.y, 3, '#e8ecf5', event.dir * 140, 70);
+          }
+          break;
+        }
+        case 'powerup': {
+          sfx.powerup();
+          const def = GM_POWERUPS[event.kind];
+          this.spawnParticles(event.x, event.y, 16, def.color, 0, 240);
+          this.floaters.push({
+            x: event.x,
+            y: event.y - 14,
+            text: def.label,
+            color: def.color,
+            life: 1,
+          });
+          break;
+        }
+        case 'shieldPop':
+          sfx.shieldPop();
+          this.spawnParticles(event.x, event.y, 18, GM_POWERUPS.shield.color, 0, 260);
+          break;
+        case 'hit':
+          sfx.hit();
+          this.spawnParticles(event.x, event.y, 8, '#fff3c4', 0, 190);
+          this.floaters.push({
+            x: event.x,
+            y: event.y - 20,
+            text: `${Math.round(event.damage)}`,
+            color: '#ffd23f',
+            life: 1,
+          });
+          break;
+        case 'explode':
+          sfx.explode();
+          this.spawnParticles(event.x, event.y, 26, '#ff8b3d', 0, 420);
+          this.spawnParticles(event.x, event.y, 12, '#ffd23f', 0, 260);
+          this.shake = 16;
+          break;
+        case 'died':
+          sfx.ringOut();
+          this.spawnParticles(event.x, Math.min(event.y, ARENA_HEIGHT - 20), 22, '#fff', 0, 360);
+          this.shake = Math.max(this.shake, 10);
+          break;
+        case 'jump':
+          if (event.seat === this.context.mySeat) sfx.jump(event.double);
+          break;
+        case 'pickup':
+          sfx.pickup();
+          break;
+        default:
+          break;
+      }
+    }
+    void now;
+  }
+
+  /**
+   * Age the firing animations. Frame-rate dependent on purpose: it is a purely
+   * cosmetic decay, and tying it to a timer for a ~200ms flourish buys nothing.
+   */
+  private decaySwings(): void {
+    for (const [seat, swing] of this.swings) {
+      swing.amount *= 0.82;
+      if (swing.amount < 0.02) this.swings.delete(seat);
+    }
+  }
+
+  private spawnParticles(
+    x: number,
+    y: number,
+    count: number,
+    color: string,
+    biasX: number,
+    speed: number,
+  ): void {
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const magnitude = speed * (0.4 + Math.random() * 0.6);
+      this.particles.push({
+        x,
+        y,
+        vx: Math.cos(angle) * magnitude + biasX,
+        vy: Math.sin(angle) * magnitude,
+        life: 1,
+        maxLife: 0.35 + Math.random() * 0.35,
+        color,
+        size: 2 + Math.random() * 3,
+      });
+    }
+    if (this.particles.length > 400) this.particles.splice(0, this.particles.length - 400);
+  }
+
+  private drawParticles(): void {
+    const { ctx } = this.stage;
+    const dt = 1 / 60;
+
+    this.particles = this.particles.filter((p) => {
+      p.life -= dt / p.maxLife;
+      if (p.life <= 0) return false;
+      p.vy += 900 * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return true;
+    });
+  }
+
+  private drawFloaters(): void {
+    const { ctx } = this.stage;
+    const dt = 1 / 60;
+
+    this.floaters = this.floaters.filter((f) => {
+      f.life -= dt / 0.8;
+      if (f.life <= 0) return false;
+      f.y -= 40 * dt;
+
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, f.life);
+      ctx.textAlign = 'center';
+      ctx.font = '800 16px Rubik Variable, system-ui, sans-serif';
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = INK;
+      ctx.strokeText(f.text, f.x, f.y);
+      ctx.fillStyle = f.color;
+      ctx.fillText(f.text, f.x, f.y);
+      ctx.restore();
+      return true;
+    });
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Small helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * How much further up the labels have to go for this hat. The 7 is the gap
+ * already between the top of the head and the damage label, which short hats
+ * fit inside for free.
+ */
+function hatClearance(hatIndex: number): number {
+  return Math.max(0, hatRise(hatIndex, PLAYER_HALF_W) - 7);
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+/** A hex colour as an rgba() string at the given alpha, for gradient stops. */
+function hexToRgba(hex: string, alpha: number): string {
+  const value = hex.replace('#', '');
+  const num = Number.parseInt(value, 16);
+  const r = (num >> 16) & 0xff;
+  const g = (num >> 8) & 0xff;
+  const b = num & 0xff;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/** Darken (negative) or lighten (positive) a hex colour. */
+function shade(hex: string, amount: number): string {
+  const value = hex.replace('#', '');
+  const num = Number.parseInt(value, 16);
+  const channel = (shift: number): number => {
+    const base = (num >> shift) & 0xff;
+    const next = amount < 0 ? base * (1 + amount) : base + (255 - base) * amount;
+    return Math.round(Math.min(255, Math.max(0, next)));
+  };
+  return `rgb(${channel(16)}, ${channel(8)}, ${channel(0)})`;
+}

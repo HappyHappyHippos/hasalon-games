@@ -1,0 +1,54 @@
+/*
+ * הסלון — "the living room".
+ *
+ * Playful pop: warm paper, heavy ink outlines, saturated primaries, and hard
+ * offset shadows with no blur anywhere. Cards read as stickers on a wall and
+ * buttons physically press in. The one rule that holds the whole look
+ * together: if it has a shadow, that shadow is solid black and offset, never
+ * soft.
+ */
+
+:root {
+  /* Surfaces */
+  --paper: #fdf6e8;
+  --paper-2: #f4e8d2;
+  --surface: #fffdf7;
+  --ink: #14110f;
+  --ink-soft: #6f655a;
+
+  /* Accents */
+  --red: #ff5252;
+  --yellow: #ffd23f;
+  --teal: #4ecdc4;
+  --violet: #7b6cf6;
+  --orange: #ff8b3d;
+  --green: #3ddc84;
+
+  /* Structure */
+  --outline-width: 3px;
+  --outline: var(--outline-width) solid var(--ink);
+  --radius: 18px;
+  --radius-sm: 12px;
+
+  /* Hard shadows. The number is also how far a pressable thing travels. */
+  --lift-lg: 6px;
+  --lift: 4px;
+  --lift-sm: 3px;
+  --shadow-lg: var(--lift-lg) var(--lift-lg) 0 var(--ink);
+  --shadow: var(--lift) var(--lift) 0 var(--ink);
+  --shadow-sm: var(--lift-sm) var(--lift-sm) 0 var(--ink);
+
+  --font-display: 'Rubik Variable', 'Rubik', system-ui, sans-serif;
+  --font-ui: 'Inter Variable', 'Inter', system-ui, sans-serif;
+
+  color-scheme: light;
+}
+
+/*
+ * The game arenas are dark on purpose — they are the television in the room,
+ * framed by a chunky black bezel. These are the only dark tokens.
+ */
+:root {
+  --screen-bezel: var(--ink);
+  --screen-bg: #12141c;
+}

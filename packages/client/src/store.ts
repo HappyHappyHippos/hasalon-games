@@ -1,0 +1,209 @@
+import { create } from 'zustand';
+import { isFaceIndex, isHatIndex } from '@mg/shared';
+import type { GameConfig, GameId, Identity, RoomView } from '@mg/shared';
+
+export type ConnectionStatus = 'idle' | 'connecting' | 'open' | 'closed';
+
+export interface Session {
+  code: string;
+  playerId: string;
+  token: string;
+}
+
+/**
+ * The slice of live game state the React HUD needs, mirrored out of the
+ * snapshot feed at a few frames a second. Deliberately game-agnostic: Achtung
+ * fills in `effects`, Gun Mayhem fills in `stocks`/`damage`/`weapon`, and the
+ * HUD components read whichever they care about.
+ */
+export interface HudPlayer {
+  seat: number;
+  score: number;
+  alive: boolean;
+  effects?: string[];
+  stocks?: number;
+  damage?: number;
+  weapon?: string;
+  ammo?: number;
+  bombs?: number;
+}
+
+export interface Hud {
+  phase: string;
+  round: number;
+  /** Seconds left on the countdown, or 0. */
+  countdown: number;
+  players: HudPlayer[];
+}
+
+export const emptyHud: Hud = { phase: 'countdown', round: 0, countdown: 0, players: [] };
+
+export interface AppState {
+  status: ConnectionStatus;
+  room: RoomView | null;
+  playerId: string | null;
+  identity: Identity;
+  error: string | null;
+  pendingCode: string;
+  busy: boolean;
+  hud: Hud;
+  matchWinnerSeat: number | null;
+  /** Sound effects. Music is muted separately — most people want one, not both. */
+  muted: boolean;
+  musicMuted: boolean;
+  musicVolume: number;
+
+  setStatus(status: ConnectionStatus): void;
+  setRoom(room: RoomView | null): void;
+  setIdentity(patch: Partial<Identity>): void;
+  setError(error: string | null): void;
+  setPendingCode(code: string): void;
+  setBusy(busy: boolean): void;
+  setHud(hud: Hud): void;
+  setMuted(muted: boolean): void;
+  setMusicMuted(muted: boolean): void;
+  setMusicVolume(volume: number): void;
+  onWelcome(room: RoomView, playerId: string): void;
+  onMatchEnded(room: RoomView, winnerSeat: number | null): void;
+  reset(): void;
+}
+
+/** Name and colour are yours everywhere, so they live in localStorage. */
+const IDENTITY_KEY = 'mg.identity';
+
+/**
+ * The seat, however, belongs to *this tab*.
+ *
+ * sessionStorage survives a reload (so refreshing mid-match puts you straight
+ * back in your seat) but is not shared between tabs — with localStorage, a
+ * second tab would resume the first tab's seat, kick it off, and the two would
+ * take turns stealing it back forever.
+ */
+const SESSION_KEY = 'mg.session';
+
+function loadIdentity(): Identity {
+  try {
+    const raw = localStorage.getItem(IDENTITY_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<Identity>;
+      // Anything missing defaults rather than resetting the whole identity —
+      // this runs against values saved before hats and faces existed.
+      return {
+        name: typeof parsed.name === 'string' ? parsed.name : '',
+        colorIndex: Number.isInteger(parsed.colorIndex) ? Number(parsed.colorIndex) : 0,
+        hat: isHatIndex(parsed.hat) ? parsed.hat : 0,
+        face: isFaceIndex(parsed.face) ? parsed.face : 0,
+      };
+    }
+  } catch {
+    // Corrupt or unavailable storage — fall through to the default.
+  }
+  return { name: '', colorIndex: 0, hat: 0, face: 0 };
+}
+
+export function saveSession(session: Session | null): void {
+  try {
+    if (session) sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    else sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    // Private mode / storage disabled: reconnecting just won't survive reloads.
+  }
+}
+
+export function loadSession(): Session | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<Session>;
+    if (
+      typeof parsed.code === 'string' &&
+      typeof parsed.playerId === 'string' &&
+      typeof parsed.token === 'string'
+    ) {
+      return { code: parsed.code, playerId: parsed.playerId, token: parsed.token };
+    }
+  } catch {
+    // Ignore.
+  }
+  return null;
+}
+
+export const useStore = create<AppState>((set) => ({
+  status: 'idle',
+  room: null,
+  playerId: null,
+  identity: loadIdentity(),
+  error: null,
+  pendingCode: '',
+  busy: false,
+  hud: emptyHud,
+  matchWinnerSeat: null,
+  muted: false,
+  musicMuted: false,
+  musicVolume: 0.4,
+
+  setStatus: (status) => set({ status }),
+  setRoom: (room) => set({ room }),
+
+  setIdentity: (patch) =>
+    set((state) => {
+      const identity = { ...state.identity, ...patch };
+      try {
+        localStorage.setItem(IDENTITY_KEY, JSON.stringify(identity));
+      } catch {
+        // Not fatal — the name just won't be remembered next visit.
+      }
+      return { identity };
+    }),
+
+  setError: (error) => set({ error, busy: false }),
+  setPendingCode: (pendingCode) => set({ pendingCode }),
+  setBusy: (busy) => set({ busy }),
+  setHud: (hud) => set({ hud }),
+  setMuted: (muted) => set({ muted }),
+  setMusicMuted: (musicMuted) => set({ musicMuted }),
+  setMusicVolume: (musicVolume) => set({ musicVolume }),
+
+  onWelcome: (room, playerId) =>
+    set({ room, playerId, error: null, busy: false, matchWinnerSeat: null }),
+
+  onMatchEnded: (room, winnerSeat) => set({ room, matchWinnerSeat: winnerSeat }),
+
+  reset: () =>
+    set({
+      room: null,
+      playerId: null,
+      hud: emptyHud,
+      matchWinnerSeat: null,
+      busy: false,
+    }),
+}));
+
+// Handy when poking at lobby/connection state from the browser console.
+if (import.meta.env.DEV) {
+  (window as unknown as { mgStore: typeof useStore }).mgStore = useStore;
+}
+
+// ---------------------------------------------------------------------------
+// Selectors
+// ---------------------------------------------------------------------------
+
+/** Seat of the local player in the running match, or -1 while spectating. */
+export function selectMySeat(state: AppState): number {
+  if (!state.room || !state.playerId) return -1;
+  return state.room.players.find((p) => p.id === state.playerId)?.seat ?? -1;
+}
+
+export function selectIsHost(state: AppState): boolean {
+  if (!state.room || !state.playerId) return false;
+  return state.room.hostId === state.playerId;
+}
+
+/** Settings narrowed to the game currently selected, or null on a mismatch. */
+export function selectSettings<T extends GameId>(
+  room: RoomView | null,
+  gameId: T,
+): Extract<GameConfig, { game: T }> | null {
+  if (!room || room.gameId !== gameId || room.settings.game !== gameId) return null;
+  return room.settings as Extract<GameConfig, { game: T }>;
+}
