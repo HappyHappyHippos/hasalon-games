@@ -100,11 +100,27 @@ class SnapshotFeed {
     this.lastDelayUpdate = now;
     if (!clock.ready) return;
 
-    // Two jitter deviations covers the overwhelming majority of late packets;
-    // the constant absorbs the server's own send granularity.
+    // The budget, term by term. Every one of these has to be in here: the
+    // delay is what the timeline spends waiting, and a packet that has not
+    // arrived by the time the timeline reaches it may as well not exist.
+    //
+    // `minRttMs / 2` is the one that is easy to leave out and expensive to
+    // miss. `clock.toClientTime` places a snapshot at the instant the server
+    // authored it, derived from the *fastest* round trip we have seen — so
+    // the earliest that snapshot can physically be here is half that round
+    // trip after its own timestamp. Render any shallower than that and we are
+    // scheduling frames to be drawn before they could possibly have landed.
+    // Omitting it happens to work on a nearby server, where the floor below
+    // swallows it, and quietly underruns on every distant one.
     const target = Math.max(
       MIN_DELAY_MS,
-      Math.min(MAX_DELAY_MS, SNAPSHOT_INTERVAL_MS + 2 * clock.jitterMs + 8),
+      Math.min(
+        MAX_DELAY_MS,
+        clock.minRttMs / 2 + // the soonest a snapshot can get here at all
+          SNAPSHOT_INTERVAL_MS + // so there is a *next* entry to interpolate toward
+          2 * clock.jitterMs + // covers the overwhelming majority of late packets
+          8, // the server's own send granularity
+      ),
     );
 
     const error = target - this.delayMs;
