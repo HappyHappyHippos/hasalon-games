@@ -11,7 +11,9 @@ games ship today: **Gun Mayhem** (4-player platform fighter, the priority —
 this is the flagship game and should get the most care) and **Achtung die
 Kurve** (up to 8-player curve/Snake game).
 
-npm workspaces monorepo, no git repo initialized in this directory.
+npm workspaces monorepo. Git repo with `origin` at
+`github.com/HappyHappyHippos/hasalon-games` (public), deployed on Railway at
+https://hasalon-games-production.up.railway.app — see **Deployment** below.
 
 ## Commands
 
@@ -23,6 +25,7 @@ npm test                    # vitest run (whole suite; app.test.ts alone takes ~
 npm run test:watch
 npm run build                # client (vite build) then server (esbuild bundle)
 npm start                    # runs the production bundle: node packages/server/dist/server.js
+npm run smoke                # two real WS clients vs a live deploy (prod by default; needs a running server)
 ```
 
 Single test file / single test: `npx vitest run path/to/file.test.ts` or
@@ -37,6 +40,40 @@ join via the `Network:` URL Vite prints.
 
 Production smoke test: `PORT=3900 node packages/server/dist/server.js`, then
 `curl localhost:3900/healthz`.
+
+## Deployment
+
+Railway, connected to `main` — **`git push` is the deploy**, there is no deploy
+command. `railway.json` at the repo root holds the deploy config (Dockerfile
+builder, `/healthz` healthcheck, `numReplicas: 1`, `sleepApplication: true`);
+change it there and commit rather than in the dashboard. `fly.toml` is a
+leftover alternative — configured, nothing deployed to it.
+
+`railway status` / `railway logs` / `railway usage` for the current state. The
+README's "Deploying" section has the full runbook.
+
+Deployment-specific traps, all of which have bitten once:
+
+- **Replica count must stay 1.** Rooms are in memory; two replicas means two
+  friends land on different instances and never see each other. `railway.json`
+  covers ordinary deploys, but region scaling bypasses it.
+- **`railway scale` treats region aliases as distinct rows.** `railway scale
+  us-west=0 eu-west=1` did *not* drain the existing `sfo` replica — it added a
+  second one, silently. Zero the region by the exact name `railway status`
+  prints (`railway scale sfo=0`), then re-read the printed `replicas:` line to
+  confirm. Trust the output, not the arguments.
+- **`railway status` says `Online` (healthy) or `Sleeping` (idle), never
+  `Success`.** A poll loop waiting for `Success`/`Deployed` never terminates.
+  Match `Online|Sleeping|Failed|Crashed` — including the failure states, or a
+  crashloop is indistinguishable from a slow build.
+- **App sleeping is deliberately on.** It won't sleep mid-game (an open
+  WebSocket counts as activity), but sleeping wipes all room codes, so a link
+  shared and left idle for an hour is dead. Cold start is ~1.7s.
+- **A green Docker build proves nothing about WebSockets** — the proxy is what
+  breaks. Verify with `npm run smoke` (two real clients through create/join/
+  ready, also reports round-trip latency) and `curl <host>/healthz` for live
+  `rooms`/`clients` counts. Don't verify with two browser tabs (see the
+  localStorage gotcha below).
 
 ## Architecture
 
@@ -174,5 +211,13 @@ array (see the HMR gotcha below before "fixing" that pattern).
   browser tabs.** When driving multiple tabs via browser automation, front
   the tab you're inspecting before reading canvas pixels/state — a canvas
   that looks permanently blank may just be backgrounded, not broken.
+- **Two browser tabs is the wrong tool for testing two players**, for all the
+  reasons above stacked on top of each other (shared localStorage, hash
+  navigation not reloading, rAF suspended when backgrounded, and automation
+  harnesses that lose a tab when you assign `location.href`). To prove
+  multiplayer works — locally or against a deploy — run `npm run smoke`
+  (`scripts/smoke-ws.mjs`), which drives two real `ws` clients through
+  create/join/ready. Faster, deterministic, and it exercises the actual wire
+  protocol. Extend that script rather than reaching for tabs again.
 - Rooms and everything in them are in-memory; there is no persistence layer
   to reach for and none should be added casually.

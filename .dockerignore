@@ -6,3 +6,7 @@ node_modules
 .claude
 *.log
 README.md
+CLAUDE.md
+# Dev-only; kept out so editing them doesn't bust the COPY layer and force a rebuild.
+scripts
+fly.toml

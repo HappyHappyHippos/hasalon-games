@@ -47,6 +47,10 @@ npm run typecheck
 npm run build
 ```
 
+```bash
+npm run smoke        # two real WS clients against a running deploy
+```
+
 `npm start` runs the production build (server + built client on one port).
 
 ## How to play
@@ -146,7 +150,96 @@ game-agnostic — `Room.ts` only ever talks to the `GameInstance` interface.
 Any host that runs a Docker image and supports WebSockets works. The image
 builds the client, bundles the server, and serves both on `PORT` (default 3000).
 
-**Fly.io:**
+### Live deployment (Railway)
+
+| | |
+|---|---|
+| Site | https://hasalon-games-production.up.railway.app |
+| Repo | https://github.com/HappyHappyHippos/hasalon-games |
+| Railway project | `hasalon-games` (workspace *Ohad's Projects*, env `production`) |
+| Region | EU West, **1 replica** |
+
+**Deploying is just pushing.** The Railway service is connected to this repo's
+`main` branch, so `git push` builds and releases. There is no deploy command to
+remember.
+
+```bash
+git push
+```
+
+`railway.json` at the repo root is the source of truth for deploy config
+(Dockerfile builder, `/healthz` healthcheck, one replica, app sleeping) — change
+it there and commit, rather than clicking in the dashboard, or the next person
+won't know why the service behaves the way it does.
+
+Useful checks:
+
+```bash
+railway status
+```
+
+```bash
+railway logs
+```
+
+```bash
+railway usage
+```
+
+### Railway gotchas
+
+These each cost real debugging time. Read before touching the service.
+
+**Never let the replica count exceed 1.** Rooms are in memory, so a second
+replica means two friends can land on different instances and never see each
+other. `numReplicas: 1` in `railway.json` covers normal deploys, but scaling by
+region bypasses it — see below.
+
+**`railway scale` treats region aliases as separate entries.** The service was
+created in `sfo`. Running `railway scale us-west=0 eu-west=1` did *not* drain it
+— Railway kept `sfo` and `us-west` as distinct rows and the service silently
+went to **2 replicas**. Zeroing the region by the exact name shown in
+`railway status` is what actually works:
+
+```bash
+railway scale sfo=0
+```
+
+Always re-read the printed `replicas:` line afterwards. It tells you the truth;
+the command's arguments don't.
+
+**App sleeping is on** (`sleepApplication` in `railway.json`). The service scales
+to zero when idle and wakes on the next request — cold start measured ~1.7s. It
+will *not* sleep mid-game, because an open WebSocket counts as activity; it only
+drops once the last player leaves. But when it does sleep, **every room code
+dies**, same as any restart. Share a link and then all walk away for an hour and
+you'll need a fresh room.
+
+**`railway status` reports `Online` when healthy and `Sleeping` when idle** —
+neither is `Success`. If you script a wait-for-deploy poll, match on those, and
+on `Failed`/`Crashed` too, or a crashloop looks identical to still-building.
+
+### Setting it up again from scratch
+
+```bash
+railway init -n hasalon-games
+```
+
+```bash
+railway add --service hasalon-games --repo HappyHappyHippos/hasalon-games --branch main
+```
+
+```bash
+railway domain
+```
+
+A public repo needs no GitHub App authorization; a private one does (install the
+Railway GitHub app on the org, or fall back to `railway up`, which uploads the
+working directory but gives up deploy-on-push).
+
+### Fly.io (alternative, configured but unused)
+
+`fly.toml` is still in the repo and works, though nothing is deployed there.
 
 ```bash
 fly launch --no-deploy
@@ -156,21 +249,46 @@ fly launch --no-deploy
 fly deploy
 ```
 
-Edit `app` in `fly.toml` first — the name has to be unique.
-
-**Important:** rooms live in memory, so run exactly one machine. With two, your
-friends can land on different ones and never see each other:
+Edit `app` in `fly.toml` first — the name has to be unique. Same single-instance
+rule applies:
 
 ```bash
 fly scale count 1
 ```
 
-Restarting or redeploying drops any in-progress match, which is fine for a
-game night but worth knowing.
+Render works from the same Dockerfile too. Note that Render's free tier spins
+down after inactivity and takes about a minute to come back, versus Railway's
+couple of seconds.
 
-Render or Railway work from the same Dockerfile. Note that Render's free tier
-spins down after inactivity, so whoever opens the link first waits about a
-minute.
+### Verifying a deploy
+
+A green build only proves Docker succeeded — it says nothing about whether
+WebSockets survive the host's proxy, which is the part that actually breaks.
+`npm run smoke` connects two real clients, creates a room with one, joins with
+the other, and checks the broadcast reaches both:
+
+```bash
+npm run smoke
+```
+
+It defaults to production; pass a host to point it elsewhere:
+
+```bash
+npm run smoke -- http://localhost:3000
+```
+
+It also prints the round-trip time and warns if latency looks wrong for a 60 Hz
+fighter — that's what caught the service being deployed to the wrong continent.
+
+For a quick liveness check, `/healthz` returns `{"ok":true,"rooms":N,"clients":N}`,
+where the counts are the fastest way to confirm a client actually connected:
+
+```bash
+curl https://hasalon-games-production.up.railway.app/healthz
+```
+
+Don't try to verify multiplayer with two browser tabs — see the localStorage and
+hash-navigation notes in `CLAUDE.md`.
 
 ## Known limits
 

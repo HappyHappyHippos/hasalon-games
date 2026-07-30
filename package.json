@@ -17,7 +17,8 @@
     "start": "node packages/server/dist/server.js",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "smoke": "node scripts/smoke-ws.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
