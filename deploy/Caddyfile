@@ -1,0 +1,22 @@
+# TLS is automatic. Caddy provisions and renews a Let's Encrypt certificate for
+# whatever hostname SITE_ADDRESS names, provided ports 80 and 443 reach this box
+# from the public internet and the DNS A record already points here. Point DNS
+# first, then start Caddy — a failed challenge backs off before retrying.
+
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	# WebSockets need no configuration here.
+	#
+	# Caddy 2's reverse_proxy detects the Upgrade handshake and switches to a
+	# raw bidirectional tunnel on its own. The `@websocket` header matchers and
+	# explicit `websocket` directives in older guides are Caddy 1 syntax; at
+	# best they do nothing, and at worst they route the upgrade somewhere it
+	# never completes. `encode` above only touches ordinary HTTP responses and
+	# leaves an upgraded connection alone.
+	#
+	# Caddy also does not buffer proxied traffic by default, which is what we
+	# want — a buffering proxy would add delay to exactly the 30 Hz snapshot
+	# stream this whole deployment exists to keep prompt.
+	reverse_proxy app:3000
+}

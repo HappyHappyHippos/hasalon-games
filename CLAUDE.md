@@ -52,6 +52,21 @@ leftover alternative — configured, nothing deployed to it.
 `railway status` / `railway logs` / `railway usage` for the current state. The
 README's "Deploying" section has the full runbook.
 
+**The GitHub→Railway webhook has silently stopped firing before.** Two merges to
+`main` produced no build at all — not a failed one, *no deployment attempted* —
+and prod kept serving a commit from hours earlier while everything looked
+healthy. Never assume a push deployed. Check
+`railway status --json | .latestDeployment.meta.commitHash` against `git rev-parse HEAD`,
+or `railway deployment list` for whether a build even started. `railway up`
+deploys from the CLI when the webhook is dead.
+
+**`/healthz` cannot tell you which build is running.** It returns byte-identical
+JSON in every version, so a poll loop waiting for it to "come back" passes
+instantly against the stale instance you are trying to replace. To check the
+version, probe the protocol: send a current-version `join` for a nonexistent
+room and read the error — `NO_SUCH_ROOM` means the new build, `BAD_VERSION`
+means you are still talking to the old one. `npm run smoke` does this properly.
+
 Deployment-specific traps, all of which have bitten once:
 
 - **Replica count must stay 1.** Rooms are in memory; two replicas means two
@@ -137,6 +152,15 @@ React would re-render the tree 30x/sec for no benefit. Canvas renderers read
 `feed` directly in their own `requestAnimationFrame` loop. Only slow-changing
 derived data (scores, phase, countdown) gets mirrored into the zustand
 `store.ts` for the HUD, throttled in `net/socket.ts:mirrorHud`.
+
+Snapshots play back on a **synced server-time timeline**, not on arrival time
+(`net/clock.ts` maps the server clock onto ours from the min-RTT ping sample;
+`net/feed.ts` places each snapshot at the instant the server authored it). The
+render delay in `feed.ts:updateDelay` therefore has to include `minRtt/2` — a
+snapshot sits on the timeline at its authoring instant, so the soonest it can
+physically be here is half the fastest round trip later. Leaving that term out
+buffers less than the wire takes and underruns on every distant deploy, while
+looking fine on localhost. `feed.test.ts` pins it.
 
 Reconnection: `sessionStorage` (not localStorage — deliberately per-tab, see
 gotchas) holds `{code, playerId, token}`; a dropped player's seat is held for

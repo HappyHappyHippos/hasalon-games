@@ -1,0 +1,53 @@
+# Production stack for a self-hosted box. Runbook: deploy/README.md
+#
+#   docker compose -f deploy/docker-compose.yml up -d --build
+#
+# Caddy terminates TLS and proxies everything to the app on the compose network;
+# the app itself is never published to the host.
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      NODE_ENV: production
+    # Deliberately `expose`, not `ports`. The app speaks plain HTTP and has no
+    # business being reachable except through Caddy.
+    expose:
+      - '3000'
+    healthcheck:
+      # busybox wget — the runtime image is alpine and has no curl.
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/healthz']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    # NEVER run more than one of these. Rooms live in memory with no shared
+    # store, so a second replica means two friends who joined the same code
+    # land on different instances and never see each other. This is the same
+    # trap `numReplicas: 1` guarded on Railway. One is the default, so the
+    # guard here is simply that nothing ever passes `--scale app=N`.
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?set SITE_ADDRESS in deploy/.env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificates live here. Losing this volume means re-requesting from
+      # Let's Encrypt, which is rate-limited — keep it.
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
