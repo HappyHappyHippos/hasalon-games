@@ -35,10 +35,10 @@ export function GunMayhemScreen({ room, mySeat }: Props): JSX.Element {
     rendererRef.current = renderer;
     renderer.start();
 
-    const input = attachGunMayhemInput((bits, seq, changed) => {
-      // Only real button changes are edges worth replaying in prediction; the
-      // periodic repeat of an unchanged mask is purely a delivery guarantee.
-      if (changed) renderer.noteInput(bits);
+    // One input per tick, whether or not anything changed. The predictor reads
+    // the same buffer `input.ts` records into, so there is nothing to forward
+    // here beyond putting it on the wire.
+    const input = attachGunMayhemInput((bits, seq) => {
       socket.sendInput({ seq, bits });
     });
     inputRef.current = input;

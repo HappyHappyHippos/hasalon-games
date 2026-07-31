@@ -7,24 +7,71 @@ import { IN_BOMB, IN_DOWN, IN_JUMP, IN_LEFT, IN_RIGHT, IN_SHOOT } from '@mg/shar
  * It also makes taps lossless — the server diffs consecutive masks to find
  * rising edges, so a press and release inside a single tick still registers.
  */
+/** One tick's worth of buttons, as sent. */
+export interface InputRecord {
+  seq: number;
+  bits: number;
+  /** `performance.now()` when this tick was sampled, for sub-tick drawing. */
+  at: number;
+}
+
+/** Beyond this the server has stopped acknowledging and something else is wrong. */
+const HISTORY = 240;
+
 export const gmInput = {
   bits: 0,
   seq: 0,
+
+  /**
+   * Every input sent recently, in order, one per tick.
+   *
+   * This is what makes prediction correct rather than approximately correct.
+   * The client and the server do not apply a given input at the same instant —
+   * a press takes half a round trip to arrive — so comparing the two by
+   * wall-clock time reads that delay as prediction error and "corrects" it,
+   * which is what used to cancel jumps mid-air. Replaying *by sequence* from
+   * the state the server has actually acknowledged has no such gap: the same
+   * masks, in the same order, from the same starting point.
+   */
+  history: [] as InputRecord[],
+
+  /** Everything the server has not confirmed applying yet. */
+  since(ack: number): InputRecord[] {
+    let first = 0;
+    while (first < this.history.length && this.history[first]!.seq <= ack) first += 1;
+    // Acknowledged inputs can never be needed again; dropping them here keeps
+    // the buffer bounded without a separate sweep.
+    if (first > 0) this.history.splice(0, first);
+    return this.history;
+  },
+
+  reset(): void {
+    this.history.length = 0;
+    this.bits = 0;
+  },
 };
 
 /**
- * How often the current mask is re-sent even when nothing has changed.
+ * Input is sampled and sent once per simulation tick, whether or not anything
+ * changed.
  *
- * Input is sent on change only, over a socket that silently drops anything sent
- * while it is reconnecting. One lost packet would otherwise leave the server
- * acting on a stale mask until the next keypress — which, if the lost packet was
- * a *press*, means the character simply does not respond. Repeating the mask
- * costs five tiny messages a second and makes every such loss self-healing.
+ * Sending on change alone is fewer packets, but it leaves a mask's *duration*
+ * implicit — the client has no way to know how many ticks the server held it
+ * for, which makes an exact replay impossible and is what forced the old
+ * timestamp-based reconciliation. One input per tick makes sequence and tick
+ * the same thing.
  *
- * Repeats are harmless by construction: the server ORs `bits & ~heldBits` for
- * rising edges, so an unchanged mask adds nothing.
+ * It also keeps the property the old 200 ms repeat was there for: a packet lost
+ * while the socket reconnects used to leave the server on a stale mask until
+ * the next keypress, and if the lost packet was a *press* the character simply
+ * stopped responding. Now the very next tick repairs it.
+ *
+ * 60 messages a second sits well inside the server's 200/s budget
+ * (`app.ts:MAX_MESSAGES_PER_SECOND`), and repeats stay harmless by
+ * construction — the server ORs `bits & ~heldBits` for rising edges, so an
+ * unchanged mask adds nothing.
  */
-const RESEND_MS = 200;
+const SAMPLE_MS = 1000 / 60;
 
 /** Survives a reload so the sequence never restarts below the server's ack. */
 const SEQ_KEY = 'mg.gm.seq';
@@ -64,11 +111,15 @@ export function attachGunMayhemInput(onChange: OnInput): InputController {
 
   gmInput.seq = loadSeq();
 
-  const send = (bits: number, changed: boolean): void => {
-    gmInput.bits = bits;
-    gmInput.seq += 1;
-    onChange(bits, gmInput.seq, changed);
-  };
+  /**
+   * Buttons pressed since the last sample but possibly already let go.
+   *
+   * Sampling on a tick would otherwise swallow any tap that begins and ends
+   * between two samples, which at 60 Hz is an easy thing to do with a jump.
+   * ORing the presses in means such a tap is reported as held for exactly one
+   * tick — which is what the server would have made of it anyway.
+   */
+  let tapped = 0;
 
   const currentBits = (): number => {
     let bits = touchBits;
@@ -76,14 +127,18 @@ export function attachGunMayhemInput(onChange: OnInput): InputController {
     return bits;
   };
 
-  const publish = (): void => {
-    const bits = currentBits();
-    if (bits === gmInput.bits) return;
-    send(bits, true);
-  };
+  const sample = (): void => {
+    const bits = currentBits() | tapped;
+    tapped = 0;
 
-  const resend = (): void => {
-    send(currentBits(), false);
+    const changed = bits !== gmInput.bits;
+    gmInput.bits = bits;
+    gmInput.seq += 1;
+
+    gmInput.history.push({ seq: gmInput.seq, bits, at: performance.now() });
+    if (gmInput.history.length > HISTORY) gmInput.history.shift();
+
+    onChange(bits, gmInput.seq, changed);
   };
 
   const onKeyDown = (event: KeyboardEvent): void => {
@@ -91,21 +146,22 @@ export function attachGunMayhemInput(onChange: OnInput): InputController {
     event.preventDefault();
     if (event.repeat) return;
     heldKeys.add(event.code);
-    publish();
+    tapped |= KEY_BITS[event.code] ?? 0;
   };
 
   const onKeyUp = (event: KeyboardEvent): void => {
     if (!(event.code in KEY_BITS)) return;
     event.preventDefault();
     heldKeys.delete(event.code);
-    publish();
   };
 
   /** Alt-tabbing mid-sprint would otherwise leave you running forever. */
   const releaseAll = (): void => {
     heldKeys.clear();
     touchBits = 0;
-    publish();
+    // Dropped rather than kept: a half-pressed button at the moment focus is
+    // lost should not fire on the way out.
+    tapped = 0;
   };
 
   /**
@@ -127,12 +183,12 @@ export function attachGunMayhemInput(onChange: OnInput): InputController {
   window.addEventListener('blur', releaseAll);
   window.addEventListener('pagehide', onPageHide);
   document.addEventListener('visibilitychange', onVisibility);
-  const heartbeat = window.setInterval(resend, RESEND_MS);
+  const heartbeat = window.setInterval(sample, SAMPLE_MS);
 
   return {
     setButton(bit, down) {
       touchBits = down ? touchBits | bit : touchBits & ~bit;
-      publish();
+      if (down) tapped |= bit;
     },
     destroy() {
       window.clearInterval(heartbeat);
@@ -144,7 +200,7 @@ export function attachGunMayhemInput(onChange: OnInput): InputController {
       heldKeys.clear();
       touchBits = 0;
       saveSeq(gmInput.seq);
-      gmInput.bits = 0;
+      gmInput.reset();
     },
   };
 }

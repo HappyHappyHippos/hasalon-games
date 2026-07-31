@@ -265,6 +265,38 @@ export interface GmSnapshotPlayer {
   p: number;
   /** last input sequence applied, for prediction replay */
   ack: number;
+  /**
+   * Buttons held at this tick.
+   *
+   * The one field here that is about *other* people. Everything else describes
+   * where a player was; this describes what they were doing, which is what lets
+   * a client carry them forward instead of drawing them where they used to be.
+   * Without it the only honest thing to render is the past.
+   */
+  ib: number;
+  /**
+   * Ticks left of dropping through a one-way ledge.
+   *
+   * Here for the same reason as `ib`, and easy to mistake for a detail that is
+   * not worth the bytes — it is not a cosmetic timer. `resolveVertical` reads
+   * it to decide whether a one-way platform catches this body, so a client
+   * extrapolating without it re-lands a dropping player on the ledge they just
+   * left, every tick, until the next snapshot drags them back down.
+   */
+  dp: number;
+  /**
+   * Coyote ticks and buffered-jump ticks.
+   *
+   * Your own client rebuilds its predicted body from this snapshot and replays
+   * whatever input the server has not acknowledged yet. Anything the sim keeps
+   * that is *not* here is silently reset to zero by that rebuild — so leaving
+   * these off means a jump taken in the moment after walking off a ledge, or
+   * buffered a few ticks before landing, is predicted as an air jump while the
+   * server grants a ground one. The two disagree about how many jumps you have
+   * left, which is a worse bug than the one it saves two numbers on.
+   */
+  cy: number;
+  jb: number;
 }
 
 export interface GmSnapshotBullet {
