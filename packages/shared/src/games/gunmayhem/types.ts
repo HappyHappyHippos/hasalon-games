@@ -284,6 +284,19 @@ export interface GmSnapshotPlayer {
    * left, every tick, until the next snapshot drags them back down.
    */
   dp: number;
+  /**
+   * Coyote ticks and buffered-jump ticks.
+   *
+   * Your own client rebuilds its predicted body from this snapshot and replays
+   * whatever input the server has not acknowledged yet. Anything the sim keeps
+   * that is *not* here is silently reset to zero by that rebuild — so leaving
+   * these off means a jump taken in the moment after walking off a ledge, or
+   * buffered a few ticks before landing, is predicted as an air jump while the
+   * server grants a ground one. The two disagree about how many jumps you have
+   * left, which is a worse bug than the one it saves two numbers on.
+   */
+  cy: number;
+  jb: number;
 }
 
 export interface GmSnapshotBullet {

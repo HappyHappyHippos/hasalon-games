@@ -15,16 +15,31 @@
  * the escape hatch if `predict` turns out to feel worse for someone: a URL, not
  * a redeploy.
  */
-export type PlaybackMode = 'predict' | 'interpolate';
+export type PlaybackMode = 'predict' | 'interpolate' | 'server';
+
+const MODES: PlaybackMode[] = ['predict', 'interpolate', 'server'];
 
 const DEFAULT_MODE: PlaybackMode = 'predict';
 
 function readMode(): PlaybackMode {
   if (typeof window === 'undefined') return DEFAULT_MODE;
   const value = new URLSearchParams(window.location.search).get('playback');
-  return value === 'interpolate' || value === 'predict' ? value : DEFAULT_MODE;
+  return MODES.includes(value as PlaybackMode) ? (value as PlaybackMode) : DEFAULT_MODE;
 }
 
 export const playbackMode: PlaybackMode = readMode();
 
-export const isPredicting = playbackMode === 'predict';
+/** Everyone drawn at the present, including you, from your own predicted body. */
+export const isPredicting = playbackMode === 'predict' || playbackMode === 'server';
+
+/**
+ * `server`: your own character is drawn from the server like everybody else's,
+ * with no local prediction at all.
+ *
+ * Nothing can be mispredicted this way, which makes it the honest reference for
+ * whether a given artifact is prediction's fault. The cost is that your own
+ * input does not show up until the server answers — a full round trip, so
+ * around 100 ms on a link like the current one, and closer to 25 ms on a server
+ * in the same country.
+ */
+export const predictsSelf = playbackMode === 'predict';

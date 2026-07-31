@@ -23,7 +23,7 @@ import { CanvasStage } from '../../game/CanvasStage';
 import { drawFace, drawHat, hatRise } from '../../game/appearance';
 import { bracket, lerp } from '../../game/interpolation';
 import { PositionSmoother } from '../../game/PositionSmoother';
-import { isPredicting } from '../../net/playbackMode';
+import { isPredicting, predictsSelf } from '../../net/playbackMode';
 import { advancePlayer, ticksBehind } from './advance';
 import { gmInput } from './input';
 import { GunMayhemPredictor } from './predictor';
@@ -187,11 +187,6 @@ export class GunMayhemRenderer {
     this.drawnBySeat.clear();
     this.lastRemoteAt = 0;
     this.wasPredicting = false;
-  }
-
-  /** Called by the screen whenever the local button mask changes. */
-  noteInput(bits: number): void {
-    this.predictor.recordInput(bits, performance.now());
   }
 
   // -------------------------------------------------------------------------
@@ -466,19 +461,12 @@ export class GunMayhemRenderer {
       let body = bodies.get(player.s);
       let predicting = false;
 
-      if (isLocal && !this.context.paused) {
-        // Prediction runs against the *newest* server state — it is simulating
-        // forward from now, not from the delayed render time.
+      if (isLocal && predictsSelf && !this.context.paused) {
+        // Prediction runs against the *newest* server state, replaying whatever
+        // input it has not acknowledged — see `predictor.ts`.
         const server = latest.players.find((p) => p.s === player.s) ?? player;
         const controllable = latest.phase === 'playing';
-        const predicted = this.predictor.update(
-          now,
-          this.level,
-          server,
-          latestAt,
-          gmInput.bits,
-          controllable,
-        );
+        const predicted = this.predictor.update(now, this.level, server, controllable);
         if (predicted) {
           predicting = true;
           body = {
