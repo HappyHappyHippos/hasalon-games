@@ -199,9 +199,30 @@ function resolveHorizontal(body: MoveBody, level: Level): void {
     // One-way ledges never block sideways movement.
     if (platform.oneWay || !overlaps(body, platform)) continue;
 
-    if (body.vx > 0) body.x = platform.x - PLAYER_HALF_W;
-    else if (body.vx < 0) body.x = platform.x + platform.w + PLAYER_HALF_W;
-    body.vx = 0;
+    // Push out the *shorter* way.
+    //
+    // This used to pick the face from the direction of travel — moving right
+    // meant "you must have come from the left, so go back to the left face".
+    // That reasoning only holds for a body that has just touched the platform.
+    // For one that is already inside, it sends it to whichever face it is
+    // furthest from: on the main floor, 800 units wide, a body barely inside
+    // the left end and holding left was placed at the far right end of the
+    // stage. A sweep of the shipped levels found 1368 positions that did this,
+    // all of them within a body's width of a floor edge.
+    const outLeft = body.x + PLAYER_HALF_W - platform.x;
+    const outRight = platform.x + platform.w - (body.x - PLAYER_HALF_W);
+
+    if (outLeft < outRight) {
+      body.x = platform.x - PLAYER_HALF_W;
+      // Only kill the velocity that is driving into the wall. Zeroing it
+      // unconditionally, as this did, means anything that leaves a body
+      // marginally inside a platform has its movement cancelled every tick for
+      // as long as it stays there.
+      if (body.vx > 0) body.vx = 0;
+    } else {
+      body.x = platform.x + platform.w + PLAYER_HALF_W;
+      if (body.vx < 0) body.vx = 0;
+    }
   }
 }
 
