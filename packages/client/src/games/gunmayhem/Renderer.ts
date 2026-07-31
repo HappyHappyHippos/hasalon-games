@@ -23,6 +23,8 @@ import { CanvasStage } from '../../game/CanvasStage';
 import { drawFace, drawHat, hatRise } from '../../game/appearance';
 import { bracket, lerp } from '../../game/interpolation';
 import { PositionSmoother } from '../../game/PositionSmoother';
+import { isPredicting } from '../../net/playbackMode';
+import { advancePlayer, ticksBehind } from './advance';
 import { gmInput } from './input';
 import { GunMayhemPredictor } from './predictor';
 import { LocalShotFx } from './localFx';
@@ -94,6 +96,18 @@ export class GunMayhemRenderer {
   private localFx = new LocalShotFx();
   /** Absorbs the jump when your own character changes which clock it is on. */
   private smoother = new PositionSmoother();
+  /**
+   * The same, once per other player.
+   *
+   * Only used while predicting. Each frame re-extrapolates them from whatever
+   * the newest snapshot is, so the moment a new one lands their drawn position
+   * steps by however far the previous guess was wrong. That step is the whole
+   * visible cost of drawing the present instead of the past, and this is what
+   * turns it into a slide.
+   */
+  private remoteSmoothers = new Map<number, PositionSmoother>();
+  /** `serverAt` of the snapshot the remote bodies were last drawn from. */
+  private lastRemoteAt = 0;
   private wasPredicting = false;
 
   private raf = 0;
@@ -127,6 +141,8 @@ export class GunMayhemRenderer {
     this.stage.attach();
     this.predictor.reset();
     this.smoother.reset();
+    this.remoteSmoothers.clear();
+    this.lastRemoteAt = 0;
     this.wasPredicting = false;
     const loop = (now: number): void => {
       this.frame(now);
@@ -140,6 +156,8 @@ export class GunMayhemRenderer {
     this.stage.detach();
     this.predictor.reset();
     this.smoother.reset();
+    this.remoteSmoothers.clear();
+    this.lastRemoteAt = 0;
     this.wasPredicting = false;
   }
 
@@ -185,7 +203,8 @@ export class GunMayhemRenderer {
     this.drawBackground(now);
     this.drawPlatforms();
 
-    const view = this.interpolate(renderTime);
+    const serverAt = latest?.serverAt ?? now;
+    const view = isPredicting ? this.presentView(now, serverAt) : this.interpolate(renderTime);
     if (view) {
       // Bullets are extrapolated forward from the newest snapshot rather than
       // interpolated — they are fast enough that drawing them late reads as lag
@@ -193,8 +212,8 @@ export class GunMayhemRenderer {
       this.drawPowerups(view.latest, now);
       this.drawCrates(view.latest);
       this.drawBombs(view.latest, now);
-      this.drawBullets(view.latest, now, latest?.serverAt ?? now);
-      this.drawPlayers(view, now, latest?.serverAt ?? now);
+      this.drawBullets(view.latest, now, serverAt);
+      this.drawPlayers(view, now, serverAt);
     }
 
     this.drawParticles();
@@ -306,6 +325,45 @@ export class GunMayhemRenderer {
     if (strength > 0.5) this.shake = Math.max(this.shake, strength * 9);
   }
 
+  /**
+   * Everyone, simulated forward from the newest snapshot to this instant.
+   *
+   * The counterpart to `interpolate` below, and deliberately the same shape so
+   * `drawPlayers` cannot tell which one it was handed. Note what is absent:
+   * there is no buffer, no bracketing, and no correction state. Each frame
+   * starts again from the newest snapshot, so nothing accumulates and nothing
+   * needs reconciling — see the header of `advance.ts`.
+   */
+  private presentView(now: number, serverAt: number): InterpolatedView | null {
+    const newest = feed.latest?.snap;
+    if (!newest || newest.game !== 'gunmayhem') return null;
+
+    const ticks = ticksBehind(now, serverAt);
+    const playing = newest.phase === 'playing';
+    const bodies = new Map<number, DrawnPlayer>();
+
+    for (const player of newest.players) {
+      const body = advancePlayer(player, this.level, ticks, playing);
+      // null means the server owns them outright — off the stage waiting to
+      // respawn, or out. `drawPlayers` skips those on the same condition.
+      if (!body) continue;
+      bodies.set(player.s, {
+        x: body.x,
+        y: body.y,
+        facing: body.facing,
+        onGround: body.onGround,
+        vx: body.vx,
+        vy: body.vy,
+      });
+    }
+
+    // `delayed` is a misnomer in this mode and that is the point: the state a
+    // character is drawn *with* and the position it is drawn *at* now come from
+    // the same snapshot, so the mismatch the interpolated path has to be
+    // careful about cannot arise here.
+    return { latest: newest, delayed: newest, bodies };
+  }
+
   private interpolate(renderTime: number): InterpolatedView | null {
     const found = bracket(feed.entries, renderTime);
     if (!found) return null;
@@ -350,6 +408,12 @@ export class GunMayhemRenderer {
 
   private drawPlayers(view: InterpolatedView, now: number, latestAt: number): void {
     const { latest, delayed, bodies } = view;
+
+    // A new snapshot is the only thing that moves a predicted remote character
+    // for a reason that is not motion. Between snapshots their extrapolation is
+    // continuous, so smoothing every frame would fight the movement itself.
+    const snapshotChanged = latestAt !== this.lastRemoteAt;
+    this.lastRemoteAt = latestAt;
 
     for (const player of delayed.players) {
       const isLocal = player.s === this.context.mySeat;
@@ -411,6 +475,18 @@ export class GunMayhemRenderer {
         const jumped = predicting !== this.wasPredicting || this.predictor.resynced;
         this.wasPredicting = predicting;
         const drawn = this.smoother.apply(body.x, body.y, now, jumped);
+        body = { ...body, x: drawn.x, y: drawn.y };
+      } else if (isPredicting) {
+        // Everyone else, when they are being drawn at the present rather than
+        // interpolated out of the past. The interpolated path needs none of
+        // this: it only ever draws positions the server actually reported, so
+        // there is nothing to be wrong about and nothing to absorb.
+        let smoother = this.remoteSmoothers.get(player.s);
+        if (!smoother) {
+          smoother = new PositionSmoother();
+          this.remoteSmoothers.set(player.s, smoother);
+        }
+        const drawn = smoother.apply(body.x, body.y, now, snapshotChanged);
         body = { ...body, x: drawn.x, y: drawn.y };
       }
 

@@ -265,6 +265,15 @@ export interface GmSnapshotPlayer {
   p: number;
   /** last input sequence applied, for prediction replay */
   ack: number;
+  /**
+   * Buttons held at this tick.
+   *
+   * The one field here that is about *other* people. Everything else describes
+   * where a player was; this describes what they were doing, which is what lets
+   * a client carry them forward instead of drawing them where they used to be.
+   * Without it the only honest thing to render is the past.
+   */
+  ib: number;
 }
 
 export interface GmSnapshotBullet {
