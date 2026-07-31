@@ -274,6 +274,16 @@ export interface GmSnapshotPlayer {
    * Without it the only honest thing to render is the past.
    */
   ib: number;
+  /**
+   * Ticks left of dropping through a one-way ledge.
+   *
+   * Here for the same reason as `ib`, and easy to mistake for a detail that is
+   * not worth the bytes — it is not a cosmetic timer. `resolveVertical` reads
+   * it to decide whether a one-way platform catches this body, so a client
+   * extrapolating without it re-lands a dropping player on the ledge they just
+   * left, every tick, until the next snapshot drags them back down.
+   */
+  dp: number;
 }
 
 export interface GmSnapshotBullet {

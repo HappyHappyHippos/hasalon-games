@@ -56,11 +56,22 @@ import {
  * characters across the stage on nothing but a stale button mask. Past this we
  * would rather draw someone slightly behind than confidently wrong.
  */
-export const MAX_ADVANCE_TICKS = 10;
+export const MAX_ADVANCE_TICKS = 6;
 
-/** How many ticks of simulation separate `serverAt` from `now`. */
+/**
+ * How many ticks of simulation separate `serverAt` from `now`.
+ *
+ * **Fractional, and that matters.** Rounding this to a whole number pins every
+ * drawn position to a tick boundary, so a character advances in jumps of one
+ * tick of travel — `RUN_SPEED / 60`, about 5.75 units — rather than moving
+ * continuously. At exactly 60 fps that is invisible, because one tick and one
+ * frame cover the same ground; at 120 or 144 Hz the character stands still for
+ * two or three frames and then lurches. The fraction is what the caller
+ * interpolates across, and it is the difference between smooth motion and a
+ * judder that reads as broken physics.
+ */
 export function ticksBehind(now: number, serverAt: number): number {
-  const raw = Math.round((now - serverAt) / TICK_MS);
+  const raw = (now - serverAt) / TICK_MS;
   return Math.min(MAX_ADVANCE_TICKS, Math.max(0, raw));
 }
 
@@ -74,13 +85,14 @@ export function bodyFrom(server: GmSnapshotPlayer): MoveBody {
     facing: server.f,
     onGround: server.g === 1,
     jumpsLeft: server.j ?? MAX_JUMPS,
-    // Not on the wire, and not worth putting there. All three are sub-frame
-    // input-timing aids that only matter to the player pressing the buttons;
-    // a remote character starting each extrapolation without them differs only
-    // in cases we cannot predict anyway.
+    // These two really are only input-timing aids: both do nothing without a
+    // `jumpPressed` edge, and no edge is ever synthesised for a remote player.
     coyote: 0,
     jumpBuffer: 0,
-    dropThrough: 0,
+    // This one is not. `resolveVertical` reads `dropThrough` to decide whether
+    // a one-way platform catches this body, so starting at zero re-lands a
+    // dropping player on the ledge they just left.
+    dropThrough: server.dp ?? 0,
     jetpack: server.jp ?? 0,
   };
 }
@@ -116,7 +128,7 @@ export function advancePlayer(
   if (server.rt > 0 || server.k <= 0) return null;
 
   const body = bodyFrom(server);
-  if (ticks <= 0) return body;
+  if (!(ticks > 0)) return body;
 
   // Buff timers are seconds long and we are advancing by tens of milliseconds,
   // so the mods are computed once rather than aged per tick. Over the two or
@@ -141,8 +153,24 @@ export function advancePlayer(
     controllable,
   };
 
-  for (let i = 0; i < ticks; i++) {
+  // Whole ticks go through the real simulation, so collision, jump arcs and
+  // friction are exactly what the server would have produced.
+  const whole = Math.floor(ticks);
+  for (let i = 0; i < whole; i++) {
     stepMovement(body, input, level, DT, mods);
+  }
+
+  // The leftover fraction is carried linearly on the body's own velocity. This
+  // is the standard way to show a fixed-step simulation on a display that does
+  // not share its rate: stepping the sim by a partial `dt` would diverge from
+  // the server, and rounding to the nearest whole tick is what made motion
+  // judder. Collision is skipped for this last sliver — it is under one tick,
+  // so at worst a character's drawn edge grazes a platform it has already been
+  // simulated against.
+  const remainder = ticks - whole;
+  if (remainder > 0) {
+    body.x += body.vx * DT * remainder;
+    body.y += body.vy * DT * remainder;
   }
   return body;
 }

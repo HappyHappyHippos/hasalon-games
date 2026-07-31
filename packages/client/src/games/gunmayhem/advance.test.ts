@@ -4,6 +4,7 @@ import {
   COUNTDOWN_TICKS,
   IN_LEFT,
   IN_RIGHT,
+  PLAYER_HALF_H,
   applyInput,
   createState,
   defaultConfig,
@@ -62,6 +63,7 @@ function idle(overrides: Partial<GmSnapshotPlayer> = {}): GmSnapshotPlayer {
     p: 0,
     ack: 0,
     ib: 0,
+    dp: 0,
     ...overrides,
   };
 }
@@ -129,6 +131,63 @@ describe('advancePlayer', () => {
     // Still travelling in the direction of the blow, not the held button.
     expect(body!.x).toBeGreaterThan(struck.x);
     expect(body!.vx).toBeGreaterThan(0);
+  });
+
+  it('does not re-land a player who is dropping through a ledge', () => {
+    // `dropThrough` is what tells `resolveVertical` to let this body pass. Left
+    // at zero — as it was, on the theory that it was a sub-frame input aid —
+    // every extrapolated tick re-catches them on the ledge they just left, and
+    // they are drawn standing on it until the next snapshot drags them down.
+    const platform = level.platforms.find((p) => p.oneWay);
+    expect(platform, 'the salon level should have a one-way platform').toBeTruthy();
+
+    // Feet just above the ledge, falling onto it — the exact case a one-way
+    // platform is supposed to catch, unless the player is dropping through.
+    const dropping = {
+      x: platform!.x + platform!.w / 2,
+      y: platform!.y - PLAYER_HALF_H - 2,
+      vy: 200,
+      g: 0 as const,
+      dp: 8,
+    };
+
+    const passing = advancePlayer(idle(dropping), level, 4, true);
+    const caught = advancePlayer(idle({ ...dropping, dp: 0 }), level, 4, true);
+
+    // The contrast is the bug: identical body, only the flag differs. Without
+    // it the dropping player is planted on the ledge; with it they keep falling.
+    expect(passing!.onGround).toBe(false);
+    expect(caught!.onGround).toBe(true);
+    expect(passing!.y).toBeGreaterThan(caught!.y);
+  });
+
+  it('advances smoothly between ticks rather than in whole-tick steps', () => {
+    // Sampling across one tick must produce a monotonic sweep, not a step. This
+    // is the judder that was invisible at 60fps because one tick and one frame
+    // happen to cover the same ground there.
+    const running = idle({ ib: IN_RIGHT, vx: 300 });
+    const xs = [0, 0.25, 0.5, 0.75].map((f) => advancePlayer(running, level, 2 + f, true)!.x);
+
+    for (let i = 1; i < xs.length; i++) {
+      expect(xs[i]).toBeGreaterThan(xs[i - 1]!);
+    }
+    // And the steps are even, rather than three zeroes and a jump.
+    const steps = xs.slice(1).map((x, i) => x - xs[i]!);
+    const spread = Math.max(...steps) - Math.min(...steps);
+    expect(spread).toBeLessThan(0.5);
+  });
+
+  it('is continuous across a tick boundary', () => {
+    // Approaching a whole tick from below must land essentially where that
+    // whole tick does. Not bit-identical — the remainder is carried at constant
+    // velocity while a real tick also accelerates, so a fraction of a tick's
+    // acceleration separates them by design. What matters is that there is no
+    // *step*: the boundary is where quantised motion used to jump 5.75 units.
+    const running = idle({ ib: IN_RIGHT, vx: 200 });
+    const exact = advancePlayer(running, level, 3, true)!;
+    const justUnder = advancePlayer(running, level, 3 - 1e-6, true)!;
+
+    expect(Math.abs(justUnder.x - exact.x)).toBeLessThan(1);
   });
 
   it('ignores buttons outside the playing phase', () => {

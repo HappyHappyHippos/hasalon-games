@@ -942,6 +942,7 @@ function toSnapshotPlayer(p: GmPlayer): GmSnapshotPlayer {
     p: p.roundWins,
     ack: p.ackSeq,
     ib: p.heldBits,
+    dp: p.dropThrough,
   };
 
   // Only spend bytes on buffs that are actually running. Most players have none

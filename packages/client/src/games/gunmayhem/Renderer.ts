@@ -1,4 +1,4 @@
-import { colorFor } from '@mg/shared';
+import { TICK_MS, colorFor } from '@mg/shared';
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
@@ -106,8 +106,32 @@ export class GunMayhemRenderer {
    * turns it into a slide.
    */
   private remoteSmoothers = new Map<number, PositionSmoother>();
+  /**
+   * Each seat's velocity as of the last snapshot, so a correction can be told
+   * apart from an event.
+   *
+   * Extrapolation cannot know about a button press. When someone double jumps
+   * we are busy drawing them falling, and the snapshot that finally says
+   * otherwise arrives as a large, sudden change. Handing that to the smoother
+   * makes the jump *slide* upward over ~80 ms, which reads as floaty and wrong
+   * — worse than simply starting late. A jump that begins 70 ms late but
+   * crisply is much closer to right, so a discontinuity this size is snapped to
+   * and only ordinary drift is smoothed. Same distinction the local predictor
+   * draws with `VELOCITY_RESYNC`.
+   */
+  private remoteVelocity = new Map<number, { vx: number; vy: number }>();
   /** `serverAt` of the snapshot the remote bodies were last drawn from. */
   private lastRemoteAt = 0;
+  /**
+   * Where each seat was actually drawn last frame.
+   *
+   * Events carry the position the *server* resolved them at, which is where
+   * that character was when the snapshot was authored — not where they are
+   * being drawn now that everyone is extrapolated forward. Firing a muzzle
+   * flash at the event's own coordinates leaves it hanging behind the gun by
+   * however far the shooter has travelled since.
+   */
+  private drawnBySeat = new Map<number, { x: number; y: number }>();
   private wasPredicting = false;
 
   private raf = 0;
@@ -142,6 +166,8 @@ export class GunMayhemRenderer {
     this.predictor.reset();
     this.smoother.reset();
     this.remoteSmoothers.clear();
+    this.remoteVelocity.clear();
+    this.drawnBySeat.clear();
     this.lastRemoteAt = 0;
     this.wasPredicting = false;
     const loop = (now: number): void => {
@@ -157,6 +183,8 @@ export class GunMayhemRenderer {
     this.predictor.reset();
     this.smoother.reset();
     this.remoteSmoothers.clear();
+    this.remoteVelocity.clear();
+    this.drawnBySeat.clear();
     this.lastRemoteAt = 0;
     this.wasPredicting = false;
   }
@@ -209,10 +237,20 @@ export class GunMayhemRenderer {
       // Bullets are extrapolated forward from the newest snapshot rather than
       // interpolated — they are fast enough that drawing them late reads as lag
       // — so the world entities all stay on the latest one.
+      //
+      // Crucially this uses *the same horizon the players got*. Bullets used to
+      // carry their own 50 ms cap, which was harmless while everyone was drawn
+      // in the past and both errors pointed the same way. Once players moved to
+      // the present the two timelines came apart, and a bullet was drawn
+      // progressively further behind the character who fired it.
+      const ahead = isPredicting
+        ? (ticksBehind(now, serverAt) * TICK_MS) / 1000
+        : Math.min(0.05, Math.max(0, (now - serverAt) / 1000));
+
       this.drawPowerups(view.latest, now);
       this.drawCrates(view.latest);
       this.drawBombs(view.latest, now);
-      this.drawBullets(view.latest, now, serverAt);
+      this.drawBullets(view.latest, ahead);
       this.drawPlayers(view, now, serverAt);
     }
 
@@ -486,9 +524,29 @@ export class GunMayhemRenderer {
           smoother = new PositionSmoother();
           this.remoteSmoothers.set(player.s, smoother);
         }
-        const drawn = smoother.apply(body.x, body.y, now, snapshotChanged);
+
+        // Only smooth what the extrapolation could plausibly have got wrong on
+        // its own. A jump, a knockback or a landing all arrive as a velocity
+        // step no guess could have contained; sliding into those is what made
+        // jumping feel broken. Snapping resets the smoother so the new position
+        // is taken at face value.
+        let smooth = snapshotChanged;
+        if (snapshotChanged) {
+          const before = this.remoteVelocity.get(player.s);
+          if (before && isVelocityEvent(before, player)) {
+            smoother.reset();
+            smooth = false;
+          }
+          this.remoteVelocity.set(player.s, { vx: player.vx, vy: player.vy });
+        }
+
+        const drawn = smoother.apply(body.x, body.y, now, smooth);
         body = { ...body, x: drawn.x, y: drawn.y };
       }
+
+      // Recorded before the invulnerability blink can `continue` past the draw,
+      // so a shot fired on a blinking frame still flashes at the right barrel.
+      this.drawnBySeat.set(player.s, { x: body.x, y: body.y });
 
       // Ground effects run whether or not the character is drawn this frame,
       // otherwise the invulnerability blink would strobe the dust too.
@@ -848,11 +906,8 @@ export class GunMayhemRenderer {
     ctx.restore();
   }
 
-  private drawBullets(snap: GunMayhemSnapshot, now: number, latestAt: number): void {
+  private drawBullets(snap: GunMayhemSnapshot, ahead: number): void {
     const { ctx } = this.stage;
-    // Bullets are fast enough that a 30 Hz snapshot rate shows as stepping;
-    // nudging them along their own velocity smooths that out.
-    const ahead = Math.min(0.05, Math.max(0, (now - latestAt) / 1000));
 
     for (const bullet of snap.bullets) {
       const x = bullet.x + bullet.vx * ahead;
@@ -992,17 +1047,26 @@ export class GunMayhemRenderer {
           // trigger went down. Drawing them again a round trip later is a
           // double flash and a double bang.
           if (event.seat === this.context.mySeat && this.localFx.consume(now)) break;
-          this.playShot(event.seat, event.kind, event.x, event.y, event.dir);
+          // Fire it from where the shooter is being *drawn*, not from where the
+          // server resolved the shot — see `drawnBySeat`. Falls back to the
+          // event's own position for anyone not currently on screen.
+          const at = this.drawnBySeat.get(event.seat);
+          this.playShot(event.seat, event.kind, at?.x ?? event.x, at?.y ?? event.y, event.dir);
           break;
         }
         case 'stab': {
           sfx.stab(event.hit);
           this.swings.set(event.seat, { amount: 1, kind: 'knife', hit: event.hit });
+          // Same reasoning as `shot`: a knife lands at arm's length from where
+          // the attacker is drawn, not from where the server last reported them.
+          const from = this.drawnBySeat.get(event.seat);
+          const sx = (from?.x ?? event.x) + event.dir * 20;
+          const sy = from?.y ?? event.y;
           if (event.hit) {
-            this.spawnParticles(event.x + event.dir * 20, event.y, 10, '#fff3c4', event.dir * 220, 200);
+            this.spawnParticles(sx, sy, 10, '#fff3c4', event.dir * 220, 200);
             this.shake = Math.max(this.shake, 6);
           } else {
-            this.spawnParticles(event.x + event.dir * 20, event.y, 3, '#e8ecf5', event.dir * 140, 70);
+            this.spawnParticles(sx, sy, 3, '#e8ecf5', event.dir * 140, 70);
           }
           break;
         }
@@ -1154,6 +1218,25 @@ export class GunMayhemRenderer {
  * already between the top of the head and the damage label, which short hats
  * fit inside for free.
  */
+/**
+ * Whether a snapshot's velocity change is something extrapolation could have
+ * produced by itself, or something that happened *to* the player.
+ *
+ * Gravity and friction change velocity gradually and predictably, and a guess
+ * that ran a few ticks on stale buttons lands close. A jump, a landing, or a
+ * shot connecting all reverse or replace velocity outright within one tick.
+ * The threshold sits above what a couple of ticks of ordinary acceleration can
+ * account for and well below a jump (`AIR_JUMP_VELOCITY` is -720).
+ */
+const VELOCITY_EVENT = 260;
+
+function isVelocityEvent(
+  before: { vx: number; vy: number },
+  now: { vx: number; vy: number },
+): boolean {
+  return Math.hypot(now.vx - before.vx, now.vy - before.vy) > VELOCITY_EVENT;
+}
+
 function hatClearance(hatIndex: number): number {
   return Math.max(0, hatRise(hatIndex, PLAYER_HALF_W) - 7);
 }

@@ -113,6 +113,44 @@ function drawnByInterpolate(entries: FeedEntry[], now: number): number | null {
   return lerp(from.x, to.x, found.alpha);
 }
 
+/**
+ * Frame-to-frame motion, sampled at an arbitrary display rate.
+ *
+ * The measurement the first version of this file was missing. Everything here
+ * used to sample at 60 fps, which is exactly the rate at which a bug that
+ * advances the drawing in whole simulation ticks is invisible — one tick of
+ * travel and one frame of travel are the same distance, so quantised motion and
+ * smooth motion produce identical samples. On any other refresh rate they do
+ * not, and 120 and 144 Hz displays are ordinary.
+ *
+ * Reports the spread of per-frame deltas. Genuinely smooth motion at a constant
+ * speed has near-zero spread; motion pinned to tick boundaries alternates
+ * between standing still and jumping a whole tick's worth.
+ */
+function frameDeltaSpread(recorded: Recorded, fps: number): { mean: number; sd: number; max: number } {
+  const { entries, ticks } = recorded;
+  const frameMs = 1000 / fps;
+  const deltas: number[] = [];
+  let previous: number | null = null;
+
+  for (let now = 30 * TICK_MS; now < ticks * TICK_MS; now += frameMs) {
+    const drawn = drawnByPredict(entries, now);
+    if (drawn === null) {
+      previous = null;
+      continue;
+    }
+    if (previous !== null) deltas.push(Math.abs(drawn - previous));
+    previous = drawn;
+  }
+
+  // The runner eventually goes off the stage and respawns, which breaks the
+  // series; there is still plenty of steady running before that.
+  expect(deltas.length).toBeGreaterThan(50);
+  const mean = deltas.reduce((a, b) => a + b, 0) / deltas.length;
+  const variance = deltas.reduce((s, d) => s + (d - mean) ** 2, 0) / deltas.length;
+  return { mean, sd: Math.sqrt(variance), max: Math.max(...deltas) };
+}
+
 interface Error {
   mean: number;
   worst: number;
@@ -193,6 +231,29 @@ describe('playback lag against the truth', () => {
     // A far weaker claim than the steady case on purpose. The point is that the
     // worst case is still an improvement, not that it is free.
     expect(predict.mean).toBeLessThan(interpolate.mean);
+  });
+
+  it('draws smooth motion at a refresh rate that is not 60 Hz', () => {
+    // A running player at a constant speed should advance by the same distance
+    // every frame. If the drawing is pinned to whole simulation ticks it
+    // instead alternates between not moving and moving a full tick's worth,
+    // which on a 144 Hz display is a visible judder — and is what a 60 Hz
+    // sample cannot see, because there one tick and one frame coincide.
+    const run = record(TICKS, () => IN_RIGHT);
+
+    const at60 = frameDeltaSpread(run, 60);
+    const at144 = frameDeltaSpread(run, 144);
+    console.log(
+      `per-frame motion — 60Hz mean ${at60.mean.toFixed(2)}px sd ${at60.sd.toFixed(2)} max ${at60.max.toFixed(2)}\n` +
+        `                  144Hz mean ${at144.mean.toFixed(2)}px sd ${at144.sd.toFixed(2)} max ${at144.max.toFixed(2)}`,
+    );
+
+    // At 144 Hz a player running at RUN_SPEED covers ~2.4px per frame. Quantised
+    // motion instead produces a stream of 0s and 5.75s, whose spread is larger
+    // than the mean step itself.
+    expect(at144.sd).toBeLessThan(at144.mean);
+    // And no single frame should lurch by much more than a smooth step.
+    expect(at144.max).toBeLessThan(3 * at144.mean);
   });
 
   it('interpolation is behind by about what the player covers in the delay', () => {

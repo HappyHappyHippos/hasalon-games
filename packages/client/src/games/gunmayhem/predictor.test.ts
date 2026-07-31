@@ -27,6 +27,7 @@ function server(overrides: Partial<GmSnapshotPlayer> = {}): GmSnapshotPlayer {
     p: 0,
     ack: 0,
     ib: 0,
+    dp: 0,
     ...overrides,
   };
 }
