@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { DT } from '../../engine';
 import {
   ARENA_WIDTH,
   BLAST_BOTTOM,
@@ -12,9 +11,11 @@ import {
   KB_BASE,
   MAX_PLAYERS,
   PLAYER_HALF_W,
+  PLAYER_WIDTH,
   POWERUP_TTL_TICKS,
   RESPAWN_TICKS,
   ROUND_OVER_TICKS,
+  RUN_SPEED,
   SHIELD_TICKS,
 } from './constants';
 import {
@@ -679,6 +680,162 @@ describe('powerups', () => {
   });
 });
 
+/**
+ * A gap every weapon in the game should be able to cover — a body and a half,
+ * inside even the knife's reach.
+ */
+const POINT_BLANK = 45;
+
+describe('bullet collision', () => {
+  /** Stand a victim `gap` to the right of the shooter, armed with `weapon`. */
+  function duel(
+    weapon: WeaponKind,
+    gap: number,
+    players = 2,
+  ): { state: GunMayhemState; shooter: GmPlayer; victim: GmPlayer } {
+    const state = makeState(players, { weaponsEnabled: false, powerupsEnabled: false });
+    skipCountdown(state);
+    const shooter = state.players[0]!;
+    const victim = state.players[1]!;
+
+    shooter.weapon = weapon;
+    shooter.ammo = WEAPONS[weapon].ammo;
+    shooter.cooldown = 0;
+    shooter.facing = 1;
+    for (const other of state.players) {
+      if (other === shooter) continue;
+      other.invuln = 0;
+      other.y = shooter.y;
+      other.x = shooter.x + gap * 4; // out of the way unless moved deliberately
+    }
+    victim.x = shooter.x + gap;
+
+    return { state, shooter, victim };
+  }
+
+  for (const weapon of Object.keys(WEAPONS) as WeaponKind[]) {
+    it(`connects at point blank with the ${weapon}`, () => {
+      // The bug: bullets moved a whole tick and were then tested as a single
+      // *point*. A sniper round covers 45 units against a body 30 wide, so
+      // fired from here its first sampled position was already past the target
+      // and the shot registered nothing at all.
+      const { state, victim } = duel(weapon, POINT_BLANK);
+      hold(state, 0, IN_SHOOT);
+      run(state, 4);
+
+      expect(victim.damage).toBeGreaterThan(0);
+    });
+  }
+
+  it('stops a round at a wall instead of shooting through it', () => {
+    const wall = (present: boolean) => {
+      // Far enough apart that the sniper's own tick spans both, so the wall and
+      // the body are genuinely competing for the same step.
+      const { state, shooter, victim } = duel('sniper', 49);
+      if (present) {
+        state.level = {
+          ...state.level,
+          platforms: [
+            ...state.level.platforms,
+            { x: shooter.x + 30, y: shooter.y - 50, w: 10, h: 100, oneWay: false },
+          ],
+        };
+      }
+      hold(state, 0, IN_SHOOT);
+      run(state, 4);
+      return victim.damage;
+    };
+
+    // The control matters: without the wall this shot lands, so the wall is
+    // what stopped it rather than the shot missing for some other reason.
+    expect(wall(false)).toBeGreaterThan(0);
+    expect(wall(true)).toBe(0);
+  });
+
+  it('hits the nearest player in the line of fire, not the lowest seat', () => {
+    // `state.players.find(...)` returned whoever sat in the lowest seat among
+    // everyone the bullet's end point happened to be inside. Put the near
+    // target in the *higher* seat so seat order and distance disagree.
+    // Both sit inside the sniper's single 45-unit step: near spans +35..+65 and
+    // far spans +55..+85, and the round's end point lands at +66 — inside far
+    // and past near, which is exactly the pair the old end-point test got
+    // backwards.
+    const { state, shooter } = duel('sniper', 200, 3);
+    const far = state.players[1]!;
+    const near = state.players[2]!;
+    near.x = shooter.x + 50;
+    far.x = shooter.x + 70;
+
+    hold(state, 0, IN_SHOOT);
+    stepTick(state);
+
+    expect(near.damage).toBeGreaterThan(0);
+    expect(far.damage).toBe(0);
+  });
+
+  it('resolves the hit where the bullet stopped, not where it was headed', () => {
+    // The `hit` event drives the on-screen marker, and a sniper round overshoots
+    // by most of a body if it reports its end-of-tick position.
+    const { state, victim } = duel('sniper', POINT_BLANK);
+    hold(state, 0, IN_SHOOT);
+    stepTick(state);
+
+    const hit = state.events.find((e) => e.t === 'hit');
+    expect(hit).toBeDefined();
+    expect(Math.abs((hit as { x: number }).x - victim.x)).toBeLessThan(PLAYER_HALF_W + 2);
+  });
+});
+
+describe('weapon balance', () => {
+  // Relationships, not transcribed constants — `weapons.ts` stays the one place
+  // the numbers live, and these say what the numbers are *for*.
+
+  it('makes a full shotgun blast hit harder than a sniper round', () => {
+    const blast = WEAPONS.shotgun.damage * WEAPONS.shotgun.pellets;
+    expect(blast).toBeGreaterThan(WEAPONS.sniper.damage);
+    // But the sniper still launches harder, which is what actually kills.
+    expect(WEAPONS.sniper.kbMul).toBeGreaterThan(WEAPONS.shotgun.kbMul);
+  });
+
+  it('gives the knife enough reach to hit someone standing next to you', () => {
+    // The box runs from your edge to `reach` beyond it, and a target counts if
+    // their own box overlaps — so their centre has to be within this much.
+    const limit = PLAYER_HALF_W + WEAPONS.knife.melee!.reach + PLAYER_HALF_W;
+    expect(limit).toBeGreaterThan(PLAYER_WIDTH * 2);
+    // Still a knife, not a spear.
+    expect(limit).toBeLessThan(PLAYER_WIDTH * 3);
+  });
+
+  it('keeps the rocket the biggest single hit in the game', () => {
+    for (const weapon of Object.keys(WEAPONS) as WeaponKind[]) {
+      if (weapon === 'rocket') continue;
+      expect(WEAPONS.rocket.damage).toBeGreaterThanOrEqual(WEAPONS[weapon].damage);
+      expect(WEAPONS.rocket.kbMul).toBeGreaterThanOrEqual(WEAPONS[weapon].kbMul);
+    }
+    expect(WEAPONS.rocket.blastRadius).toBeGreaterThan(PLAYER_WIDTH * 4);
+  });
+
+  it('costs the strong weapons their ammo — only the pistol is unlimited', () => {
+    for (const weapon of Object.keys(WEAPONS) as WeaponKind[]) {
+      if (weapon === 'pistol') continue;
+      expect(WEAPONS[weapon].ammo).toBeGreaterThan(0);
+    }
+    expect(WEAPONS.pistol.ammo).toBe(0);
+    // The rocket is the rarest thing you can pick up, so it stays the smallest
+    // magazine of the lot.
+    for (const weapon of ['shotgun', 'sniper', 'knife', 'smg'] as WeaponKind[]) {
+      expect(WEAPONS.rocket.ammo).toBeLessThan(WEAPONS[weapon].ammo);
+    }
+  });
+
+  it('scales the knife lunge with a real chunk of a run', () => {
+    // The knife has no recoil; the lunge is its entire movement tech, and it
+    // has to be worth the risk of closing to arm's length.
+    expect(WEAPONS.knife.melee!.lunge).toBeGreaterThan(RUN_SPEED * 0.5);
+    expect(WEAPONS.knife.recoil).toBe(0);
+  });
+});
+
 describe('hitstun', () => {
   /**
    * Shoot player 1 once with `weapon`, then let go of the trigger.
@@ -697,22 +854,14 @@ describe('hitstun', () => {
     const shooter = state.players[0]!;
     const victim = state.players[1]!;
 
-    const def = WEAPONS[weapon];
     shooter.weapon = weapon;
-    shooter.ammo = def.ammo;
+    shooter.ammo = WEAPONS[weapon].ammo;
     shooter.cooldown = 0;
     shooter.facing = 1;
     victim.invuln = 0;
     victim.damage = startingDamage;
     victim.y = shooter.y;
-
-    // Stand them exactly where the bullet's first step lands, rather than at
-    // some fixed gap. Bullets move in whole-tick jumps and are tested as a
-    // point, so a sniper round — 45 units a tick — steps clean over a 30-wide
-    // body fired point blank. A knife instead needs them inside its reach.
-    victim.x = def.melee
-      ? shooter.x + PLAYER_HALF_W + def.melee.reach / 2
-      : shooter.x + PLAYER_HALF_W + 6 + def.speed * DT;
+    victim.x = shooter.x + POINT_BLANK;
 
     hold(state, 0, IN_SHOOT);
     for (let i = 0; i < 20 && victim.damage === startingDamage; i++) stepTick(state);

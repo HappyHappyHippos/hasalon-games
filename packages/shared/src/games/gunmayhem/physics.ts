@@ -288,6 +288,56 @@ export function pointInPlatform(x: number, y: number, platform: Platform): boole
   return x > platform.x && x < platform.x + platform.w && y > platform.y && y < platform.y + platform.h;
 }
 
+/**
+ * How far along the segment `(x0,y0) → (x1,y1)` it first enters the box, as a
+ * fraction in `[0, 1]`, or null if it never does.
+ *
+ * Here because testing a bullet as a *point* at the end of its tick is not
+ * enough: a sniper round covers 45 units a tick against a body 30 wide, so at
+ * close range the two sampled positions straddle the target and the shot passes
+ * clean through. The same skips a bullet through thin geometry. Sweeping the
+ * whole step asks the question the player thinks they are asking.
+ *
+ * The slab method: clip the travelled interval against each axis's pair of
+ * planes in turn, and if what is left ever inverts, the segment misses. A
+ * segment that starts inside returns 0.
+ */
+export function segmentHitsBox(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  minX: number,
+  minY: number,
+  maxX: number,
+  maxY: number,
+): number | null {
+  let enter = 0;
+  let exit = 1;
+
+  // Both axes, same arithmetic. Written out rather than looped because the pair
+  // of arrays a loop would need allocates, and this runs per bullet per
+  // platform per tick.
+  const clip = (from: number, delta: number, min: number, max: number): boolean => {
+    if (delta === 0) {
+      // Parallel to these two planes: either inside the slab for the whole
+      // segment or outside it for the whole segment. Dividing here would
+      // produce infinities that quietly poison the comparisons below.
+      return from >= min && from <= max;
+    }
+    let near = (min - from) / delta;
+    let far = (max - from) / delta;
+    if (near > far) [near, far] = [far, near];
+    if (near > enter) enter = near;
+    if (far < exit) exit = far;
+    return enter <= exit;
+  };
+
+  if (!clip(x0, x1 - x0, minX, maxX)) return null;
+  if (!clip(y0, y1 - y0, minY, maxY)) return null;
+  return enter;
+}
+
 function approach(value: number, target: number, maxDelta: number): number {
   if (value < target) return Math.min(value + maxDelta, target);
   if (value > target) return Math.max(value - maxDelta, target);

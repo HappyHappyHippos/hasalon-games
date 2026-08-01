@@ -46,7 +46,7 @@ import {
   SHIELD_KB_MUL,
 } from './constants';
 import { LEVEL_IDS, getLevel, spawnPoint } from './levels';
-import { pointInPlatform, stepMovement, type MoveInput } from './physics';
+import { blocksBullets, segmentHitsBox, stepMovement, type MoveInput } from './physics';
 import {
   applyPowerup,
   emptyBuffs,
@@ -63,7 +63,6 @@ import {
   IN_LEFT,
   IN_RIGHT,
   IN_SHOOT,
-  type Bullet,
   type GmBuffKind,
   type GmEvent,
   type GmPlayer,
@@ -504,12 +503,29 @@ function spendAmmo(player: GmPlayer): void {
   player.ammo = spent.ammo;
 }
 
+/**
+ * Bullets are swept, not sampled.
+ *
+ * They move in whole-tick jumps — a sniper round covers 45 units against a body
+ * 30 wide — so testing where one *ended up* misses anything it flew over on the
+ * way. Fired point blank the sniper's first sampled position was already past
+ * the target and the shot registered nothing at all.
+ *
+ * Everything the bullet could have struck is scored along the same segment and
+ * the nearest one wins. That also settles two things the old two-pass version
+ * decided by accident: which of several players in the line of fire is hit (the
+ * nearest, not the lowest seat), and whether a wall between you and them stops
+ * the round (it does).
+ */
 function stepBullets(state: GunMayhemState): void {
   for (let i = state.bullets.length - 1; i >= 0; i--) {
     const bullet = state.bullets[i]!;
     const weapon = WEAPONS[bullet.kind];
 
     if (weapon.explosive) bullet.vy += ROCKET_GRAVITY * DT;
+
+    const fromX = bullet.x;
+    const fromY = bullet.y;
     bullet.x += bullet.vx * DT;
     bullet.y += bullet.vy * DT;
     bullet.life -= 1;
@@ -518,18 +534,52 @@ function stepBullets(state: GunMayhemState): void {
     let hitPlayer: GmPlayer | null = null;
 
     if (!done) {
+      // Nearest impact along the step, whatever kind of thing it was.
+      let nearest = Infinity;
+
       for (const platform of state.level.platforms) {
-        if (platform.oneWay) continue; // bullets fly through ledges
-        if (pointInPlatform(bullet.x, bullet.y, platform)) {
-          done = true;
-          break;
+        if (!blocksBullets(platform)) continue; // bullets fly through ledges
+        const t = segmentHitsBox(
+          fromX,
+          fromY,
+          bullet.x,
+          bullet.y,
+          platform.x,
+          platform.y,
+          platform.x + platform.w,
+          platform.y + platform.h,
+        );
+        if (t !== null && t < nearest) nearest = t;
+      }
+
+      for (const player of state.players) {
+        if (!canBeHit(player, bullet.owner)) continue;
+        const t = segmentHitsBox(
+          fromX,
+          fromY,
+          bullet.x,
+          bullet.y,
+          player.x - PLAYER_HALF_W,
+          player.y - PLAYER_HALF_H,
+          player.x + PLAYER_HALF_W,
+          player.y + PLAYER_HALF_H,
+        );
+        // Strictly nearer, so a tie goes to the platform found first — a round
+        // stopped by a wall must not also hit whoever is stood against the
+        // far side of it.
+        if (t !== null && t < nearest) {
+          nearest = t;
+          hitPlayer = player;
         }
       }
-    }
 
-    if (!done) {
-      hitPlayer = state.players.find((p) => canBeHit(p, bullet.owner) && hitsBody(p, bullet)) ?? null;
-      if (hitPlayer) done = true;
+      if (nearest !== Infinity) {
+        done = true;
+        // Resolve at the point of impact rather than where the bullet would
+        // have got to, so blast centres and hit markers land on the target.
+        bullet.x = fromX + (bullet.x - fromX) * nearest;
+        bullet.y = fromY + (bullet.y - fromY) * nearest;
+      }
     }
 
     if (!done) continue;
@@ -563,15 +613,6 @@ function stepBullets(state: GunMayhemState): void {
 
 function canBeHit(player: GmPlayer, ownerSeat: number): boolean {
   return player.active && player.invuln <= 0 && player.seat !== ownerSeat;
-}
-
-function hitsBody(player: GmPlayer, bullet: Bullet): boolean {
-  return (
-    bullet.x > player.x - PLAYER_HALF_W &&
-    bullet.x < player.x + PLAYER_HALF_W &&
-    bullet.y > player.y - PLAYER_HALF_H &&
-    bullet.y < player.y + PLAYER_HALF_H
-  );
 }
 
 // ---------------------------------------------------------------------------

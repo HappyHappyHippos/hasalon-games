@@ -9,7 +9,13 @@ import {
   PLAYER_HALF_H,
   RUN_SPEED,
 } from './constants';
-import { stepMovement, type MoveBody, type MoveInput, type MoveMods } from './physics';
+import {
+  segmentHitsBox,
+  stepMovement,
+  type MoveBody,
+  type MoveInput,
+  type MoveMods,
+} from './physics';
 import type { Level } from './types';
 
 /** A deliberately plain stage, so each test asserts one thing about physics. */
@@ -366,5 +372,55 @@ describe('determinism', () => {
 
     expect(a).toEqual(b);
     expect(Number.isFinite(a.x) && Number.isFinite(a.y)).toBe(true);
+  });
+});
+
+describe('segmentHitsBox', () => {
+  // A 30x44 box centred on (100, 100), the size of a player.
+  const box = [85, 78, 115, 122] as const;
+  const hit = (x0: number, y0: number, x1: number, y1: number): number | null =>
+    segmentHitsBox(x0, y0, x1, y1, ...box);
+
+  it('catches a segment that steps clean over the box', () => {
+    // The actual bug: a sniper round covers 45 units a tick against a 30-wide
+    // body, so neither endpoint is inside it and a point test finds nothing.
+    expect(hit(70, 100, 130, 100)).not.toBeNull();
+    expect(hit(70, 100, 130, 100)).toBeCloseTo((85 - 70) / 60, 5);
+  });
+
+  it('reports where along the segment the box starts, not just that it does', () => {
+    // Halfway to the near face.
+    expect(hit(55, 100, 115, 100)).toBeCloseTo(0.5, 5);
+  });
+
+  it('returns 0 for a segment that begins inside', () => {
+    expect(hit(100, 100, 400, 100)).toBe(0);
+  });
+
+  it('misses when the segment passes above, below or short', () => {
+    expect(hit(70, 50, 130, 50)).toBeNull(); // over the top
+    expect(hit(70, 200, 130, 200)).toBeNull(); // under it
+    expect(hit(0, 100, 60, 100)).toBeNull(); // stops short
+    expect(hit(130, 100, 200, 100)).toBeNull(); // starts past it
+  });
+
+  it('handles a segment with no length on an axis', () => {
+    // Dividing by a zero delta produces infinities that quietly poison the
+    // interval arithmetic, so each axis is special-cased. Purely vertical,
+    // purely horizontal, and a segment of no length at all.
+    expect(hit(100, 0, 100, 300)).toBeCloseTo(78 / 300, 5);
+    expect(hit(200, 0, 200, 300)).toBeNull();
+    expect(hit(0, 100, 300, 100)).toBeCloseTo(85 / 300, 5);
+    expect(hit(100, 100, 100, 100)).toBe(0);
+    expect(hit(0, 0, 0, 0)).toBeNull();
+  });
+
+  it('catches a diagonal that clips a corner', () => {
+    // Enters through the top face near the right edge. A per-axis test that
+    // did not intersect the two intervals would call this a hit anywhere.
+    expect(hit(80, 60, 120, 100)).not.toBeNull();
+    // Same slope, shifted so it passes the corner outside: the x interval and
+    // the y interval each overlap the box, but never at the same time.
+    expect(hit(40, 60, 80, 100)).toBeNull();
   });
 });

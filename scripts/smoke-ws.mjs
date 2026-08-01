@@ -310,6 +310,13 @@ if (!(movedAfterHit > 5)) {
 }
 console.log(`  ✓ guest still moves after being shot (${movedAfterHit.toFixed(0)}px)`);
 
+// Bullet tunnelling — a fast round stepping clean over a body between two ticks
+// — is deliberately *not* probed here. It only shows up on the sniper, at
+// 2700 units/sec, and there is no wire message that hands a player a specific
+// weapon: crates drop one at random every 7–12 seconds, which is neither quick
+// nor repeatable. A probe firing the pistol would pass either way and prove
+// nothing. `sim.test.ts:bullet collision` covers it against the real simulation.
+
 // ---------------------------------------------------------------------------
 // Recoil
 // ---------------------------------------------------------------------------
