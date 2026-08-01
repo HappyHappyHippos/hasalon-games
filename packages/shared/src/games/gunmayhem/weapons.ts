@@ -17,7 +17,15 @@ export interface WeaponDef {
   pellets: number;
   /** Radians of random spread per pellet. */
   spread: number;
-  /** Backwards shove applied to the shooter. Recoil-jumping is a real technique. */
+  /**
+   * Backwards shove applied to the shooter, in units per second, the same
+   * standing as airborne.
+   *
+   * Compare against `RUN_SPEED` (345) to read these: a value near it is a shove
+   * you fight, well over it is a launch. Ground friction bleeds a kick off in
+   * about `recoil / 31` ticks and air friction takes six times longer, so the
+   * air is where these are felt. Recoil-jumping is a real technique.
+   */
   recoil: number;
   explosive: boolean;
   blastRadius: number;
@@ -43,7 +51,7 @@ export const WEAPONS: Record<WeaponKind, WeaponDef> = {
     ammo: 0,
     pellets: 1,
     spread: 0,
-    recoil: 55,
+    recoil: 150,
     explosive: false,
     blastRadius: 0,
     life: 70,
@@ -59,7 +67,7 @@ export const WEAPONS: Record<WeaponKind, WeaponDef> = {
     ammo: 70,
     pellets: 1,
     spread: 0.045,
-    recoil: 26,
+    recoil: 45,
     explosive: false,
     blastRadius: 0,
     life: 60,
@@ -75,7 +83,7 @@ export const WEAPONS: Record<WeaponKind, WeaponDef> = {
     ammo: 18,
     pellets: 5,
     spread: 0.13,
-    recoil: 210,
+    recoil: 340,
     explosive: false,
     blastRadius: 0,
     life: 34,
@@ -91,7 +99,7 @@ export const WEAPONS: Record<WeaponKind, WeaponDef> = {
     ammo: 7,
     pellets: 1,
     spread: 0,
-    recoil: 300,
+    recoil: 460,
     explosive: false,
     blastRadius: 0,
     life: 90,
@@ -107,7 +115,7 @@ export const WEAPONS: Record<WeaponKind, WeaponDef> = {
     ammo: 4,
     pellets: 1,
     spread: 0,
-    recoil: 240,
+    recoil: 400,
     explosive: true,
     blastRadius: 120,
     life: 120,

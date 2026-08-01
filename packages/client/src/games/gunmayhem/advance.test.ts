@@ -59,6 +59,7 @@ function idle(overrides: Partial<GmSnapshotPlayer> = {}): GmSnapshotPlayer {
     jp: 0,
     w: 'pistol',
     am: 0,
+  cd: 0,
     bo: 3,
     p: 0,
     ack: 0,

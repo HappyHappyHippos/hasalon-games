@@ -4,9 +4,13 @@ import {
   IN_JUMP,
   IN_LEFT,
   IN_RIGHT,
+  IN_SHOOT,
   MAX_JUMPS,
+  applyShotImpulse,
   emptyBuffs,
   movementMods,
+  shotCooldownTicks,
+  spendRound,
   stepMovement,
   type GmBuffKind,
   type GmBuffs,
@@ -14,6 +18,7 @@ import {
   type Level,
   type MoveBody,
   type MoveInput,
+  type WeaponKind,
 } from '@mg/shared/gunmayhem';
 import { gmInput } from './input';
 
@@ -49,6 +54,11 @@ import { gmInput } from './input';
  * far worse than following. And buffs are adopted from the snapshot rather than
  * anticipated, since a powerup pickup is not something the local sim can know
  * about first.
+ *
+ * **Firing is replayed too**, because it moves you: recoil is an impulse on
+ * `vx`, and a knife's lunge is the same thing pointing the other way. Only the
+ * shooter's own movement is replayed here — no bullet is created, nothing takes
+ * damage, and whether a shot connected stays entirely the server's business.
  */
 
 /**
@@ -73,6 +83,10 @@ export class GunMayhemPredictor {
   private reportedJumpSeq = 0;
   private jumped: 'ground' | 'air' | null = null;
 
+  /** The same, for shots. Replay rediscovers each one until the server acks it. */
+  private reportedShotSeq = 0;
+  private fired: WeaponKind | null = null;
+
   /** Set for the one frame in which the body moved for a reason that is not motion. */
   resynced = false;
 
@@ -85,6 +99,8 @@ export class GunMayhemPredictor {
     this.resynced = false;
     this.jumped = null;
     this.reportedJumpSeq = 0;
+    this.fired = null;
+    this.reportedShotSeq = 0;
   }
 
   stop(): void {
@@ -100,6 +116,20 @@ export class GunMayhemPredictor {
     const jumped = this.jumped;
     this.jumped = null;
     return jumped;
+  }
+
+  /**
+   * A shot predicted since the last call, and what it was fired with. Reading
+   * it clears it.
+   *
+   * This is the single place that decides your own gun went off — the flash,
+   * the bang and the kick all come from the same tick, which they could not if
+   * the effects kept their own separate cooldown clock.
+   */
+  consumeShot(): WeaponKind | null {
+    const fired = this.fired;
+    this.fired = null;
+    return fired;
   }
 
   /**
@@ -124,7 +154,8 @@ export class GunMayhemPredictor {
     }
 
     const body = bodyFrom(server);
-    const mods = movementMods(buffsFrom(server));
+    const buffs = buffsFrom(server);
+    const mods = movementMods(buffs);
 
     // Everything the server has not confirmed. `since` also prunes what it has,
     // so the buffer stays bounded without a separate sweep.
@@ -138,8 +169,24 @@ export class GunMayhemPredictor {
     let jumpedAt = 0;
     let jumpedKind: 'ground' | 'air' | null = null;
 
+    // The gun, carried through the replay the same way. `cd` is where the
+    // server's own cooldown stood, so the first replayed shot lands on the tick
+    // the server will fire it on rather than one either side.
+    let weapon = server.w;
+    let ammo = server.am;
+    let cooldown = server.cd ?? 0;
+    let firedAt = 0;
+    let firedKind: WeaponKind | null = null;
+
     for (let i = start; i < pending.length; i++) {
       const record = pending[i]!;
+
+      // Server order, exactly: `stepTimers` runs down the cooldown, then
+      // `stepBodies` moves you and sets which way you are facing, and only then
+      // does `stepShooting` fire and kick you the other way. Recoil therefore
+      // lands on `vx` *after* this tick's movement, and shows up in the next.
+      cooldown = Math.max(0, cooldown - 1);
+
       const result = stepMovement(
         body,
         toMoveInput(record.bits, record.bits & ~previous, controllable),
@@ -151,6 +198,17 @@ export class GunMayhemPredictor {
         jumpedAt = record.seq;
         jumpedKind = result.jumped;
       }
+
+      // Held, not pressed: `stepShooting` gates on the held bit and the
+      // cooldown and nothing else, so every gun is effectively full-auto.
+      if (controllable && (record.bits & IN_SHOOT) !== 0 && cooldown === 0) {
+        cooldown = shotCooldownTicks(weapon, buffs);
+        applyShotImpulse(body, weapon);
+        firedAt = record.seq;
+        firedKind = weapon;
+        ({ weapon, ammo } = spendRound(weapon, ammo));
+      }
+
       previous = record.bits;
     }
 
@@ -170,6 +228,10 @@ export class GunMayhemPredictor {
     if (jumpedKind && jumpedAt > this.reportedJumpSeq) {
       this.reportedJumpSeq = jumpedAt;
       this.jumped = jumpedKind;
+    }
+    if (firedKind && firedAt > this.reportedShotSeq) {
+      this.reportedShotSeq = firedAt;
+      this.fired = firedKind;
     }
 
     if (this.seeded && Math.hypot(body.x - this.lastX, body.y - this.lastY) > RESYNC_DISTANCE) {

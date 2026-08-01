@@ -190,10 +190,10 @@ export const BULLET_SIZE = 5;
 /** Rockets arc a little; everything else flies flat. */
 export const ROCKET_GRAVITY = 420;
 
-/**
- * Recoil while standing, as a fraction of the weapon's full kick. Friction is
- * low enough now that full recoil on the ground slides you around annoyingly,
- * but airborne recoil is a real movement option and stays at 100% — it is half
- * of why the shotgun is fun.
+/*
+ * Recoil is per-weapon and lives in `weapons.ts`. There is deliberately no
+ * ground/air multiplier: the kick is one impulse, applied the same however you
+ * are standing, and `GROUND_FRICTION` being six times `AIR_FRICTION` is what
+ * makes it read differently in the air. Scaling it down on the ground *as well*
+ * put every gun below the point where anyone could feel it.
  */
-export const RECOIL_GROUND_MUL = 0.45;

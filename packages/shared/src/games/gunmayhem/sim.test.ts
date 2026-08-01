@@ -13,7 +13,6 @@ import {
   MAX_PLAYERS,
   PLAYER_HALF_W,
   POWERUP_TTL_TICKS,
-  RECOIL_GROUND_MUL,
   RESPAWN_TICKS,
   ROUND_OVER_TICKS,
   SHIELD_TICKS,
@@ -781,34 +780,83 @@ describe('hitstun', () => {
 });
 
 describe('recoil', () => {
-  it('kicks less on the ground than in the air', () => {
-    const grounded = makeState(1, { weaponsEnabled: false, powerupsEnabled: false });
-    skipCountdown(grounded);
-    const standing = grounded.players[0]!;
-    // Let them settle onto the stage before measuring.
-    run(grounded, 60);
-    expect(standing.onGround).toBe(true);
-    standing.vx = 0;
-    standing.facing = 1;
-    standing.cooldown = 0;
-    hold(grounded, 0, IN_SHOOT);
-    stepTick(grounded);
-    const groundKick = Math.abs(standing.vx);
+  /**
+   * Fire once, facing right, and report the velocity it left behind.
+   *
+   * Nothing else touches `vx` on the way: the shooter starts at rest holding no
+   * direction, so the friction pass in `stepMovement` takes 0 to 0, and the kick
+   * lands after it in the same tick.
+   */
+  function kick(weapon: WeaponKind, airborne: boolean): number {
+    const state = makeState(1, { weaponsEnabled: false, powerupsEnabled: false });
+    skipCountdown(state);
+    const player = state.players[0]!;
+    run(state, 60); // let them settle onto the stage
 
-    const airborne = makeState(1, { weaponsEnabled: false, powerupsEnabled: false });
-    skipCountdown(airborne);
-    const flying = airborne.players[0]!;
-    flying.onGround = false;
-    flying.y -= 200;
-    flying.vx = 0;
-    flying.facing = 1;
-    flying.cooldown = 0;
-    hold(airborne, 0, IN_SHOOT);
-    stepTick(airborne);
-    const airKick = Math.abs(flying.vx);
+    if (airborne) {
+      player.onGround = false;
+      player.y -= 200;
+    } else {
+      expect(player.onGround).toBe(true);
+    }
+    player.weapon = weapon;
+    player.ammo = WEAPONS[weapon].ammo;
+    player.vx = 0;
+    player.facing = 1;
+    player.cooldown = 0;
 
-    expect(groundKick).toBeLessThan(airKick);
-    expect(groundKick / airKick).toBeCloseTo(RECOIL_GROUND_MUL, 1);
+    hold(state, 0, IN_SHOOT);
+    stepTick(state);
+    return player.vx;
+  }
+
+  it('kicks exactly the same standing as airborne', () => {
+    // There used to be a ground multiplier here. Against a ground friction six
+    // times air friction it put every gun below what anyone could feel — a
+    // pistol shot moved you less than a pixel.
+    for (const weapon of Object.keys(WEAPONS) as WeaponKind[]) {
+      expect(kick(weapon, false)).toBeCloseTo(kick(weapon, true), 5);
+    }
+  });
+
+  it('shoves you backwards, harder for the heavier guns', () => {
+    const back = (weapon: WeaponKind): number => -kick(weapon, true);
+
+    // Facing right, so a backwards kick is negative and `back` is positive.
+    expect(back('sniper')).toBeGreaterThan(back('shotgun'));
+    expect(back('shotgun')).toBeGreaterThan(back('pistol'));
+    expect(back('pistol')).toBeGreaterThan(back('smg'));
+    expect(back('smg')).toBeGreaterThan(0);
+
+    // Every gun's kick matches its own tuning value exactly.
+    for (const weapon of Object.keys(WEAPONS) as WeaponKind[]) {
+      if (WEAPONS[weapon].melee) continue;
+      expect(back(weapon)).toBeCloseTo(WEAPONS[weapon].recoil, 5);
+    }
+  });
+
+  it('lunges the knife forwards instead', () => {
+    expect(kick('knife', true)).toBeCloseTo(WEAPONS.knife.melee!.lunge, 5);
+  });
+
+  it('is big enough on the ground to actually move you', () => {
+    // The point of the change. A kick that friction eats inside one tick is not
+    // recoil, it is a rounding error — which is what the pistol used to be.
+    const state = makeState(1, { weaponsEnabled: false, powerupsEnabled: false });
+    skipCountdown(state);
+    const player = state.players[0]!;
+    run(state, 60);
+    player.facing = 1;
+    player.vx = 0;
+    player.cooldown = 0;
+
+    const before = player.x;
+    hold(state, 0, IN_SHOOT);
+    stepTick(state);
+    hold(state, 0, 0);
+    run(state, 20); // let ground friction bleed the kick off
+
+    expect(before - player.x).toBeGreaterThan(4);
   });
 });
 

@@ -259,6 +259,16 @@ export interface GmSnapshotPlayer {
   w: WeaponKind;
   /** ammo */
   am: number;
+  /**
+   * Ticks until this weapon can fire again.
+   *
+   * Here for the same reason as `cy`/`jb`/`dp`: the predictor replays your
+   * inputs forward from this snapshot, and firing moves you — recoil is an
+   * impulse on `vx`. Without knowing where the cooldown stood it would have to
+   * guess which replayed ticks produced a shot, and a guess that is one tick out
+   * puts your predicted position a kick's width away from the server's.
+   */
+  cd: number;
   /** bombs */
   bo: number;
   /** round wins */

@@ -4,6 +4,7 @@ import {
   COUNTDOWN_TICKS,
   IN_JUMP,
   IN_RIGHT,
+  IN_SHOOT,
   applyInput,
   createState,
   defaultConfig,
@@ -11,6 +12,7 @@ import {
   makeSnapshot,
   stepTick,
   type GmSnapshotPlayer,
+  type WeaponKind,
 } from '@mg/shared/gunmayhem';
 import { GunMayhemPredictor } from './predictor';
 import { gmInput } from './input';
@@ -46,6 +48,7 @@ function bare(overrides: Partial<GmSnapshotPlayer> = {}): GmSnapshotPlayer {
     jp: 0,
     w: 'pistol',
     am: 0,
+    cd: 0,
     bo: 3,
     p: 0,
     ack: 0,
@@ -72,7 +75,11 @@ interface Run {
  * a replay of the unacknowledged tail has to land on the server's own future
  * state. That is the property the whole design rests on.
  */
-function run(ticks: number, bitsAt: (tick: number) => number): Run {
+function run(
+  ticks: number,
+  bitsAt: (tick: number) => number,
+  arm?: { weapon: WeaponKind; ammo: number },
+): Run {
   const state = createState(
     [
       { id: 'p0', name: 'P0', colorIndex: 0 },
@@ -82,6 +89,12 @@ function run(ticks: number, bitsAt: (tick: number) => number): Run {
     4242,
   );
   for (let i = 0; i < COUNTDOWN_TICKS; i++) stepTick(state);
+
+  if (arm) {
+    const p0 = state.players.find((p) => p.seat === 0)!;
+    p0.weapon = arm.weapon;
+    p0.ammo = arm.ammo;
+  }
 
   const snapshots: GmSnapshotPlayer[] = [];
   const inputs: Array<{ seq: number; bits: number; at: number }> = [];
@@ -212,6 +225,67 @@ describe('GunMayhemPredictor', () => {
     const shoved = bare({ vx: -260, ack: 1 });
     const body = predictor.update(TICK_MS, level, shoved, true)!;
     expect(body.vx).toBeLessThan(-100);
+  });
+
+  it('kicks you back on the tick you fire, not a round trip later', () => {
+    // Recoil is applied in `stepShooting`, which the client does not run, so
+    // replaying movement alone left the kick to arrive with the next snapshot —
+    // about 100ms after the trigger, and after the muzzle flash, which *is*
+    // predicted. Replaying the shot means the predicted body has to land on the
+    // server's own arithmetic, kick included.
+    const TICKS = 45;
+    const r = run(TICKS, () => IN_SHOOT);
+    const predictor = new GunMayhemPredictor();
+
+    for (const tick of [14, 27, 40]) {
+      const body = predictedAt(predictor, r, tick)!;
+      const truth = r.snapshots[tick]!;
+      expect(body.vx).toBeCloseTo(truth.vx, 0);
+      expect(body.x).toBeCloseTo(truth.x, 1);
+    }
+
+    // The kick has to be big enough that matching it means something. Facing
+    // right at spawn, so recoil walks the shooter left.
+    expect(r.snapshots[TICKS - 1]!.x).toBeLessThan(r.snapshots[0]!.x - 10);
+  });
+
+  it('follows the magazine, so an emptied gun kicks like the pistol it becomes', () => {
+    // The predictor tracks ammo through the replay because running dry swaps you
+    // back to the pistol, and the pistol has a different cooldown and a
+    // different kick. Two rounds of sniper — 460 apiece — then 150s.
+    const TICKS = 200;
+    const r = run(TICKS, () => IN_SHOOT, { weapon: 'sniper', ammo: 2 });
+    const predictor = new GunMayhemPredictor();
+
+    for (const tick of [30, 70, 120, 190]) {
+      const body = predictedAt(predictor, r, tick)!;
+      const truth = r.snapshots[tick]!;
+      expect(body.vx).toBeCloseTo(truth.vx, 0);
+      expect(body.x).toBeCloseTo(truth.x, 1);
+    }
+    expect(r.snapshots[TICKS - 1]!.w).toBe('pistol');
+  });
+
+  it('reports each predicted shot exactly once', () => {
+    // Replay reruns from scratch every frame, so the same shot is rediscovered
+    // until the server acknowledges it. Reporting it each time would stack a
+    // muzzle flash and a bang per frame for half a round trip.
+    const TICKS = 45;
+    const r = run(TICKS, () => IN_SHOOT);
+    const predictor = new GunMayhemPredictor();
+
+    let shots = 0;
+    for (let tick = LAG_TICKS; tick < TICKS; tick++) {
+      predictedAt(predictor, r, tick);
+      if (predictor.consumeShot()) shots += 1;
+      // A second read in the same frame must come back empty.
+      expect(predictor.consumeShot()).toBeNull();
+    }
+
+    // A pistol's 13-tick cooldown puts the server's shots on ticks 0, 13, 26 and
+    // 39. The first is already acknowledged before this loop starts, so there is
+    // nothing left to predict about it — three shots are replayed, once each.
+    expect(shots).toBe(3);
   });
 
   it('gives the same answer whatever the refresh rate', () => {
