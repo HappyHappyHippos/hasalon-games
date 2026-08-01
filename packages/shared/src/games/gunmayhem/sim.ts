@@ -309,16 +309,28 @@ function stepPlaying(state: GunMayhemState): void {
   checkRoundOver(state);
 }
 
+/**
+ * Every timer counts down through `tick`, which clamps at zero.
+ *
+ * The clamp is not decoration. `if (t > 0) t -= 1` looks equivalent and is not:
+ * given a timer that is not a whole number of ticks it steps *past* zero and
+ * stops on a small negative, which then fails every `=== 0` test forever. That
+ * cost a player their controls for the rest of a life — see `damageAndLaunch`.
+ */
+function tick(value: number): number {
+  return Math.max(0, value - 1);
+}
+
 function stepTimers(state: GunMayhemState): void {
   for (const player of state.players) {
-    if (player.cooldown > 0) player.cooldown -= 1;
-    if (player.bombCooldown > 0) player.bombCooldown -= 1;
-    if (player.hitstun > 0) player.hitstun -= 1;
-    if (player.invuln > 0) player.invuln -= 1;
+    player.cooldown = tick(player.cooldown);
+    player.bombCooldown = tick(player.bombCooldown);
+    player.hitstun = tick(player.hitstun);
+    player.invuln = tick(player.invuln);
     // Jetpack fuel is deliberately not in here — it burns per thrusting tick
     // inside `stepMovement`, not on a clock.
     for (const kind of Object.keys(player.buffs) as GmBuffKind[]) {
-      if (player.buffs[kind] > 0) player.buffs[kind] -= 1;
+      player.buffs[kind] = tick(player.buffs[kind]);
     }
   }
 }
@@ -346,7 +358,13 @@ function stepBodies(state: GunMayhemState, controllable: boolean): void {
       down: controllable && (held & IN_DOWN) !== 0,
       jumpPressed: controllable && (player.pendingPress & IN_JUMP) !== 0,
       jumpHeld: controllable && (held & IN_JUMP) !== 0,
-      controllable: controllable && player.hitstun === 0,
+      // `<= 0`, never `=== 0`. An equality test here is a trap: it hands the
+      // controls back only on an exact value, so any timer that misses it —
+      // for any reason, now or later — locks the player out permanently rather
+      // than for a tick. Every other hitstun check in this file is a
+      // comparison, and so is the client's (`predictor.ts`), which is why this
+      // one disagreeing showed up as being stuck on your own screen alone.
+      controllable: controllable && player.hitstun <= 0,
     };
 
     const result = stepMovement(player, input, state.level, DT, movementMods(player.buffs));
@@ -708,7 +726,11 @@ function damageAndLaunch(
   const knockback = (KB_BASE + target.damage * KB_PER_DAMAGE) * kbMul;
   target.vx = dirX * knockback;
   target.vy = -knockback * KB_UP_BIAS;
-  target.hitstun = Math.min(HITSTUN_MAX, HITSTUN_BASE + knockback * HITSTUN_PER_KB);
+  // Rounded, because this is a countdown in ticks and the rest of the sim
+  // assumes timers are whole. Knockback is a float, so this expression is one
+  // too, and an unrounded 9.534 counts down to -0.466 and sticks there — which
+  // the control gate in `stepBodies` then reads as "still in hitstun", forever.
+  target.hitstun = Math.round(Math.min(HITSTUN_MAX, HITSTUN_BASE + knockback * HITSTUN_PER_KB));
   target.onGround = false;
 
   if (bySeat !== target.seat) {

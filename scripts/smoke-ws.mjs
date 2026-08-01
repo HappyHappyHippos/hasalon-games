@@ -239,6 +239,78 @@ if (!(movedAfter > 5)) {
 console.log(`  ✓ guest still moves after reloading (${movedAfter.toFixed(0)}px)`);
 
 // ---------------------------------------------------------------------------
+// The hit that used to cost you the rest of your life
+// ---------------------------------------------------------------------------
+
+/**
+ * Get shot, then try to walk.
+ *
+ * Two players reported getting stuck in place after being hit — bullets still
+ * shoved them around, but their own controls did nothing until they died. The
+ * cause was a hitstun timer set to a fractional number of ticks, counted down
+ * with `if (t > 0) t -= 1` so it stopped on a small negative, and compared with
+ * `=== 0` to decide whether you had your controls back. It never matched again.
+ *
+ * Every part of that is server-side and covered by unit tests now. This is here
+ * because it is the *behaviour* the players described, and checking it against
+ * a real deployment costs one extra exchange.
+ */
+const hostSeat = started.room.players.find((p) => p.name === 'SmokeHost')?.seat ?? -1;
+if (hostSeat < 0) throw new Error('host was not seated');
+
+const IN_SHOOT = 16;
+
+/** Both seats out of the same snapshot, so their positions are comparable. */
+async function bothSeats(ws) {
+  const { snap } = await next(ws, (m) => m.t === 'snapshot', 'snapshot');
+  const shooter = snap.players.find((p) => p.s === hostSeat);
+  const target = snap.players.find((p) => p.s === guestSeat);
+  if (!shooter || !target) throw new Error('a seat is missing from the snapshot');
+  return { shooter, target };
+}
+
+// Spawn invulnerability lasts 1.8s of play and nothing lands until it is gone.
+for (let i = 0; i < 200; i++) {
+  const { target } = await bothSeats(host);
+  if (target.iv <= 0) break;
+}
+
+const opening = await bothSeats(host);
+// Face the guest and hold the trigger. `heldBits` persists server-side until it
+// is changed, so one message is a held button.
+const toward = opening.target.x > opening.shooter.x ? IN_RIGHT : IN_LEFT;
+host.send(JSON.stringify({ t: 'input', i: { seq: 1000, bits: toward | IN_SHOOT } }));
+
+let struck = null;
+for (let i = 0; i < 400 && !struck; i++) {
+  const { target } = await bothSeats(host);
+  if (target.d > 0) struck = target;
+}
+host.send(JSON.stringify({ t: 'input', i: { seq: 1400, bits: 0 } }));
+
+if (!struck) {
+  throw new Error('the host never managed to hit the guest — the probe proved nothing');
+}
+console.log(`  ✓ guest took a hit (${struck.d} damage, hitstun ${struck.st})`);
+
+// Let the knockback bleed off, so what we measure next is input and not the
+// shove. `comeToRest` sends a zero mask and waits out friction.
+const shoved = await comeToRest(reloaded, 1500);
+assertOnStage(shoved, 'after being shot');
+if (shoved.st < 0) {
+  throw new Error(`hitstun settled at ${shoved.st} — negative, so the controls never come back`);
+}
+
+const movedAfterHit = await run(reloaded, 1501);
+if (!(movedAfterHit > 5)) {
+  throw new Error(
+    `guest is stuck after being shot (moved ${movedAfterHit.toFixed(1)}px) — ` +
+      'hitstun never handed the controls back',
+  );
+}
+console.log(`  ✓ guest still moves after being shot (${movedAfterHit.toFixed(0)}px)`);
+
+// ---------------------------------------------------------------------------
 // Snapshot cadence
 // ---------------------------------------------------------------------------
 

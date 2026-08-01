@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DT } from '../../engine';
 import {
   ARENA_WIDTH,
   BLAST_BOTTOM,
@@ -6,9 +7,11 @@ import {
   BOMB_RADIUS,
   BUFF_TICKS,
   COUNTDOWN_TICKS,
+  HITSTUN_MAX,
   JETPACK_FUEL_TICKS,
   KB_BASE,
   MAX_PLAYERS,
+  PLAYER_HALF_W,
   POWERUP_TTL_TICKS,
   RECOIL_GROUND_MUL,
   RESPAWN_TICKS,
@@ -34,6 +37,7 @@ import {
   type GmPlayer,
   type GunMayhemConfig,
   type GunMayhemState,
+  type WeaponKind,
 } from './types';
 
 function seats(count: number) {
@@ -673,6 +677,106 @@ describe('powerups', () => {
     skipCountdown(state);
     run(state, 60 * 30);
     expect(state.powerups).toHaveLength(0);
+  });
+});
+
+describe('hitstun', () => {
+  /**
+   * Shoot player 1 once with `weapon`, then let go of the trigger.
+   *
+   * Written after two players reported getting stuck in place after being hit —
+   * unable to move themselves, but still shoved around by bullets. The cause was
+   * a hitstun timer that never reached the value the control gate compared
+   * against, so the controls never came back for the rest of that life.
+   */
+  function takeAHit(
+    weapon: WeaponKind,
+    startingDamage = 0,
+  ): { state: GunMayhemState; victim: GmPlayer } {
+    const state = makeState(2, { weaponsEnabled: false, powerupsEnabled: false });
+    skipCountdown(state);
+    const shooter = state.players[0]!;
+    const victim = state.players[1]!;
+
+    const def = WEAPONS[weapon];
+    shooter.weapon = weapon;
+    shooter.ammo = def.ammo;
+    shooter.cooldown = 0;
+    shooter.facing = 1;
+    victim.invuln = 0;
+    victim.damage = startingDamage;
+    victim.y = shooter.y;
+
+    // Stand them exactly where the bullet's first step lands, rather than at
+    // some fixed gap. Bullets move in whole-tick jumps and are tested as a
+    // point, so a sniper round — 45 units a tick — steps clean over a 30-wide
+    // body fired point blank. A knife instead needs them inside its reach.
+    victim.x = def.melee
+      ? shooter.x + PLAYER_HALF_W + def.melee.reach / 2
+      : shooter.x + PLAYER_HALF_W + 6 + def.speed * DT;
+
+    hold(state, 0, IN_SHOOT);
+    for (let i = 0; i < 20 && victim.damage === startingDamage; i++) stepTick(state);
+    hold(state, 0, 0);
+    expect(victim.damage).toBeGreaterThan(startingDamage);
+
+    return { state, victim };
+  }
+
+  /**
+   * Cancel the knockback flight. What is under test is whether the timer hands
+   * the controls back, not how far the shove throws you — and at the top end a
+   * rocket launches the victim clean off the stage, where respawning would reset
+   * the timer and hide the bug.
+   */
+  function plant(victim: GmPlayer): void {
+    victim.vx = 0;
+    victim.vy = 0;
+  }
+
+  for (const weapon of Object.keys(WEAPONS) as WeaponKind[]) {
+    it(`hands the controls back after a ${weapon} hit`, () => {
+      const { state, victim } = takeAHit(weapon);
+      const stocks = victim.stocks;
+
+      expect(victim.hitstun).toBeGreaterThan(0);
+
+      // Comfortably past the longest hitstun the game can apply.
+      for (let i = 0; i < HITSTUN_MAX + 30; i++) {
+        plant(victim);
+        stepTick(state);
+      }
+
+      expect(victim.stocks).toBe(stocks); // never died, so nothing reset them
+      expect(victim.hitstun).toBe(0);
+
+      const before = victim.x;
+      hold(state, 1, IN_RIGHT);
+      run(state, 30);
+      expect(victim.x).toBeGreaterThan(before + 20);
+    });
+  }
+
+  it('always counts down to exactly zero, whatever the hit', () => {
+    // Every other timer in the sim is set from `seconds()` or `Math.round`, so
+    // it is a whole number of ticks and `t -= 1` lands on zero. Hitstun is
+    // derived from knockback, which is a float, and used not to be — it walked
+    // straight past zero to a small negative and stopped there.
+    for (const weapon of Object.keys(WEAPONS) as WeaponKind[]) {
+      for (const startingDamage of [0, 7, 23, 60, 91, 150, 300]) {
+        const { state, victim } = takeAHit(weapon, startingDamage);
+
+        expect(Number.isInteger(victim.hitstun)).toBe(true);
+        expect(victim.hitstun).toBeLessThanOrEqual(HITSTUN_MAX);
+
+        for (let i = 0; i < HITSTUN_MAX + 5; i++) {
+          plant(victim);
+          stepTick(state);
+          expect(victim.hitstun).toBeGreaterThanOrEqual(0);
+        }
+        expect(victim.hitstun).toBe(0);
+      }
+    }
   });
 });
 
