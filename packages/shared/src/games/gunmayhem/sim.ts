@@ -41,21 +41,20 @@ import {
   RESPAWN_INVULN_TICKS,
   RESPAWN_TICKS,
   POWERUP_SIZE,
-  RECOIL_GROUND_MUL,
   ROCKET_GRAVITY,
   ROUND_OVER_TICKS,
   SHIELD_KB_MUL,
 } from './constants';
 import { LEVEL_IDS, getLevel, spawnPoint } from './levels';
-import { pointInPlatform, stepMovement, type MoveInput } from './physics';
+import { blocksBullets, segmentHitsBox, stepMovement, type MoveInput } from './physics';
 import {
   applyPowerup,
-  cooldownMul,
   emptyBuffs,
   movementMods,
   rollNextPowerupDelay,
   spawnPowerup,
 } from './powerups';
+import { applyShotImpulse, shotCooldownTicks, spendRound } from './shooting';
 import { CRATE_POOL, DEFAULT_WEAPON, WEAPONS } from './weapons';
 import {
   IN_BOMB,
@@ -64,7 +63,6 @@ import {
   IN_LEFT,
   IN_RIGHT,
   IN_SHOOT,
-  type Bullet,
   type GmBuffKind,
   type GmEvent,
   type GmPlayer,
@@ -385,16 +383,19 @@ function stepShooting(state: GunMayhemState): void {
     if (player.cooldown > 0) continue;
 
     const weapon = WEAPONS[player.weapon];
-    player.cooldown = Math.max(1, Math.round(weapon.cooldown * cooldownMul(player.buffs)));
+    player.cooldown = shotCooldownTicks(player.weapon, player.buffs);
 
     const muzzleX = player.x + player.facing * (PLAYER_HALF_W + 6);
     const muzzleY = player.y - 4;
 
     // Melee is a different weapon entirely: no projectile, an instant hitbox,
-    // and a lunge *forwards* where a gun would kick you back.
+    // and a lunge *forwards* where a gun would kick you back. Both of those
+    // impulses come from `applyShotImpulse` below, so the client can replay
+    // them without knowing which branch the server took.
     if (weapon.melee) {
       stab(state, player, weapon.melee, weapon.damage, weapon.kbMul);
-      spendAmmo(player, weapon.ammo);
+      applyShotImpulse(player, player.weapon);
+      spendAmmo(player);
       continue;
     }
 
@@ -415,11 +416,7 @@ function stepShooting(state: GunMayhemState): void {
       });
     }
 
-    // Recoil. Shooting while airborne shoves you backwards, which is a real
-    // movement option and half of why the shotgun is fun. Standing still it is
-    // scaled down, otherwise low friction lets you skate around on gunfire.
-    const recoil = player.onGround ? weapon.recoil * RECOIL_GROUND_MUL : weapon.recoil;
-    player.vx -= player.facing * recoil;
+    applyShotImpulse(player, player.weapon);
 
     state.events.push({
       t: 'shot',
@@ -430,21 +427,24 @@ function stepShooting(state: GunMayhemState): void {
       kind: weapon.kind,
     });
 
-    spendAmmo(player, weapon.ammo);
+    spendAmmo(player);
   }
 }
 
 /**
  * A knife swing. Hits the nearest valid target inside a box in front of the
- * player, and lunges whether or not it connects — the lunge is the knife's
- * movement tech, the mirror image of airborne recoil.
+ * player.
+ *
+ * The forward lunge that goes with it is *not* here — it is
+ * `applyShotImpulse`, alongside every gun's recoil, because it happens whether
+ * or not the swing connects and the client has to be able to replay it.
  *
  * Draws no RNG at all, so melee cannot perturb the shared random stream.
  */
 function stab(
   state: GunMayhemState,
   player: GmPlayer,
-  melee: { reach: number; lunge: number },
+  melee: { reach: number },
   damage: number,
   kbMul: number,
 ): void {
@@ -482,7 +482,6 @@ function stab(
     }
   }
 
-  player.vx += player.facing * melee.lunge;
   state.events.push({
     t: 'stab',
     seat: player.seat,
@@ -493,21 +492,40 @@ function stab(
   });
 }
 
-function spendAmmo(player: GmPlayer, capacity: number): void {
-  if (capacity <= 0) return;
-  player.ammo -= 1;
-  if (player.ammo <= 0) {
-    player.weapon = DEFAULT_WEAPON;
-    player.ammo = 0;
-  }
+/**
+ * Through `spendRound` rather than inline, so the client predictor — which has
+ * to track the same magazine to know which replayed ticks fire — cannot drift
+ * from this by one round.
+ */
+function spendAmmo(player: GmPlayer): void {
+  const spent = spendRound(player.weapon, player.ammo);
+  player.weapon = spent.weapon;
+  player.ammo = spent.ammo;
 }
 
+/**
+ * Bullets are swept, not sampled.
+ *
+ * They move in whole-tick jumps — a sniper round covers 45 units against a body
+ * 30 wide — so testing where one *ended up* misses anything it flew over on the
+ * way. Fired point blank the sniper's first sampled position was already past
+ * the target and the shot registered nothing at all.
+ *
+ * Everything the bullet could have struck is scored along the same segment and
+ * the nearest one wins. That also settles two things the old two-pass version
+ * decided by accident: which of several players in the line of fire is hit (the
+ * nearest, not the lowest seat), and whether a wall between you and them stops
+ * the round (it does).
+ */
 function stepBullets(state: GunMayhemState): void {
   for (let i = state.bullets.length - 1; i >= 0; i--) {
     const bullet = state.bullets[i]!;
     const weapon = WEAPONS[bullet.kind];
 
     if (weapon.explosive) bullet.vy += ROCKET_GRAVITY * DT;
+
+    const fromX = bullet.x;
+    const fromY = bullet.y;
     bullet.x += bullet.vx * DT;
     bullet.y += bullet.vy * DT;
     bullet.life -= 1;
@@ -516,18 +534,52 @@ function stepBullets(state: GunMayhemState): void {
     let hitPlayer: GmPlayer | null = null;
 
     if (!done) {
+      // Nearest impact along the step, whatever kind of thing it was.
+      let nearest = Infinity;
+
       for (const platform of state.level.platforms) {
-        if (platform.oneWay) continue; // bullets fly through ledges
-        if (pointInPlatform(bullet.x, bullet.y, platform)) {
-          done = true;
-          break;
+        if (!blocksBullets(platform)) continue; // bullets fly through ledges
+        const t = segmentHitsBox(
+          fromX,
+          fromY,
+          bullet.x,
+          bullet.y,
+          platform.x,
+          platform.y,
+          platform.x + platform.w,
+          platform.y + platform.h,
+        );
+        if (t !== null && t < nearest) nearest = t;
+      }
+
+      for (const player of state.players) {
+        if (!canBeHit(player, bullet.owner)) continue;
+        const t = segmentHitsBox(
+          fromX,
+          fromY,
+          bullet.x,
+          bullet.y,
+          player.x - PLAYER_HALF_W,
+          player.y - PLAYER_HALF_H,
+          player.x + PLAYER_HALF_W,
+          player.y + PLAYER_HALF_H,
+        );
+        // Strictly nearer, so a tie goes to the platform found first — a round
+        // stopped by a wall must not also hit whoever is stood against the
+        // far side of it.
+        if (t !== null && t < nearest) {
+          nearest = t;
+          hitPlayer = player;
         }
       }
-    }
 
-    if (!done) {
-      hitPlayer = state.players.find((p) => canBeHit(p, bullet.owner) && hitsBody(p, bullet)) ?? null;
-      if (hitPlayer) done = true;
+      if (nearest !== Infinity) {
+        done = true;
+        // Resolve at the point of impact rather than where the bullet would
+        // have got to, so blast centres and hit markers land on the target.
+        bullet.x = fromX + (bullet.x - fromX) * nearest;
+        bullet.y = fromY + (bullet.y - fromY) * nearest;
+      }
     }
 
     if (!done) continue;
@@ -561,15 +613,6 @@ function stepBullets(state: GunMayhemState): void {
 
 function canBeHit(player: GmPlayer, ownerSeat: number): boolean {
   return player.active && player.invuln <= 0 && player.seat !== ownerSeat;
-}
-
-function hitsBody(player: GmPlayer, bullet: Bullet): boolean {
-  return (
-    bullet.x > player.x - PLAYER_HALF_W &&
-    bullet.x < player.x + PLAYER_HALF_W &&
-    bullet.y > player.y - PLAYER_HALF_H &&
-    bullet.y < player.y + PLAYER_HALF_H
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -960,6 +1003,7 @@ function toSnapshotPlayer(p: GmPlayer): GmSnapshotPlayer {
     jp: p.jetpack,
     w: p.weapon,
     am: p.ammo,
+    cd: p.cooldown,
     bo: p.bombs,
     p: p.roundWins,
     ack: p.ackSeq,

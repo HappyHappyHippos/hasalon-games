@@ -148,11 +148,11 @@ const IN_RIGHT = 2;
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/** The guest's own record from the next snapshot to arrive. */
-async function seatState(ws) {
+/** One seat's record from the next snapshot to arrive. Defaults to the guest. */
+async function seatState(ws, seat = guestSeat) {
   const { snap } = await next(ws, (m) => m.t === 'snapshot', 'snapshot');
-  const me = snap.players.find((p) => p.s === guestSeat);
-  if (!me) throw new Error(`guest is not in snapshot for seat ${guestSeat}`);
+  const me = snap.players.find((p) => p.s === seat);
+  if (!me) throw new Error(`no snapshot record for seat ${seat}`);
   return me;
 }
 
@@ -167,10 +167,10 @@ function assertOnStage(me, when) {
  * than of momentum left over from the last one. Without this the check passes
  * even when every input is being discarded — the character is simply coasting.
  */
-async function comeToRest(ws, seq) {
+async function comeToRest(ws, seq, seat = guestSeat) {
   ws.send(JSON.stringify({ t: 'input', i: { seq, bits: 0 } }));
   await wait(400);
-  return seatState(ws);
+  return seatState(ws, seat);
 }
 
 /**
@@ -309,6 +309,41 @@ if (!(movedAfterHit > 5)) {
   );
 }
 console.log(`  ✓ guest still moves after being shot (${movedAfterHit.toFixed(0)}px)`);
+
+// Bullet tunnelling — a fast round stepping clean over a body between two ticks
+// — is deliberately *not* probed here. It only shows up on the sniper, at
+// 2700 units/sec, and there is no wire message that hands a player a specific
+// weapon: crates drop one at random every 7–12 seconds, which is neither quick
+// nor repeatable. A probe firing the pistol would pass either way and prove
+// nothing. `sim.test.ts:bullet collision` covers it against the real simulation.
+
+// ---------------------------------------------------------------------------
+// Recoil
+// ---------------------------------------------------------------------------
+
+/**
+ * Firing has to move the shooter.
+ *
+ * Recoil was in the code for a long time and nobody could feel it: a ground
+ * multiplier scaled it down, and ground friction — six times air friction —
+ * finished it off inside a tick. A pistol shot moved you under a pixel. The kick
+ * is one impulse now, the same standing as airborne, and this is the check that
+ * it survives contact with a real server rather than only a unit test.
+ */
+const settled = await comeToRest(host, 1600, hostSeat);
+const restingX = settled.x;
+// Trigger only: no direction held, so anything that moves them is the kick.
+host.send(JSON.stringify({ t: 'input', i: { seq: 1601, bits: IN_SHOOT } }));
+await wait(1000);
+host.send(JSON.stringify({ t: 'input', i: { seq: 1700, bits: 0 } }));
+
+const kicked = await seatState(host, hostSeat);
+const pushed = Math.abs(kicked.x - restingX);
+// Recoil pushes opposite to facing, and nothing else was pressed.
+if (!(pushed > 5)) {
+  throw new Error(`a second of pistol fire moved the shooter ${pushed.toFixed(1)}px — recoil is not landing`);
+}
+console.log(`  ✓ recoil moved the shooter ${pushed.toFixed(0)}px in a second of pistol fire`);
 
 // ---------------------------------------------------------------------------
 // Snapshot cadence

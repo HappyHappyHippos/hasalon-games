@@ -17,7 +17,15 @@ export interface WeaponDef {
   pellets: number;
   /** Radians of random spread per pellet. */
   spread: number;
-  /** Backwards shove applied to the shooter. Recoil-jumping is a real technique. */
+  /**
+   * Backwards shove applied to the shooter, in units per second, the same
+   * standing as airborne.
+   *
+   * Compare against `RUN_SPEED` (345) to read these: a value near it is a shove
+   * you fight, well over it is a launch. Ground friction bleeds a kick off in
+   * about `recoil / 31` ticks and air friction takes six times longer, so the
+   * air is where these are felt. Recoil-jumping is a real technique.
+   */
   recoil: number;
   explosive: boolean;
   blastRadius: number;
@@ -43,7 +51,7 @@ export const WEAPONS: Record<WeaponKind, WeaponDef> = {
     ammo: 0,
     pellets: 1,
     spread: 0,
-    recoil: 55,
+    recoil: 150,
     explosive: false,
     blastRadius: 0,
     life: 70,
@@ -59,7 +67,7 @@ export const WEAPONS: Record<WeaponKind, WeaponDef> = {
     ammo: 70,
     pellets: 1,
     spread: 0.045,
-    recoil: 26,
+    recoil: 45,
     explosive: false,
     blastRadius: 0,
     life: 60,
@@ -68,14 +76,14 @@ export const WEAPONS: Record<WeaponKind, WeaponDef> = {
     kind: 'shotgun',
     name: 'Shotgun',
     icon: '⋙',
-    damage: 3.4,
+    damage: 4.2,
     cooldown: 32,
     speed: 1300,
-    kbMul: 0.95,
-    ammo: 18,
+    kbMul: 1.15,
+    ammo: 20,
     pellets: 5,
     spread: 0.13,
-    recoil: 210,
+    recoil: 340,
     explosive: false,
     blastRadius: 0,
     life: 34,
@@ -91,7 +99,7 @@ export const WEAPONS: Record<WeaponKind, WeaponDef> = {
     ammo: 7,
     pellets: 1,
     spread: 0,
-    recoil: 300,
+    recoil: 460,
     explosive: false,
     blastRadius: 0,
     life: 90,
@@ -100,36 +108,36 @@ export const WEAPONS: Record<WeaponKind, WeaponDef> = {
     kind: 'rocket',
     name: 'Rocket',
     icon: '➤',
-    damage: 16,
+    damage: 20,
     cooldown: 70,
     speed: 850,
     kbMul: 2.6,
-    ammo: 4,
+    ammo: 5,
     pellets: 1,
     spread: 0,
-    recoil: 240,
+    recoil: 400,
     explosive: true,
-    blastRadius: 120,
+    blastRadius: 145,
     life: 120,
   },
   knife: {
     kind: 'knife',
     name: 'Knife',
     icon: '†',
-    damage: 14,
+    damage: 17,
     cooldown: 22,
     // Nothing that describes a bullet applies. `pellets: 0` also means the
     // spread draw never happens, so melee never touches the RNG stream.
     speed: 0,
-    kbMul: 2.1,
-    ammo: 8,
+    kbMul: 2.35,
+    ammo: 10,
     pellets: 0,
     spread: 0,
     recoil: 0,
     explosive: false,
     blastRadius: 0,
     life: 0,
-    melee: { reach: 26, lunge: 300 },
+    melee: { reach: 34, lunge: 300 },
   },
 };
 

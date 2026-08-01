@@ -25,7 +25,6 @@ import { bracket, lerp } from '../../game/interpolation';
 import { PositionSmoother } from '../../game/PositionSmoother';
 import { isPredicting, predictsSelf } from '../../net/playbackMode';
 import { advancePlayer, ticksBehind } from './advance';
-import { gmInput } from './input';
 import { GunMayhemPredictor } from './predictor';
 import { LocalShotFx } from './localFx';
 import { drawBackdrop, drawScenery } from './stageArt';
@@ -483,11 +482,17 @@ export class GunMayhemRenderer {
           const jumped = this.predictor.consumeJump();
           if (jumped) sfx.jump(jumped === 'air');
 
-          // Same idea for the gun. Both are drawn from the predicted body, so
-          // the flash is at the barrel the player can see, not where the server
-          // last reported them.
-          const shot = this.localFx.update(now, latest.tick, server, body, gmInput.bits, controllable);
-          if (shot) this.playShot(player.s, shot.kind, shot.x, shot.y, shot.dir);
+          // Same idea for the gun, and from the same replay — so the flash, the
+          // bang and the recoil all belong to one tick. Drawn from the predicted
+          // body, so the flash is at the barrel the player can see rather than
+          // where the server last reported them. A knife is excluded: `stab`
+          // events carry whether the swing connected, which changes the whole
+          // effect and is not something we can know locally.
+          const fired = this.predictor.consumeShot();
+          if (fired && !WEAPONS[fired].melee) {
+            this.playShot(player.s, fired, body.x, body.y, body.facing);
+            this.localFx.played(now);
+          }
         }
       }
       if (!body) {
