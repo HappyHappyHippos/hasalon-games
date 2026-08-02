@@ -48,12 +48,11 @@ export function HomeScreen(): JSX.Element {
 
         <div className="sticker home__card">
           <div className="home__you">
-            <Avatar
+            <AppearancePicker
               colorIndex={identity.colorIndex}
               hat={identity.hat}
               face={identity.face}
-              name={identity.name}
-              size={64}
+              onChange={(patch) => setIdentity(patch)}
             />
             <label className="field">
               <span className="field__label">{t.yourName}</span>
@@ -69,23 +68,6 @@ export function HomeScreen(): JSX.Element {
             </label>
           </div>
 
-          <div className="field">
-            <span className="field__label">{t.yourColour}</span>
-            <ColorPicker
-              value={identity.colorIndex}
-              onChange={(colorIndex) => setIdentity({ colorIndex })}
-            />
-          </div>
-
-          <div className="field">
-            <span className="field__label">{t.yourLook}</span>
-            <AppearancePicker
-              colorIndex={identity.colorIndex}
-              hat={identity.hat}
-              face={identity.face}
-              onChange={(patch) => setIdentity(patch)}
-            />
-          </div>
 
           {effectiveMode === 'idle' ? (
             <div className="home__actions">

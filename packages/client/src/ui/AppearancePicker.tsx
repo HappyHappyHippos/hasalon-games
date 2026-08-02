@@ -70,7 +70,7 @@ export function AppearancePicker({ colorIndex, hat, face, takenColors, onChange 
   );
 
   return (
-    <div className="appearance" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+    <div className="appearance" dir="ltr" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', marginRight: '0.25rem' }}>
         <Button variant="ghost" size="sm" onClick={handlePrevHat} style={{ padding: '0.25rem' }}><ChevronLeft /></Button>
         <Button variant="ghost" size="sm" onClick={handlePrevFace} style={{ padding: '0.25rem' }}><ChevronLeft /></Button>
