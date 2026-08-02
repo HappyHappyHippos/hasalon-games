@@ -52,14 +52,11 @@ export function Avatar({
           <>
             <path d="M14 25h3.5" fill="none" />
             <path d="M22.5 25H26" fill="none" />
+            <path d="M16 30h8" fill="none" />
           </>
         ) : (
           <FaceMark face={faceFor(face)} />
         )}
-
-        {variant === 0 && <path d="M16 30.5q4 2.5 8 0" fill="none" />}
-        {variant === 1 && <path d="M16.5 30.5h7" fill="none" />}
-        {variant === 2 && <path d="M16 31q4-2.5 8 0" fill="none" />}
 
         <HatMark hat={hatFor(hat)} fill={fill} />
       </g>
@@ -70,43 +67,56 @@ export function Avatar({
 function FaceMark({ face }: { face: Face }): JSX.Element {
   const eyes = (
     <>
-      <circle cx="15.5" cy="25" r="1.9" fill="var(--ink)" stroke="none" />
-      <circle cx="24.5" cy="25" r="1.9" fill="var(--ink)" stroke="none" />
+      <circle cx="14" cy="24" r="2.5" fill="var(--ink)" stroke="none" />
+      <circle cx="26" cy="24" r="2.5" fill="var(--ink)" stroke="none" />
     </>
   );
 
   switch (face) {
     case 'default':
-      return eyes;
+      return (
+        <>
+          {eyes}
+          <path d="M16 29h8" fill="none" />
+        </>
+      );
     case 'happy':
       return (
         <>
-          <path d="M13.5 25.5q2-2.5 4 0" fill="none" />
-          <path d="M22.5 25.5q2-2.5 4 0" fill="none" />
+          {eyes}
+          <path d="M15 28a5 4 0 0 0 10 0" fill="none" />
         </>
       );
     case 'angry':
       return (
         <>
           {eyes}
-          <path d="M12.5 21.5l5 1.5" fill="none" strokeWidth="2" />
-          <path d="M27.5 21.5l-5 1.5" fill="none" strokeWidth="2" />
+          <path d="M11 21.5l4 1" fill="none" strokeWidth="2" />
+          <path d="M29 21.5l-4 1" fill="none" strokeWidth="2" />
+          <path d="M16 30q4-2.5 8 0" fill="none" />
         </>
       );
     case 'shades':
-      return <rect x="11" y="22.5" width="18" height="5" rx="1.5" fill="var(--ink)" />;
+      return (
+        <>
+          <rect x="10" y="21" width="20" height="6" rx="1.5" fill="var(--ink)" stroke="none" />
+          <path d="M16 30h8" fill="none" />
+        </>
+      );
     case 'dead':
       return (
         <>
-          <path d="M13.5 23l4 4M17.5 23l-4 4" fill="none" strokeWidth="2" />
-          <path d="M22.5 23l4 4M26.5 23l-4 4" fill="none" strokeWidth="2" />
+          <path d="M12 22l4 4M16 22l-4 4" fill="none" strokeWidth="2" />
+          <path d="M24 22l4 4M28 22l-4 4" fill="none" strokeWidth="2" />
+          <path d="M16 29h8" fill="none" />
         </>
       );
     case 'cyclops':
       return (
         <>
-          <circle cx="20" cy="25" r="3.4" fill="var(--ink)" stroke="none" />
-          <circle cx="21.1" cy="23.9" r="1" fill="var(--surface)" stroke="none" />
+          <circle cx="20" cy="24" r="4.5" fill="var(--ink)" stroke="none" />
+          <circle cx="21.5" cy="22.5" r="1.5" fill="var(--surface)" stroke="none" />
+          <path d="M16 30h8" fill="none" />
         </>
       );
   }
