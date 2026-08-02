@@ -47,11 +47,12 @@ export function HomeScreen(): JSX.Element {
         </header>
 
         <div className="sticker home__card">
-          <div className="home__you" style={{ justifyContent: 'center' }}>
-            <label className="field" style={{ flex: 1, maxWidth: '200px' }}>
-              <span className="field__label">{t.yourName}</span>
+          <div className="home__you" style={{ justifyContent: 'center', alignItems: 'center', gap: '2rem' }}>
+            <label className="field" style={{ width: '180px', flex: 'none' }}>
+              <span className="field__label" style={{ textAlign: 'center', display: 'block', width: '100%' }}>{t.yourName}</span>
               <input
                 className="input"
+                style={{ textAlign: 'center' }}
                 value={identity.name}
                 onChange={(event) => setIdentity({ name: event.target.value })}
                 placeholder={t.namePlaceholder}
