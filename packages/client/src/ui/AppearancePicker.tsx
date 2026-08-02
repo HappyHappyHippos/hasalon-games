@@ -57,45 +57,22 @@ export function AppearancePicker({ colorIndex, hat, face, takenColors, onChange 
     onChange({ face: (face + 1) % FACES.length });
   };
 
-  const carouselStyle = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    background: 'var(--surface-sunken)',
-    borderRadius: 'var(--radius-md)',
-    padding: '0.25rem',
-  };
-
-  const labelStyle = {
-    fontWeight: 600,
-    fontSize: '0.875rem',
-    color: 'var(--ink)',
-  };
-
   return (
-    <div className="appearance">
-      <div className="appearance__preview" style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
-        <Avatar colorIndex={colorIndex} hat={hat} face={face} size={96} />
+    <div className="appearance" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginRight: '1rem' }}>
+        <Button variant="ghost" size="sm" onClick={handlePrevHat}>&lt;</Button>
+        <Button variant="ghost" size="sm" onClick={handlePrevFace}>&lt;</Button>
+        <Button variant="ghost" size="sm" onClick={handlePrevColor}>&lt;</Button>
       </div>
 
-      <div className="appearance__rows" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-        <div style={carouselStyle}>
-          <Button variant="ghost" size="sm" onClick={handlePrevColor}>&lt;</Button>
-          <span style={labelStyle}>{t.colorNames[colorIndex] ?? 'Color'}</span>
-          <Button variant="ghost" size="sm" onClick={handleNextColor}>&gt;</Button>
-        </div>
+      <div className="appearance__preview" style={{ flexShrink: 0 }}>
+        <Avatar colorIndex={colorIndex} hat={hat} face={face} size={130} />
+      </div>
 
-        <div style={carouselStyle}>
-          <Button variant="ghost" size="sm" onClick={handlePrevHat}>&lt;</Button>
-          <span style={labelStyle}>{t.hatNames[hat] ?? 'Hat'}</span>
-          <Button variant="ghost" size="sm" onClick={handleNextHat}>&gt;</Button>
-        </div>
-
-        <div style={carouselStyle}>
-          <Button variant="ghost" size="sm" onClick={handlePrevFace}>&lt;</Button>
-          <span style={labelStyle}>{t.faceNames[face] ?? 'Face'}</span>
-          <Button variant="ghost" size="sm" onClick={handleNextFace}>&gt;</Button>
-        </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginLeft: '1rem' }}>
+        <Button variant="ghost" size="sm" onClick={handleNextHat}>&gt;</Button>
+        <Button variant="ghost" size="sm" onClick={handleNextFace}>&gt;</Button>
+        <Button variant="ghost" size="sm" onClick={handleNextColor}>&gt;</Button>
       </div>
     </div>
   );
