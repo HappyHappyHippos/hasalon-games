@@ -55,6 +55,8 @@ export function TouchPad({ onButton }: Props): JSX.Element {
       const previous = stickBits.current;
       if (next === previous) return;
       stickBits.current = next;
+      // Diff rather than replace: `setButton` is a per-bit call, and pushing a
+      // bit that is already down would re-arm the tap latch it feeds.
       for (const bit of STICK_BITS) {
         const was = (previous & bit) !== 0;
         const is = (next & bit) !== 0;

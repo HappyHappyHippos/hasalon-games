@@ -52,8 +52,6 @@ export function OptionsMenu(): JSX.Element {
   const voice = useVoice();
   const t = useT();
 
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-
   // Escape is the reflex for "get this off my screen", and it should also be
   // able to *open* the menu — that's the fast way to pause without hunting for
   // a button while someone is shooting at you.
@@ -149,25 +147,29 @@ export function OptionsMenu(): JSX.Element {
               }}
             />
           </label>
-          
-          {voice.active && (
-            <div className="options__voice-debug">
-              {Object.entries(voice.peers).length > 0 && (
-                <ul style={{ margin: '1rem 0 0 0', padding: 0, listStyle: 'none', fontSize: '0.875rem' }}>
-                  {Object.entries(voice.peers).map(([id, status]) => {
-                    const peerName = room?.players.find((p) => p.id === id)?.name || id;
-                    return (
-                      <li key={id} style={{ display: 'flex', justifyContent: 'space-between', opacity: status === 'connected' ? 1 : 0.6 }}>
-                        <span>{peerName}</span>
-                        <span>{status === 'connected' ? t.voiceConnected : status === 'connecting' ? t.voiceConnecting : t.voiceFailed(1)}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-              {isIOS && <p className="muted small" style={{ marginTop: '1rem' }}>{t.voiceIosNote}</p>}
-            </div>
-          )}
+
+          {/*
+            The lobby track is CC BY 4.0, so this credit is a licence condition
+            rather than a courtesy — and the options menu is where the licensor
+            asks for it. Remove it only alongside the track. See
+            `public/music/ATTRIBUTION.md`.
+          */}
+          <p className="muted small options__credit">
+            Hot Swing ·{' '}
+            <a href="https://incompetech.com/" target="_blank" rel="noreferrer noopener">
+              Kevin MacLeod
+            </a>{' '}
+            ·{' '}
+            <a
+              href="https://creativecommons.org/licenses/by/4.0/"
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              CC BY 4.0
+            </a>
+          </p>
+
+          {voice.active && <VoicePeers />}
         </section>
 
         <section className="options__section">
@@ -294,4 +296,61 @@ export function OptionsMenu(): JSX.Element {
       </div>
     </div>
   );
+}
+
+/**
+ * Who your microphone actually reached, one line per person.
+ *
+ * "I can't hear Yoni" is otherwise undiagnosable from the sofa — a peer that
+ * failed to connect is indistinguishable from one who simply is not talking.
+ * Only rendered while your own mic is open, because that is the only time any
+ * of it is true.
+ */
+function VoicePeers(): JSX.Element | null {
+  const room = useStore((s) => s.room);
+  const voice = useVoice();
+  const t = useT();
+
+  const peers = Object.entries(voice.peers);
+  if (peers.length === 0 && !isIOS()) return null;
+
+  return (
+    <div className="options__peers">
+      {peers.length > 0 && (
+        <ul className="options__peerlist">
+          {peers.map(([id, status]) => (
+            <li key={id} className={`options__peer options__peer--${status}`}>
+              <span>{room?.players.find((p) => p.id === id)?.name ?? id}</span>
+              <span>
+                {status === 'connected'
+                  ? t.voiceConnected
+                  : status === 'connecting'
+                    ? t.voiceConnecting
+                    : t.voicePeerFailed}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {/*
+        The settings half of "why can't I hear anyone": iOS routes WebRTC
+        playback through the ring/silent switch and the media volume, so a
+        perfectly connected peer can still be inaudible.
+      */}
+      {isIOS() && <p className="muted small">{t.voiceIosNote}</p>}
+    </div>
+  );
+}
+
+/**
+ * Best-effort iOS detection, for a hint that is only true there.
+ *
+ * `navigator.platform` is deprecated but is still the only way to tell an iPad
+ * on iPadOS 13+ from a Mac — it reports `MacIntel` either way, and only the
+ * iPad has touch points. Wrong answers here cost a line of advice, nothing more.
+ */
+function isIOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  if (/iPad|iPhone|iPod/.test(navigator.userAgent)) return true;
+  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
 }

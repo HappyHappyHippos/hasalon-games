@@ -236,7 +236,7 @@ describe('one-way platforms', () => {
   });
 });
 
-describe('hitstun', () => {
+describe('the countdown control gate', () => {
   it('keeps momentum but ignores the controls', () => {
     const b = body({ vx: -700, onGround: false, y: 200 });
     run(b, 6, input({ right: true, jumpPressed: true, controllable: false }));

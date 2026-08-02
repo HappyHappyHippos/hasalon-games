@@ -246,14 +246,13 @@ console.log(`  ✓ guest still moves after reloading (${movedAfter.toFixed(0)}px
  * Get shot, then try to walk.
  *
  * Two players reported getting stuck in place after being hit — bullets still
- * shoved them around, but their own controls did nothing until they died. The
- * cause was a hitstun timer set to a fractional number of ticks, counted down
- * with `if (t > 0) t -= 1` so it stopped on a small negative, and compared with
- * `=== 0` to decide whether you had your controls back. It never matched again.
+ * shoved them around, but their own controls did nothing until they died. That
+ * was hitstun, a timer that took the controls away for a few ticks after a hit
+ * and, set to a fractional number of ticks, sometimes never gave them back.
  *
- * Every part of that is server-side and covered by unit tests now. This is here
- * because it is the *behaviour* the players described, and checking it against
- * a real deployment costs one extra exchange.
+ * Hitstun no longer exists: a hit costs momentum and nothing else. So this is
+ * now a check that the *stronger* property holds against a real deployment —
+ * being shot never affects your controls at all — and it costs one exchange.
  */
 const hostSeat = started.room.players.find((p) => p.name === 'SmokeHost')?.seat ?? -1;
 if (hostSeat < 0) throw new Error('host was not seated');
@@ -291,21 +290,18 @@ host.send(JSON.stringify({ t: 'input', i: { seq: 1400, bits: 0 } }));
 if (!struck) {
   throw new Error('the host never managed to hit the guest — the probe proved nothing');
 }
-console.log(`  ✓ guest took a hit (${struck.d} damage, hitstun ${struck.st})`);
+console.log(`  ✓ guest took a hit (${struck.d} damage)`);
 
 // Let the knockback bleed off, so what we measure next is input and not the
 // shove. `comeToRest` sends a zero mask and waits out friction.
 const shoved = await comeToRest(reloaded, 1500);
 assertOnStage(shoved, 'after being shot');
-if (shoved.st < 0) {
-  throw new Error(`hitstun settled at ${shoved.st} — negative, so the controls never come back`);
-}
 
 const movedAfterHit = await run(reloaded, 1501);
 if (!(movedAfterHit > 5)) {
   throw new Error(
     `guest is stuck after being shot (moved ${movedAfterHit.toFixed(1)}px) — ` +
-      'hitstun never handed the controls back',
+      'being hit is not supposed to affect the controls at all',
   );
 }
 console.log(`  ✓ guest still moves after being shot (${movedAfterHit.toFixed(0)}px)`);

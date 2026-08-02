@@ -62,7 +62,7 @@ export interface MoveInput {
   jumpPressed: boolean;
   /** Jump held right now, as opposed to newly pressed. Drives the jetpack. */
   jumpHeld: boolean;
-  /** False during hitstun — you keep your momentum but lose the controls. */
+  /** False during the countdown. A hit no longer takes the controls away. */
   controllable: boolean;
 }
 

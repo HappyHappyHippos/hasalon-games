@@ -1,18 +1,30 @@
-import { useEffect, useRef, useState, type JSX } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type JSX } from 'react';
 import { Couch } from './Logo';
 import { music } from '../music';
 
 /**
- * Three seconds of logo before a match.
+ * A logo sting before a match.
  *
- * The duration is not arbitrary. Both games open with a three-second countdown
- * during which nobody can act — `COUNTDOWN_TICKS = 3 * TICK_RATE` in each game's
- * constants — so the splash sits exactly on top of dead time and costs nobody a
- * single tick of play. **Keep these in step.** Make the splash longer than the
- * countdown and every player spends the difference being shot at behind a
- * curtain.
+ * The duration is not arbitrary. Both games open with a countdown during which
+ * nobody can act — `COUNTDOWN_TICKS = seconds(2)` in each game's constants — so
+ * the splash sits on top of dead time and costs nobody a single tick of play.
+ * **Keep these in step.** Make the splash longer than the countdown and every
+ * player spends the difference being shot at behind a curtain.
+ *
+ * Deliberately a little *under* two seconds rather than exactly two. The mount
+ * is a React effect and the timeout is a `setTimeout`, so both drift by a frame
+ * or two; with no margin at all, that drift lands on the wrong side.
+ *
+ * The stylesheet reads this value through the `--intro-ms` custom property set
+ * below, rather than repeating it. It used to be hardcoded in both places, and
+ * the last time this number changed the CSS was left behind — the curtain then
+ * unmounted 620ms before its own fade-out was due to begin, so the splash
+ * hard-cut instead of fading and nobody could see why from either file alone.
  */
-export const INTRO_MS = 2000;
+export const INTRO_MS = 1800;
+
+/** How long the closing fade takes. Must stay under `INTRO_MS`. */
+const FADE_OUT_MS = 380;
 
 /** Reduced motion gets the beat, not the choreography. */
 const REDUCED_MS = 400;
@@ -63,6 +75,12 @@ export function Intro({ onDone }: Props): JSX.Element {
   return (
     <div
       className={`intro${reduced ? ' intro--reduced' : ''}${leaving ? ' intro--leaving' : ''}`}
+      style={
+        {
+          '--intro-ms': `${INTRO_MS}ms`,
+          '--intro-fade-ms': `${FADE_OUT_MS}ms`,
+        } as CSSProperties
+      }
       role="presentation"
       aria-hidden="true"
     >

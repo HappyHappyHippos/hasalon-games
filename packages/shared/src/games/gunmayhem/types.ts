@@ -107,7 +107,6 @@ export interface GmPlayer {
 
   damage: number;
   stocks: number;
-  hitstun: number;
   /** >0 means waiting to come back; the player is off the stage. */
   respawnTimer: number;
   invuln: number;
@@ -240,8 +239,6 @@ export interface GmSnapshotPlayer {
   d: number;
   /** stocks */
   k: number;
-  /** hitstun ticks */
-  st: number;
   /** invulnerable ticks */
   iv: number;
   /** respawn timer */

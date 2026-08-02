@@ -21,7 +21,6 @@ export const JUMP_ON = 0.5;
  * - A thumb resting near the line would chatter the bit on and off, and the sim
  *   jumps on the **rising** edge (`sim.ts`: `pendingPress & IN_JUMP`), so chatter
  *   is a burst of jumps rather than one.
- *   is a burst of jumps rather than one.
  * - The held bit feeds the jetpack (`physics.ts`: `jumpHeld`), so it has to
  *   stay set for as long as the player means it to.
  *
@@ -76,11 +75,9 @@ export function stickToBits(vector: StickVector, state: StickState, now: number)
     // then raises it again to trigger another air jump.
     const timeHeld = now - state.jumpHeldSince;
     const period = HOLD_REJUMP_MS + REARM_RELEASE_MS;
-    const inPeriod = timeHeld % period;
-    
-    if (timeHeld < HOLD_REJUMP_MS || inPeriod < HOLD_REJUMP_MS) {
-      bits |= IN_JUMP;
-    }
+    // The modulo covers the first cycle too: below `HOLD_REJUMP_MS`,
+    // `inPeriod === timeHeld`, so no separate first-pass test is needed.
+    if (timeHeld % period < HOLD_REJUMP_MS) bits |= IN_JUMP;
   } else if (vector.y >= DROP_Y) {
     bits |= IN_DOWN;
   }

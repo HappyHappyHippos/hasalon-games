@@ -28,9 +28,6 @@ import {
   CRATE_TTL_TICKS,
   DEFAULT_STOCKS,
   DEFAULT_TARGET_WINS,
-  HITSTUN_BASE,
-  HITSTUN_MAX,
-  HITSTUN_PER_KB,
   KB_BASE,
   KB_PER_DAMAGE,
   KB_UP_BIAS,
@@ -140,7 +137,6 @@ function createPlayer(seat: GameSeat, index: number, config: GunMayhemConfig): G
     buffs: emptyBuffs(),
     damage: 0,
     stocks: config.stocks,
-    hitstun: 0,
     respawnTimer: 0,
     invuln: 0,
     active: true,
@@ -193,7 +189,6 @@ function resetToSpawn(state: GunMayhemState, player: GmPlayer, index: number): v
   player.jetpack = 0;
   player.buffs = emptyBuffs();
   player.damage = 0;
-  player.hitstun = 0;
   player.respawnTimer = 0;
   player.invuln = RESPAWN_INVULN_TICKS;
   player.weapon = DEFAULT_WEAPON;
@@ -323,7 +318,6 @@ function stepTimers(state: GunMayhemState): void {
   for (const player of state.players) {
     player.cooldown = tick(player.cooldown);
     player.bombCooldown = tick(player.bombCooldown);
-    player.hitstun = tick(player.hitstun);
     player.invuln = tick(player.invuln);
     // Jetpack fuel is deliberately not in here — it burns per thrusting tick
     // inside `stepMovement`, not on a clock.
@@ -356,13 +350,10 @@ function stepBodies(state: GunMayhemState, controllable: boolean): void {
       down: controllable && (held & IN_DOWN) !== 0,
       jumpPressed: controllable && (player.pendingPress & IN_JUMP) !== 0,
       jumpHeld: controllable && (held & IN_JUMP) !== 0,
-      // `<= 0`, never `=== 0`. An equality test here is a trap: it hands the
-      // controls back only on an exact value, so any timer that misses it —
-      // for any reason, now or later — locks the player out permanently rather
-      // than for a tick. Every other hitstun check in this file is a
-      // comparison, and so is the client's (`predictor.ts`), which is why this
-      // one disagreeing showed up as being stuck on your own screen alone.
-      controllable: controllable && player.hitstun <= 0,
+      // Purely the phase gate now. Being hit used to lock the controls for a
+      // few ticks (hitstun); it no longer does, so a launched player can steer,
+      // jump and shoot on the way out. See `damageAndLaunch`.
+      controllable,
     };
 
     const result = stepMovement(player, input, state.level, DT, movementMods(player.buffs));
@@ -378,7 +369,7 @@ function stepBodies(state: GunMayhemState, controllable: boolean): void {
 
 function stepShooting(state: GunMayhemState): void {
   for (const player of state.players) {
-    if (!player.active || player.hitstun > 0) continue;
+    if (!player.active) continue;
     if ((player.heldBits & IN_SHOOT) === 0) continue;
     if (player.cooldown > 0) continue;
 
@@ -623,7 +614,7 @@ function stepBombThrows(state: GunMayhemState): void {
   if (!state.config.bombsEnabled) return;
 
   for (const player of state.players) {
-    if (!player.active || player.hitstun > 0) continue;
+    if (!player.active) continue;
     if ((player.pendingPress & IN_BOMB) === 0) continue;
     if (player.bombs <= 0 || player.bombCooldown > 0) continue;
 
@@ -769,11 +760,9 @@ function damageAndLaunch(
   const knockback = (KB_BASE + target.damage * KB_PER_DAMAGE) * kbMul;
   target.vx = dirX * knockback;
   target.vy = -knockback * KB_UP_BIAS;
-  // Rounded, because this is a countdown in ticks and the rest of the sim
-  // assumes timers are whole. Knockback is a float, so this expression is one
-  // too, and an unrounded 9.534 counts down to -0.466 and sticks there — which
-  // the control gate in `stepBodies` then reads as "still in hitstun", forever.
-  target.hitstun = Math.round(Math.min(HITSTUN_MAX, HITSTUN_BASE + knockback * HITSTUN_PER_KB));
+  // No hitstun: a hit takes your momentum, never your controls. Knockback still
+  // *replaces* velocity so every hit reads the same, but you are free to fight
+  // it from the first tick — which is the whole point of dropping it.
   target.onGround = false;
 
   if (bySeat !== target.seat) {
@@ -996,7 +985,6 @@ function toSnapshotPlayer(p: GmPlayer): GmSnapshotPlayer {
     g: p.onGround ? 1 : 0,
     d: Math.round(p.damage),
     k: p.stocks,
-    st: p.hitstun,
     iv: p.invuln,
     rt: p.respawnTimer,
     j: p.jumpsLeft,

@@ -6,7 +6,6 @@ import {
   BOMB_RADIUS,
   BUFF_TICKS,
   COUNTDOWN_TICKS,
-  HITSTUN_MAX,
   JETPACK_FUEL_TICKS,
   KB_BASE,
   MAX_PLAYERS,
@@ -531,7 +530,6 @@ describe('the knife', () => {
 
     expect(victim.damage).toBeCloseTo(WEAPONS.knife.damage, 3);
     expect(victim.vx).toBeGreaterThan(0); // launched away from the attacker
-    expect(victim.hitstun).toBeGreaterThan(0);
     void attacker;
   });
 
@@ -632,7 +630,7 @@ describe('powerups', () => {
     shooter.facing = 1;
 
     hold(state, 0, IN_SHOOT);
-    // A shielded hit deliberately applies no hitstun, so low ground friction
+    // A shielded hit is a much smaller shove, so low ground friction
     // bleeds the shove off within a couple of ticks — measure the peak, not the
     // state several ticks later.
     let peakVx = 0;
@@ -836,14 +834,18 @@ describe('weapon balance', () => {
   });
 });
 
-describe('hitstun', () => {
+describe('being hit never takes the controls away', () => {
   /**
    * Shoot player 1 once with `weapon`, then let go of the trigger.
    *
    * Written after two players reported getting stuck in place after being hit —
-   * unable to move themselves, but still shoved around by bullets. The cause was
-   * a hitstun timer that never reached the value the control gate compared
+   * unable to move themselves, but still shoved around by bullets. That was a
+   * hitstun timer that never reached the value the control gate compared
    * against, so the controls never came back for the rest of that life.
+   *
+   * Hitstun is gone entirely now, which removes the whole class of bug. These
+   * tests stayed, repointed at the property that replaced it: a hit costs you
+   * your momentum and nothing else, from the very first tick.
    */
   function takeAHit(
     weapon: WeaponKind,
@@ -872,10 +874,9 @@ describe('hitstun', () => {
   }
 
   /**
-   * Cancel the knockback flight. What is under test is whether the timer hands
-   * the controls back, not how far the shove throws you — and at the top end a
-   * rocket launches the victim clean off the stage, where respawning would reset
-   * the timer and hide the bug.
+   * Cancel the knockback flight. What is under test is the controls, not how far
+   * the shove throws you — and at the top end a rocket launches the victim clean
+   * off the stage, where respawning would hide the answer.
    */
   function plant(victim: GmPlayer): void {
     victim.vx = 0;
@@ -883,47 +884,35 @@ describe('hitstun', () => {
   }
 
   for (const weapon of Object.keys(WEAPONS) as WeaponKind[]) {
-    it(`hands the controls back after a ${weapon} hit`, () => {
+    it(`leaves the victim in control immediately after a ${weapon} hit`, () => {
       const { state, victim } = takeAHit(weapon);
       const stocks = victim.stocks;
 
-      expect(victim.hitstun).toBeGreaterThan(0);
-
-      // Comfortably past the longest hitstun the game can apply.
-      for (let i = 0; i < HITSTUN_MAX + 30; i++) {
-        plant(victim);
-        stepTick(state);
-      }
-
-      expect(victim.stocks).toBe(stocks); // never died, so nothing reset them
-      expect(victim.hitstun).toBe(0);
-
+      // No settling period at all: steer on the very next tick.
+      plant(victim);
       const before = victim.x;
       hold(state, 1, IN_RIGHT);
       run(state, 30);
+
+      expect(victim.stocks).toBe(stocks); // never died, so nothing reset them
       expect(victim.x).toBeGreaterThan(before + 20);
     });
   }
 
-  it('always counts down to exactly zero, whatever the hit', () => {
-    // Every other timer in the sim is set from `seconds()` or `Math.round`, so
-    // it is a whole number of ticks and `t -= 1` lands on zero. Hitstun is
-    // derived from knockback, which is a float, and used not to be — it walked
-    // straight past zero to a small negative and stopped there.
-    for (const weapon of Object.keys(WEAPONS) as WeaponKind[]) {
-      for (const startingDamage of [0, 7, 23, 60, 91, 150, 300]) {
-        const { state, victim } = takeAHit(weapon, startingDamage);
+  it('lets a victim jump out of a knockback at any damage', () => {
+    // The reason hitstun was removed: a launch has to be survivable by playing
+    // well, not merely by having taken less damage so far.
+    for (const startingDamage of [0, 7, 23, 60, 91, 150, 300]) {
+      const { state, victim } = takeAHit('rocket', startingDamage);
+      plant(victim);
+      victim.onGround = false;
+      victim.jumpsLeft = 1;
 
-        expect(Number.isInteger(victim.hitstun)).toBe(true);
-        expect(victim.hitstun).toBeLessThanOrEqual(HITSTUN_MAX);
+      const before = victim.vy;
+      hold(state, 1, IN_JUMP);
+      stepTick(state);
 
-        for (let i = 0; i < HITSTUN_MAX + 5; i++) {
-          plant(victim);
-          stepTick(state);
-          expect(victim.hitstun).toBeGreaterThanOrEqual(0);
-        }
-        expect(victim.hitstun).toBe(0);
-      }
+      expect(victim.vy).toBeLessThan(before);
     }
   });
 });

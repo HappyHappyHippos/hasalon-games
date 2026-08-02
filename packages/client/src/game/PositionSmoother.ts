@@ -4,7 +4,7 @@
  * The problem it solves is specific. Your own character is drawn from two
  * different clocks: a *predicted* body at `now`, and an *interpolated* one a
  * snapshot interval plus half a round trip in the past. The renderer switches
- * between them whenever the server takes over — the first frame of hitstun, say
+ * between them whenever the server takes over — the frame a hit lands, say
  * — and the switch alone moves the character by however far it travelled in
  * that gap. At full sprint that is over a hundred pixels, in one frame, in the
  * middle of the most legible moment of a fight. The prediction resyncs are the

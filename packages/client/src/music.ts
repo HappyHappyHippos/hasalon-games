@@ -27,16 +27,24 @@ export type MusicTrack = 'lobby' | GameId;
  * under `INTRO_MS` (see `ui/Intro.tsx`) so it does not outlive the animation.
  * ────────────────────────────────────────────────────────────────────────────
  */
-export const INTRO_STING_URL = '/music/intro.ogg';
+export const INTRO_STING_URL = '/music/intro.mp3';
 
 /**
- * Two of these are Ogg because the machine they were fetched on had no ffmpeg.
- * Both extensions are served by the production static handler.
+ * All mp3, and that is not a detail.
+ *
+ * Two of these used to be Ogg Vorbis, which **Safari has never supported** — not
+ * "old Safari", any of it, desktop and iOS alike. On every iPhone in the family
+ * the element fired `error` on load, the track went into `broken` below, and
+ * since `lobby` is what plays on every screen outside a match, the site was
+ * silent from first paint. It looked like a code bug and was a codec choice.
+ *
+ * mp3 is the one format every target decodes. Anything dropped in here later
+ * should be mp3 too unless someone adds real format negotiation.
  */
 const TRACKS: Record<MusicTrack, string> = {
-  lobby: '/music/lobby.ogg',
+  lobby: '/music/lobby.mp3',
   gunmayhem: '/music/gunmayhem.mp3',
-  achtung: '/music/achtung.ogg',
+  achtung: '/music/achtung.mp3',
 };
 
 /** Long enough to feel deliberate, short enough not to overlap two melodies. */
@@ -44,6 +52,15 @@ const FADE_MS = 700;
 const FADE_STEP_MS = 50;
 /** How far the music drops while a menu is open, as a fraction of volume. */
 const DUCK_SCALE = 0.25;
+
+/**
+ * Events that can satisfy an autoplay policy.
+ *
+ * `click` and `touchend` are the load-bearing ones: iOS Safari does not treat
+ * `pointerdown` as a media user-activation, so a retry hooked only to that
+ * never fires on the devices most likely to need it.
+ */
+const GESTURE_EVENTS = ['pointerdown', 'click', 'touchend', 'keydown'] as const;
 
 interface MusicSettings {
   muted: boolean;
@@ -55,11 +72,24 @@ class Music {
   /** Two elements so a track change can crossfade instead of cutting. */
   private players: (HTMLAudioElement | null)[] = [null, null];
   private active = 0;
+  /** What is actually playing. */
   private current: MusicTrack | null = null;
+  /** What *should* be playing, whether or not we managed it. */
+  private wanted: MusicTrack | null = null;
   private ducked = false;
   private fadeTimer: number | null = null;
-  /** Tracks whose file failed to load. Never retried — they aren't coming back. */
+  /**
+   * Tracks that have failed to load more than once.
+   *
+   * Deliberately not on the first failure. This used to retire a track for the
+   * whole session the moment one `error` fired, which turned any transient
+   * hiccup — a dropped request on a phone changing cell, a reload mid-fetch —
+   * into permanent silence with no way back. Two strikes, because a genuinely
+   * missing or undecodable file fails every single time and a flaky network
+   * does not.
+   */
   private broken = new Set<MusicTrack>();
+  private failures = new Map<MusicTrack, number>();
   /** Set while we're waiting on a gesture to satisfy the autoplay policy. */
   private gestureHooked = false;
 
@@ -76,11 +106,12 @@ class Music {
     saveSettings(this.settings);
     if (muted) {
       this.stopAll();
-    } else if (this.current) {
-      // Unmuting mid-session should pick the music back up where we are now.
-      const track = this.current;
       this.current = null;
-      this.play(track);
+    } else if (this.wanted) {
+      // Unmuting mid-session picks the music back up for wherever we are *now*,
+      // which is not necessarily the screen the mute happened on.
+      this.current = null;
+      this.play(this.wanted);
     }
   }
 
@@ -100,9 +131,17 @@ class Music {
   }
 
   play(track: MusicTrack): void {
+    // What the app *wants* playing, recorded even when we cannot honour it —
+    // muted, or the file is broken. Unmuting three screens later has to pick up
+    // the track for the screen you are on now, not the one you muted on.
+    this.wanted = track;
+
     if (this.current === track) return;
-    this.current = track;
+    // `current` is only claimed once we are actually going to try. It used to be
+    // set above this guard, so a muted or broken track still became "current"
+    // and the bed then stayed silent until some *other* track was requested.
     if (this.settings.muted || this.broken.has(track)) return;
+    this.current = track;
 
     const next = (this.active + 1) % 2;
     const previous = this.players[this.active];
@@ -112,9 +151,14 @@ class Music {
     player.preload = 'auto';
     player.volume = 0;
     player.onerror = () => {
-      // No file, or a codec this browser won't take. Give up on it quietly.
-      this.broken.add(track);
+      // No file, a codec this browser won't take, or a request that died on the
+      // way. Only the first two are permanent, and we cannot tell them apart
+      // from here — so count strikes rather than condemning on the first.
+      const strikes = (this.failures.get(track) ?? 0) + 1;
+      this.failures.set(track, strikes);
+      if (strikes >= 2) this.broken.add(track);
       if (this.players[next] === player) this.players[next] = null;
+      if (this.current === track) this.current = null;
     };
 
     this.players[next] = player;
@@ -184,25 +228,41 @@ class Music {
    * Browsers refuse to start audio before a gesture. Unlike a sound effect —
    * which is always *caused* by a click — music starts on a phase change, so a
    * rejection here is routine on first load. Wait for the next interaction.
+   *
+   * Two things this gets right that the previous version did not, and between
+   * them they were most of why the music never played:
+   *
+   * - **It re-arms.** The old retry removed its listeners, tried once more, and
+   *   swallowed the rejection. One failed attempt and that was the session.
+   * - **It listens for `click` and `touchend`, not just `pointerdown`.** iOS
+   *   Safari does not grant media activation on `pointerdown` — it grants it on
+   *   `touchend`/`click`. So on an iPhone the single retry was being spent on
+   *   the one event guaranteed not to satisfy the policy.
    */
   private start(player: HTMLAudioElement): void {
-    const attempt = player.play();
-    if (!attempt) return;
-    attempt.catch(() => {
-      if (this.gestureHooked) return;
-      this.gestureHooked = true;
+    const attempt = () => {
+      const promise = player.play();
+      if (!promise) return;
+      promise.catch(() => {
+        // A track that has since been swapped out should not keep queueing
+        // retries; the newer one has its own.
+        if (this.players[this.active] !== player) return;
+        if (this.gestureHooked) return;
+        this.gestureHooked = true;
 
-      const retry = (): void => {
-        window.removeEventListener('pointerdown', retry);
-        window.removeEventListener('keydown', retry);
-        this.gestureHooked = false;
-        const active = this.players[this.active];
-        if (active && !this.settings.muted) void active.play().catch(() => undefined);
-      };
+        const retry = (): void => {
+          for (const event of GESTURE_EVENTS) window.removeEventListener(event, retry);
+          this.gestureHooked = false;
+          const active = this.players[this.active];
+          if (active && !this.settings.muted) this.start(active);
+        };
 
-      window.addEventListener('pointerdown', retry, { once: true });
-      window.addEventListener('keydown', retry, { once: true });
-    });
+        for (const event of GESTURE_EVENTS) {
+          window.addEventListener(event, retry, { once: true });
+        }
+      });
+    };
+    attempt();
   }
 
   private crossfade(incoming: HTMLAudioElement, outgoing: HTMLAudioElement | null): void {

@@ -92,10 +92,6 @@ export const KB_PER_DAMAGE = 9.5;
 /** Fraction of the knockback applied upwards, so hits pop people into the air. */
 export const KB_UP_BIAS = 0.42;
 
-export const HITSTUN_BASE = 3;
-export const HITSTUN_PER_KB = 0.022;
-export const HITSTUN_MAX = 26;
-
 /** Damage is capped so a camper can't become literally unkillable-adjacent. */
 export const MAX_DAMAGE = 320;
 

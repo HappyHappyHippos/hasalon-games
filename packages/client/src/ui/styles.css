@@ -1404,7 +1404,13 @@ strong,
   background-image:
     radial-gradient(circle at 1px 1px, rgba(20, 17, 15, 0.07) 1px, transparent 0);
   background-size: 22px 22px;
-  animation: intro-out 380ms ease-in 2620ms both;
+  /* Timings come from `Intro.tsx` via custom properties rather than being
+     repeated here. Both numbers used to be hardcoded in both files, and the
+     last time the component's duration changed this rule was left behind: the
+     splash unmounted 620ms before its own fade was due to start, so it
+     hard-cut. The fallbacks only apply if the component forgets to set them. */
+  animation: intro-out var(--intro-fade-ms, 380ms) ease-in
+    calc(var(--intro-ms, 1800ms) - var(--intro-fade-ms, 380ms)) both;
 }
 
 .intro--leaving {
@@ -1699,6 +1705,44 @@ strong,
 .options__slider input:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+/* Licence credit for the lobby track. Small, but it is a CC BY condition, not
+   decoration — see public/music/ATTRIBUTION.md. */
+.options__credit {
+  margin: 0;
+  opacity: 0.7;
+}
+.options__credit a {
+  color: inherit;
+}
+
+/* Who your microphone actually reached. */
+.options__peers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+.options__peerlist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 14px;
+}
+.options__peer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.options__peer--connecting {
+  opacity: 0.6;
+}
+.options__peer--failed {
+  color: var(--red);
 }
 
 .rules {

@@ -41,7 +41,6 @@ function bare(overrides: Partial<GmSnapshotPlayer> = {}): GmSnapshotPlayer {
     g: 1,
     d: 0,
     k: 3,
-    st: 0,
     iv: 0,
     rt: 0,
     j: 2,
@@ -138,8 +137,10 @@ describe('GunMayhemPredictor', () => {
     gmInput.seq = 0;
   });
 
-  it('hands control back to the server during hitstun, respawn and elimination', () => {
-    for (const state of [{ st: 8 }, { rt: 40 }, { k: 0 }]) {
+  it('hands control back to the server during respawn and elimination', () => {
+    // Being hit is deliberately not in this list: a hit no longer takes the
+    // controls away, so prediction runs straight through a knockback.
+    for (const state of [{ rt: 40 }, { k: 0 }]) {
       const predictor = new GunMayhemPredictor();
       expect(predictor.update(1000, level, bare(state), true)).toBeNull();
       expect(predictor.active).toBe(false);
@@ -216,9 +217,10 @@ describe('GunMayhemPredictor', () => {
   });
 
   it('adopts velocity the server applied that we could not have predicted', () => {
-    // Recoil, a knife lunge, a shield popping: all change velocity with no
-    // hitstun to announce them. Rebuilding from the snapshot means these arrive
-    // for free rather than needing a correction rule of their own.
+    // Recoil, a knife lunge, a shield popping, a bullet landing: all change
+    // velocity with nothing in the input stream to announce them. Rebuilding
+    // from the snapshot means these arrive for free rather than needing a
+    // correction rule of their own.
     const predictor = new GunMayhemPredictor();
     gmInput.history.push({ seq: 1, bits: 0, at: 0 });
 

@@ -34,9 +34,15 @@ export function useVoiceMesh(): void {
   const playerId = useStore((s) => s.playerId);
   const active = useVoice().active;
 
-  // The join order of `room.players` is stable, so a plain id list is enough to
-  // tell "somebody joined or left" from "somebody changed their hat".
-  // We filter by `voice` to only sync peers who have their mic on (in the mesh).
+  // Membership is *who has their microphone open*, not who is in the room.
+  //
+  // That distinction is the whole fix for the bug where two phones could not
+  // hear each other. Building the mesh from room membership meant whoever
+  // enabled their mic first offered into the void — the other side had no
+  // stream yet and dropped it — and when the second player enabled theirs, the
+  // id comparison told them not to offer while the first player skipped them as
+  // already-known. Neither ever offered again. Keyed on the voice flags, both
+  // sides create the peer on the same broadcast and exactly one of them offers.
   const voices = room?.players.filter((p) => p.voice).map((p) => p.id).join(',') ?? '';
   const status = useStore((s) => s.status);
 
@@ -46,6 +52,11 @@ export function useVoiceMesh(): void {
       return;
     }
     if (!active || !playerId || status !== 'open') return;
+    // Re-assert our own flag on every (re)connection. `announce` otherwise only
+    // fires from start/stop, and a player whose disconnect grace expired rejoins
+    // as a fresh `RoomPlayer` with `voice: false` — mic open, invisible to
+    // everyone else's mesh, permanently.
+    voice.reannounce();
     voice.syncPeers(voices ? voices.split(',') : []);
   }, [voices, active, playerId, status]);
 

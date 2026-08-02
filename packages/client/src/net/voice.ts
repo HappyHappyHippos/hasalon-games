@@ -7,17 +7,26 @@
  *
  * ## Getting through carrier-grade NAT
  *
- * This used to be STUN-only, and STUN is enough for two home routers to find
- * each other and nothing else. A player behind carrier-grade NAT — the norm on
- * Israeli mobile networks, and this game does get played phone-only — has no
- * route a STUN candidate can describe, so those peers connected to nobody while
- * everyone on wifi was fine.
+ * STUN alone is enough for two home routers to find each other and nothing
+ * else. A player behind carrier-grade NAT — the norm on Israeli mobile
+ * networks, and this game does get played phone-only — has no route a STUN
+ * candidate can describe, so those peers connect to nobody while everyone on
+ * wifi is fine.
  *
- * The ICE servers now come from the server's `/ice` endpoint, which adds a TURN
+ * The ICE servers come from the server's `/ice` endpoint, which adds a TURN
  * relay (see `server/src/ice.ts` for which one and why it is free). That
- * endpoint never fails: the worst case is the old STUN-only list plus some
- * free public relays, so this module's fallback is only for the network being
- * down entirely — in which case there is no signalling either.
+ * endpoint never fails, so `FALLBACK_ICE_SERVERS` below is only for the network
+ * being down entirely — in which case there is no signalling either.
+ *
+ * ## Two phones is the case that breaks
+ *
+ * Everything here that looks over-careful is because a desktop is forgiving and
+ * two phones are not. Three separate bugs each produced "connected, but silence"
+ * between an iPhone and an Android while iPhone-to-laptop worked: building the
+ * mesh from room membership rather than who has a mic open (see `useVoice.ts`),
+ * putting a *remote* stream through an `AudioContext` (which mutes the audio
+ * element on WebKit — see `startLevels`), and creating that context outside the
+ * user gesture so iOS left it suspended.
  *
  * Failure is still per-peer and still has to be *visible*: `peers` carries a
  * status for every other player and the UI reports it. "I can't hear Yoni"
@@ -39,8 +48,13 @@
  * is talking — are mirrored into the store, and only when they change.
  */
 /**
- * Only used when `/ice` itself is unreachable. Public STUN, two of them because
- * the first occasionally rate-limits and ICE is happy to use whichever answers.
+ * Only used when `/ice` itself is unreachable.
+ *
+ * Public STUN — two, because the first occasionally rate-limits and ICE will use
+ * whichever answers — plus the Open Relay Project's free TURN servers on
+ * TCP/TLS 443. The relay entries matter: without them a client whose `/ice`
+ * fetch times out (plausible on a phone right after the mic prompt) silently
+ * drops to STUN-only, which is the configuration that cannot cross CGNAT.
  */
 const FALLBACK_ICE_SERVERS: RTCIceServer[] = [
   { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
@@ -83,12 +97,19 @@ export interface VoiceSnapshot {
 interface Peer {
   pc: RTCPeerConnection;
   audio: HTMLAudioElement | null;
-  analyser: AnalyserNode | null;
   /** Last time this peer was over the speech threshold. */
   loudAt: number;
   status: PeerStatus;
   /** True if we are the offering side, which decides who re-offers on a restart. */
   weOffer: boolean;
+  /**
+   * An offer of ours is out and unanswered.
+   *
+   * Distinct from `weOffer`, which is a permanent role. This is the transient
+   * fact that decides whether an incoming offer is a collision — keying glare
+   * detection on the role instead made every later offer look like one.
+   */
+  offerPending: boolean;
   /**
    * Candidates that arrived before the remote description did.
    *
@@ -100,6 +121,8 @@ interface Peer {
   pending: RTCIceCandidateInit[];
   /** One ICE restart is allowed per peer before we call it dead. */
   restarted: boolean;
+  /** Guards the `getStats` level fallback against overlapping calls. */
+  statsInFlight: boolean;
 }
 
 type Listener = (snapshot: VoiceSnapshot) => void;
@@ -130,11 +153,20 @@ async function loadIceServers(): Promise<RTCIceServer[]> {
   }
 }
 
-export function supported(): boolean {
+/** The prefixed constructor is still the only one on older WebKit. */
+type WindowWithWebkitAudio = Window & { webkitAudioContext?: typeof AudioContext };
+
+function audioContextCtor(): typeof AudioContext | null {
+  if (typeof window === 'undefined') return null;
+  return window.AudioContext ?? (window as WindowWithWebkitAudio).webkitAudioContext ?? null;
+}
+
+function supported(): boolean {
   return (
-    !!window.RTCPeerConnection &&
+    typeof window !== 'undefined' &&
+    typeof RTCPeerConnection !== 'undefined' &&
     !!navigator.mediaDevices?.getUserMedia &&
-    !!(window.AudioContext || (window as any).webkitAudioContext)
+    audioContextCtor() !== null
   );
 }
 
@@ -163,6 +195,10 @@ class Voice {
 
   /** Fetched once per `start()` and reused for every peer in that session. */
   private iceServers: RTCIceServer[] = FALLBACK_ICE_SERVERS;
+
+  /** Listeners that nudge a suspended `AudioContext` back awake. */
+  private contextWatched = false;
+  private wakeContext: (() => void) | null = null;
 
   // -------------------------------------------------------------------------
   // Subscription — a store-shaped surface for `useSyncExternalStore`
@@ -201,6 +237,20 @@ class Voice {
     }
     this.selfId = selfId;
 
+    // Built here, synchronously, *before* the first `await` — this is still
+    // inside the click that called us, and on iOS a context created after the
+    // gesture window closes starts suspended and stays that way. A suspended
+    // context makes the analyser read pure zeroes, so your own speaking ring
+    // never lights up and it looks exactly like a dead microphone.
+    const Ctor = audioContextCtor();
+    try {
+      this.ctx = Ctor ? new Ctor() : null;
+    } catch {
+      // Some browsers cap the number of live contexts. Levels are a nicety;
+      // losing them must not stop the call.
+      this.ctx = null;
+    }
+
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
         // All three on: this is a living room, and half the players will be in
@@ -211,6 +261,8 @@ class Voice {
     } catch (err) {
       const name = (err as DOMException | undefined)?.name;
       this.emit({ error: name === 'NotFoundError' ? 'nodevice' : 'denied' });
+      void this.ctx?.close().catch(() => undefined);
+      this.ctx = null;
       return;
     }
 
@@ -220,9 +272,39 @@ class Voice {
 
     this.localAnalyser = this.analyserFor(this.stream);
     this.startLevels();
+    this.watchContext();
 
     this.emit({ active: true, muted: false, error: null });
     this.announce?.(true);
+  }
+
+  /**
+   * Keep the level-metering context awake.
+   *
+   * iOS suspends an `AudioContext` on backgrounding, on an incoming call, and
+   * sometimes on nothing much at all — and a suspended context silently reports
+   * zero level forever, so the speaking rings just stop. Nudging it on the next
+   * gesture or foreground is the whole remedy.
+   */
+  private watchContext(): void {
+    if (this.contextWatched) return;
+    this.contextWatched = true;
+
+    const wake = (): void => {
+      if (this.ctx?.state === 'suspended') void this.ctx.resume().catch(() => undefined);
+    };
+    this.wakeContext = wake;
+
+    document.addEventListener('visibilitychange', wake);
+    window.addEventListener('pointerdown', wake);
+  }
+
+  private unwatchContext(): void {
+    if (!this.wakeContext) return;
+    document.removeEventListener('visibilitychange', this.wakeContext);
+    window.removeEventListener('pointerdown', this.wakeContext);
+    this.wakeContext = null;
+    this.contextWatched = false;
   }
 
   /** Close the microphone and every connection. */
@@ -234,6 +316,7 @@ class Voice {
     this.stream = null;
 
     this.localAnalyser = null;
+    this.unwatchContext();
     void this.ctx?.close().catch(() => undefined);
     this.ctx = null;
 
@@ -248,6 +331,18 @@ class Voice {
   /** Drop all peers without closing the microphone. Used when socket reconnects. */
   clearPeers(): void {
     for (const id of [...this.peers.keys()]) this.dropPeer(id);
+  }
+
+  /**
+   * Tell the room our microphone is open, again.
+   *
+   * Idempotent on the server (`Room.setVoice` returns early when unchanged), so
+   * this is safe to call on every reconnect — which is the point, because a
+   * rejoin after the disconnect grace expires creates a fresh player record with
+   * the flag cleared.
+   */
+  reannounce(): void {
+    if (this.stream) this.announce?.(true);
   }
 
   /**
@@ -295,12 +390,13 @@ class Voice {
     const peer: Peer = {
       pc,
       audio: null,
-      analyser: null,
       loudAt: 0,
       status: 'connecting',
       weOffer,
+      offerPending: false,
       pending: [],
       restarted: false,
+      statsInFlight: false,
     };
     this.peers.set(id, peer);
     this.publishPeers();
@@ -316,7 +412,7 @@ class Voice {
     pc.ontrack = (event) => {
       const [remote] = event.streams;
       if (!remote) return;
-      
+
       // Handle repeat ontrack
       const current = this.peers.get(id);
       if (current && current.audio && current.audio.srcObject === remote) return;
@@ -365,11 +461,16 @@ class Voice {
   }
 
   private async offer(id: string, pc: RTCPeerConnection): Promise<void> {
+    const peer = this.peers.get(id);
     try {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
+      // Set only once the offer is really out. Marking it earlier would make a
+      // failed `createOffer` look like an outstanding negotiation forever.
+      if (peer) peer.offerPending = true;
       this.send?.(id, { kind: 'offer', sdp: pc.localDescription?.toJSON() });
     } catch {
+      if (peer) peer.offerPending = false;
       this.setPeerStatus(id, 'failed');
     }
   }
@@ -380,6 +481,10 @@ class Voice {
     peer.pc.onicecandidate = null;
     peer.pc.ontrack = null;
     peer.pc.onconnectionstatechange = null;
+    // Added alongside `onconnectionstatechange` but never cleared here, so
+    // `checkState` could still fire on a closed connection for a peer that no
+    // longer exists.
+    peer.pc.oniceconnectionstatechange = null;
     peer.pc.close();
     if (peer.audio) {
       peer.audio.srcObject = null;
@@ -427,12 +532,32 @@ class Voice {
 
     try {
       if (message.kind === 'offer' && message.sdp) {
-        const collision = peer.pc.signalingState !== 'stable' || peer.weOffer;
-        if (collision) {
+        // Glare: an offer arriving while one of ours is still outstanding.
+        //
+        // The test is `offerPending`, not `weOffer`. `weOffer` is a *permanent
+        // role* assigned at creation, so keying on it treated every incoming
+        // offer as a collision for the life of the connection — including a
+        // legitimate re-offer on a long-stable peer, which was then dropped in
+        // silence.
+        //
+        // Polite/impolite is settled by the same id comparison that picked the
+        // offerer, so the two can never disagree: the impolite side ignores the
+        // colliding offer and its own will land; the polite side rolls its
+        // offer back and answers.
+        const glare = peer.offerPending || peer.pc.signalingState === 'have-local-offer';
+        if (glare) {
           const polite = this.selfId > from;
           if (!polite) return;
-          // Polite implies rolling back. In perfect negotiation, a polite peer receiving an offer
-          // will rollback automatically via setRemoteDescription on modern browsers.
+          // Explicit, not assumed. Chrome and Safari both accept an implicit
+          // rollback inside `setRemoteDescription`, but Firefox has historically
+          // not, and a silent throw here means one player hears nobody.
+          try {
+            await peer.pc.setLocalDescription({ type: 'rollback' });
+          } catch {
+            // Already stable, or unsupported. `setRemoteDescription` below is
+            // the thing that actually has to work.
+          }
+          peer.offerPending = false;
         }
         await peer.pc.setRemoteDescription(message.sdp);
         await this.flushCandidates(peer);
@@ -441,6 +566,7 @@ class Voice {
         this.send?.(from, { kind: 'answer', sdp: peer.pc.localDescription?.toJSON() });
       } else if (message.kind === 'answer' && message.sdp) {
         await peer.pc.setRemoteDescription(message.sdp);
+        peer.offerPending = false;
         await this.flushCandidates(peer);
       } else if (message.kind === 'ice' && message.candidate) {
         // Hold it rather than dropping it. This used to be an `addIceCandidate`
@@ -478,13 +604,22 @@ class Voice {
     // iOS refuses playback until a gesture. Voice is always started by a tap, so
     // this rarely fires — but the retry is the same pattern `music.ts` uses, and
     // the failure mode without it is silence nobody can explain.
-    const attemptPlay = () => {
+    const attemptPlay = (): void => {
+      // A peer dropped while a retry was armed must not keep re-arming — that
+      // listener holds the closure, and with it the whole `RTCPeerConnection`.
+      if (this.peers.get(id) !== peer) return;
       void peer.audio?.play().catch(() => {
         const retry = (): void => {
           window.removeEventListener('pointerdown', retry);
+          window.removeEventListener('touchend', retry);
+          window.removeEventListener('click', retry);
           attemptPlay();
         };
+        // `touchend`/`click` as well as `pointerdown`: iOS grants media
+        // activation on the former, never the latter.
         window.addEventListener('pointerdown', retry, { once: true });
+        window.addEventListener('touchend', retry, { once: true });
+        window.addEventListener('click', retry, { once: true });
       });
     };
     attemptPlay();
@@ -538,36 +673,52 @@ class Voice {
       }
 
       for (const [id, peer] of this.peers) {
+        // Levels come from the receiver, never from a Web Audio node built on
+        // the remote stream. Routing a remote WebRTC track through an
+        // `AudioContext` silences the `<audio>` element playing it on WebKit,
+        // which is why voice worked to a desktop and not between two phones.
         let level = 0;
-        let hasSyncSource = false;
-        const receivers = peer.pc.getReceivers();
-        
-        for (const receiver of receivers) {
-          const sources = receiver.getSynchronizationSources?.() ?? [];
-          for (const source of sources) {
-            if (source.audioLevel !== undefined) {
-              level = Math.max(level, source.audioLevel);
-              hasSyncSource = true;
-            }
+        let sampled = false;
+        for (const receiver of peer.pc.getReceivers()) {
+          for (const source of receiver.getSynchronizationSources?.() ?? []) {
+            if (source.audioLevel === undefined) continue;
+            level = Math.max(level, source.audioLevel);
+            sampled = true;
           }
         }
-        
-        if (hasSyncSource) {
-          if (level > SPEAKING_ON) peer.loudAt = now;
-        } else {
-          // Fallback to getStats for browsers where getSynchronizationSources lacks audioLevel
-          peer.pc.getStats().then(stats => {
-            let sLevel = 0;
-            stats.forEach(report => {
-              if (report.type === 'inbound-rtp' && report.kind === 'audio' && report.audioLevel !== undefined) {
-                sLevel = Math.max(sLevel, report.audioLevel);
-              }
-            });
-            if (sLevel > SPEAKING_ON) peer.loudAt = performance.now();
-          }).catch(() => undefined);
-        }
 
-        if (now - peer.loudAt < SPEAKING_HANG_MS) speaking.push(id);
+        if (sampled) {
+          // Same hysteresis as the local path: `SPEAKING_ON` to light up,
+          // `SPEAKING_OFF` plus the hang time to go out, so the ring does not
+          // flicker on every gap between syllables.
+          if (level > SPEAKING_ON) peer.loudAt = now;
+          if (level > SPEAKING_OFF && now - peer.loudAt < SPEAKING_HANG_MS) speaking.push(id);
+        } else {
+          // Firefox and Safari do not fill in `audioLevel` here, so fall back to
+          // `getStats`. It is async, so it updates `loudAt` for the *next* pass
+          // rather than this one — and one flight at a time, because kicking off
+          // a fresh promise per peer per 100 ms was ~70 a second in a full room.
+          if (!peer.statsInFlight) {
+            peer.statsInFlight = true;
+            void peer.pc
+              .getStats()
+              .then((stats) => {
+                let best = 0;
+                stats.forEach((report) => {
+                  const r = report as { type?: string; kind?: string; audioLevel?: number };
+                  if (r.type === 'inbound-rtp' && r.kind === 'audio' && r.audioLevel !== undefined) {
+                    best = Math.max(best, r.audioLevel);
+                  }
+                });
+                if (best > SPEAKING_ON) peer.loudAt = performance.now();
+              })
+              .catch(() => undefined)
+              .finally(() => {
+                peer.statsInFlight = false;
+              });
+          }
+          if (now - peer.loudAt < SPEAKING_HANG_MS) speaking.push(id);
+        }
       }
 
       // Only publish on a change, so the HUD is not re-rendered ten times a

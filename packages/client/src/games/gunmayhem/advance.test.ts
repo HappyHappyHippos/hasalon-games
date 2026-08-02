@@ -52,7 +52,6 @@ function idle(overrides: Partial<GmSnapshotPlayer> = {}): GmSnapshotPlayer {
     g: 1,
     d: 0,
     k: 3,
-    st: 0,
     iv: 0,
     rt: 0,
     j: 2,
@@ -123,17 +122,19 @@ describe('advancePlayer', () => {
     expect(advancePlayer(idle({ k: 0 }), level, 3, true)).toBeNull();
   });
 
-  it('carries a player in hitstun on physics alone', () => {
-    // Knocked sideways with the left button still held from before the hit.
-    // The server ignores their input during hitstun, so we must too, or they
-    // will be drawn fighting a knockback that in truth they cannot resist.
-    const struck = idle({ st: 20, ib: IN_LEFT, vx: 300, vy: -100, g: 0 });
+  it('lets a knocked-back player fight the blow, because the server does', () => {
+    // Knocked to the right with the left button still held. Hitstun used to
+    // make the server ignore that input, so this drew them as pure ballistics;
+    // now the server honours it, and drawing them helpless would be a
+    // correction waiting to happen on the next snapshot.
+    const struck = idle({ ib: IN_LEFT, vx: 300, vy: -100, g: 0 });
     const body = advancePlayer(struck, level, 5, true);
 
     expect(body).not.toBeNull();
-    // Still travelling in the direction of the blow, not the held button.
+    // Still carried right by the blow over this many ticks...
     expect(body!.x).toBeGreaterThan(struck.x);
-    expect(body!.vx).toBeGreaterThan(0);
+    // ...but already decelerating against it, rather than coasting.
+    expect(body!.vx).toBeLessThan(struck.vx);
   });
 
   it('does not re-land a player who is dropping through a ledge', () => {

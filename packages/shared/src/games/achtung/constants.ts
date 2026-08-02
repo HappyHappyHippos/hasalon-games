@@ -66,9 +66,11 @@ export const HOLE_MAX_GAP_TICKS = 115;
 /**
  * How many ticks a hole lasts.
  *
- * Gap is `HOLE_DURATION_TICKS * BASE_SPEED * DT` minus a line width at each
- * end. At normal speed this is ~26.5 units of daylight between two curves of
- * radius 3.0.
+ * The head travels `HOLE_DURATION_TICKS * BASE_SPEED * DT` with the pen up —
+ * 32.5 units at normal speed — and the stamped circle at each end eats one
+ * radius of that, leaving ~26.5 units of daylight to thread at radius 3.0.
+ * Comfortably over four line widths, which is what it takes to go through at an
+ * angle rather than only dead-on.
  */
 export const HOLE_DURATION_TICKS = 16;
 /** No gap can start during the first moments of a round. */

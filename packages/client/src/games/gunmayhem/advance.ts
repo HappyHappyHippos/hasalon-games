@@ -114,10 +114,9 @@ function buffsFrom(server: GmSnapshotPlayer): GmBuffs {
  * of stocks. Those are not positions to extrapolate; they are states in which
  * the character is not on the stage at all.
  *
- * Hitstun is deliberately *not* in that list. A player being knocked across the
- * screen has no input, but they are pure ballistics, which is the most
- * predictable thing in the game — so they get simulated with the controls
- * ignored, exactly as the server does it.
+ * A player being knocked across the screen is not in that list either: they are
+ * still holding whatever they were holding, and the server still honours it, so
+ * they are simulated exactly like anyone else.
  */
 export function advancePlayer(
   server: GmSnapshotPlayer,
@@ -135,10 +134,10 @@ export function advancePlayer(
   // three ticks this runs for, a timer ticking down cannot change the result.
   const mods = movementMods(buffsFrom(server));
 
-  // In control unless the server says otherwise. `heldBits` is held constant:
-  // it is the last thing we know they were doing, and assuming they kept doing
-  // it is both the standard prediction and the correct one most of the time.
-  const controllable = phasePlaying && server.st <= 0;
+  // `heldBits` is held constant: it is the last thing we know they were doing,
+  // and assuming they kept doing it is both the standard prediction and the
+  // correct one most of the time.
+  const controllable = phasePlaying;
   const bits = controllable ? server.ib : 0;
 
   const input = {

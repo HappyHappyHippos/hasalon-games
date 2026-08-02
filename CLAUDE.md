@@ -216,7 +216,7 @@ not per-key messages — taps shorter than one tick still register because the
 server ORs rising edges (`sim.ts:applyInput`), and the sequence lets the
 client replay unacknowledged inputs after a correction
 (`client/games/gunmayhem/predictor.ts`). Prediction only runs while the local
-player is actually in control (not in hitstun/respawn/out-of-stocks) —
+player is actually in control (not respawning or out of stocks) —
 knockback isn't predictable so the code deliberately doesn't try.
 
 ### Client structure

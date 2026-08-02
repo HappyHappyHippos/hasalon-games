@@ -49,11 +49,17 @@ import { gmInput } from './input';
  * the question: the same masks, in the same order, from the same start.
  *
  * Two things are still deliberately *not* predicted. Prediction stops entirely
- * while the server owns you — hitstun, respawning, out of stocks — because
- * knockback depends on bullets you cannot see coming and guessing at it looks
- * far worse than following. And buffs are adopted from the snapshot rather than
- * anticipated, since a powerup pickup is not something the local sim can know
- * about first.
+ * while the server owns you — respawning, or out of stocks — because those are
+ * not positions to extrapolate at all. And buffs are adopted from the snapshot
+ * rather than anticipated, since a powerup pickup is not something the local sim
+ * can know about first.
+ *
+ * Being *hit* used to stop prediction too, back when it took your controls
+ * away. It no longer does, so the local player is now predicted straight
+ * through a knockback. The trade is deliberate: knockback still depends on
+ * bullets you cannot see coming, so expect a correction on the tick a hit
+ * lands — `PositionSmoother` exists to absorb exactly that — but in return you
+ * keep steering, jumping and shooting without a pause.
  *
  * **Firing is replayed too**, because it moves you: recoil is an impulse on
  * `vx`, and a knife's lunge is the same thing pointing the other way. Only the
@@ -148,7 +154,7 @@ export class GunMayhemPredictor {
   ): MoveBody | null {
     this.resynced = false;
 
-    if (server.st > 0 || server.rt > 0 || server.k <= 0) {
+    if (server.rt > 0 || server.k <= 0) {
       this.stop();
       return null;
     }
