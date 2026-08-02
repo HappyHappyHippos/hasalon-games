@@ -72,14 +72,29 @@ export function LobbyScreen(): JSX.Element {
                     player.connected ? '' : ' person--away'
                   }${speaking.has(player.id) ? ' person--speaking' : ''}`}
                 >
-                  <Avatar
-                    colorIndex={player.colorIndex}
-                    hat={player.hat}
-                    face={player.face}
-                    name={player.name}
-                    size={38}
-                    away={!player.connected}
-                  />
+                  {player.id === playerId ? (
+                    <div style={{ marginLeft: '-0.5rem', marginRight: '0.25rem' }}>
+                      <AppearancePicker
+                        colorIndex={identity.colorIndex}
+                        hat={identity.hat}
+                        face={identity.face}
+                        takenColors={takenColors}
+                        onChange={(patch) => {
+                          setIdentity(patch);
+                          socket.setIdentity(patch);
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <Avatar
+                      colorIndex={player.colorIndex}
+                      hat={player.hat}
+                      face={player.face}
+                      name={player.name}
+                      size={52}
+                      away={!player.connected}
+                    />
+                  )}
                   {player.voice && (
                     <span className="person__mic" aria-hidden="true">
                       🎤
@@ -129,18 +144,6 @@ export function LobbyScreen(): JSX.Element {
                 </p>
               )}
             </div>
-
-            <h2 className="eyebrow">{t.yourLook}</h2>
-            <AppearancePicker
-              colorIndex={identity.colorIndex}
-              hat={identity.hat}
-              face={identity.face}
-              takenColors={takenColors}
-              onChange={(patch) => {
-                setIdentity(patch);
-                socket.setIdentity(patch);
-              }}
-            />
           </section>
 
           <section className="lobby__choice">
