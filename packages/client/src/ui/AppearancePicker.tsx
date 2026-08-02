@@ -72,9 +72,9 @@ export function AppearancePicker({ colorIndex, hat, face, takenColors, onChange 
   return (
     <div className="appearance" dir="ltr" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', marginRight: '-1rem', zIndex: 1 }}>
-        <Button variant="ghost" size="sm" onClick={handlePrevHat} style={{ padding: '0.25rem' }}><ChevronLeft /></Button>
-        <Button variant="ghost" size="sm" onClick={handlePrevFace} style={{ padding: '0.25rem' }}><ChevronLeft /></Button>
-        <Button variant="ghost" size="sm" onClick={handlePrevColor} style={{ padding: '0.25rem' }}><ChevronLeft /></Button>
+        <Button variant="ghost" size="sm" onClick={handlePrevHat} style={{ padding: '0.1rem 0.5rem', minHeight: 'unset' }}><ChevronLeft /></Button>
+        <Button variant="ghost" size="sm" onClick={handlePrevFace} style={{ padding: '0.1rem 0.5rem', minHeight: 'unset' }}><ChevronLeft /></Button>
+        <Button variant="ghost" size="sm" onClick={handlePrevColor} style={{ padding: '0.1rem 0.5rem', minHeight: 'unset' }}><ChevronLeft /></Button>
       </div>
 
       <div className="appearance__preview" style={{ flexShrink: 0, zIndex: 2 }}>
@@ -82,9 +82,9 @@ export function AppearancePicker({ colorIndex, hat, face, takenColors, onChange 
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', marginLeft: '-1rem', zIndex: 1 }}>
-        <Button variant="ghost" size="sm" onClick={handleNextHat} style={{ padding: '0.25rem' }}><ChevronRight /></Button>
-        <Button variant="ghost" size="sm" onClick={handleNextFace} style={{ padding: '0.25rem' }}><ChevronRight /></Button>
-        <Button variant="ghost" size="sm" onClick={handleNextColor} style={{ padding: '0.25rem' }}><ChevronRight /></Button>
+        <Button variant="ghost" size="sm" onClick={handleNextHat} style={{ padding: '0.1rem 0.5rem', minHeight: 'unset' }}><ChevronRight /></Button>
+        <Button variant="ghost" size="sm" onClick={handleNextFace} style={{ padding: '0.1rem 0.5rem', minHeight: 'unset' }}><ChevronRight /></Button>
+        <Button variant="ghost" size="sm" onClick={handleNextColor} style={{ padding: '0.1rem 0.5rem', minHeight: 'unset' }}><ChevronRight /></Button>
       </div>
     </div>
   );
