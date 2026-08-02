@@ -59,26 +59,6 @@ export function LobbyScreen(): JSX.Element {
           <Button onClick={() => void copyLink()}>{copied ? t.copied : t.copyInvite}</Button>
         </header>
 
-        {/* Directly under the code, above everything else. Being ready is the
-            only thing a guest has to do in here, and it used to be at the very
-            bottom of a page that scrolls on a phone. */}
-        <div className="sticker lobby__ready">
-          <Button
-            variant={me?.ready ? 'plain' : 'primary'}
-            size="lg"
-            full
-            tone={me?.ready ? undefined : colorFor(identity.colorIndex)}
-            onClick={() => socket.setReady(!me?.ready)}
-          >
-            {me?.ready ? t.notReady : t.ready}
-          </Button>
-          {!canStart && (
-            <p className="muted small center">
-              {t.readyCount(readyPlayers.length, game.meta.minPlayers, game.meta.name)}
-            </p>
-          )}
-        </div>
-
         <div className="lobby__grid">
           <section className="sticker lobby__people">
             <h2 className="eyebrow">
@@ -142,6 +122,23 @@ export function LobbyScreen(): JSX.Element {
 
             <h2 className="eyebrow">{t.voiceHeading}</h2>
             <VoiceBar />
+
+            <div className="sticker lobby__ready">
+              <Button
+                variant={me?.ready ? 'plain' : 'primary'}
+                size="lg"
+                full
+                tone={me?.ready ? undefined : colorFor(identity.colorIndex)}
+                onClick={() => socket.setReady(!me?.ready)}
+              >
+                {me?.ready ? t.notReady : t.ready}
+              </Button>
+              {!canStart && (
+                <p className="muted small center" style={{ marginTop: '0.5rem' }}>
+                  {t.readyCount(readyPlayers.length, game.meta.minPlayers, game.meta.name)}
+                </p>
+              )}
+            </div>
 
             <h2 className="eyebrow">{t.yourLook}</h2>
             <AppearancePicker
