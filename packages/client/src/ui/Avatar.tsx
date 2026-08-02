@@ -65,58 +65,78 @@ export function Avatar({
 }
 
 function FaceMark({ face }: { face: Face }): JSX.Element {
-  const eyes = (
-    <>
-      <circle cx="14" cy="24" r="2.5" fill="var(--ink)" stroke="none" />
-      <circle cx="26" cy="24" r="2.5" fill="var(--ink)" stroke="none" />
-    </>
-  );
-
   switch (face) {
     case 'default':
       return (
         <>
-          {eyes}
-          <path d="M16 29h8" fill="none" />
+          {/* Eyes with catchlights */}
+          <ellipse cx="14" cy="23" rx="2.5" ry="3.5" fill="var(--ink)" stroke="none" />
+          <circle cx="14.5" cy="22" r="1" fill="white" stroke="none" />
+          <ellipse cx="26" cy="23" rx="2.5" ry="3.5" fill="var(--ink)" stroke="none" />
+          <circle cx="26.5" cy="22" r="1" fill="white" stroke="none" />
+          {/* Confident smirk */}
+          <path d="M15 29 Q 20 31 25 28" fill="none" />
+          <path d="M25 28 L 26 27" fill="none" />
         </>
       );
     case 'happy':
       return (
         <>
-          {eyes}
-          <path d="M15 28a5 4 0 0 0 10 0" fill="none" />
+          {/* ^ ^ eyes */}
+          <path d="M12 24 Q 14 21 16 24" fill="none" />
+          <path d="M24 24 Q 26 21 28 24" fill="none" />
+          {/* Blush */}
+          <ellipse cx="11" cy="26" rx="2.5" ry="1.5" fill="#ff7675" opacity="0.6" stroke="none" />
+          <ellipse cx="29" cy="26" rx="2.5" ry="1.5" fill="#ff7675" opacity="0.6" stroke="none" />
+          {/* Open laughing mouth */}
+          <path d="M14 28 C 14 34, 26 34, 26 28 Z" fill="var(--ink)" stroke="none" />
+          <path d="M16 30 C 16 34, 24 34, 24 30 Z" fill="#ff7675" stroke="none" />
         </>
       );
     case 'angry':
       return (
         <>
-          {eyes}
-          <path d="M11 21.5l4 1" fill="none" strokeWidth="2" />
-          <path d="M29 21.5l-4 1" fill="none" strokeWidth="2" />
-          <path d="M16 30q4-2.5 8 0" fill="none" />
+          {/* Sharp brows */}
+          <path d="M11 21 L 16 23.5 M 29 21 L 24 23.5" fill="none" strokeWidth="2.5" />
+          {/* Intense small eyes */}
+          <circle cx="14.5" cy="24.5" r="1.5" fill="var(--ink)" stroke="none" />
+          <circle cx="25.5" cy="24.5" r="1.5" fill="var(--ink)" stroke="none" />
+          {/* Jagged mouth */}
+          <path d="M15 30 L 17 28 L 20 30 L 23 28 L 25 30" fill="none" strokeLinejoin="miter" />
         </>
       );
     case 'shades':
       return (
         <>
-          <rect x="10" y="21" width="20" height="6" rx="1.5" fill="var(--ink)" stroke="none" />
-          <path d="M16 30h8" fill="none" />
+          {/* Cool wrap-around shades */}
+          <path d="M9 22 Q 20 25 31 22 L 30 26 Q 20 28 10 26 Z" fill="var(--ink)" stroke="none" />
+          {/* Shade reflection */}
+          <path d="M11 23 L 14 23 M 16 23 L 28 23" fill="none" stroke="white" strokeWidth="1" opacity="0.6" />
+          <path d="M17 30 H 23" fill="none" />
         </>
       );
     case 'dead':
       return (
         <>
-          <path d="M12 22l4 4M16 22l-4 4" fill="none" strokeWidth="2" />
-          <path d="M24 22l4 4M28 22l-4 4" fill="none" strokeWidth="2" />
-          <path d="M16 29h8" fill="none" />
+          {/* X eyes */}
+          <path d="M12 23 L 16 27 M 16 23 L 12 27" fill="none" strokeWidth="2" />
+          <path d="M24 23 L 28 27 M 28 23 L 24 27" fill="none" strokeWidth="2" />
+          {/* Tongue hanging out */}
+          <path d="M16 30 Q 20 28 24 30" fill="none" />
+          <path d="M22 30 V 33 A 2 2 0 0 1 18 33 V 30" fill="#ff7675" stroke="none" />
         </>
       );
     case 'cyclops':
       return (
         <>
-          <circle cx="20" cy="24" r="4.5" fill="var(--ink)" stroke="none" />
-          <circle cx="21.5" cy="22.5" r="1.5" fill="var(--surface)" stroke="none" />
-          <path d="M16 30h8" fill="none" />
+          {/* Big eye with iris */}
+          <circle cx="20" cy="23" r="5.5" fill="white" stroke="none" />
+          <circle cx="20" cy="23" r="5.5" fill="none" stroke="var(--ink)" strokeWidth="2" />
+          <circle cx="20" cy="23" r="2.5" fill="#0984e3" stroke="none" />
+          <circle cx="20" cy="23" r="1" fill="var(--ink)" stroke="none" />
+          <circle cx="21" cy="21.5" r="0.8" fill="white" stroke="none" />
+          {/* Open tiny mouth */}
+          <circle cx="20" cy="31" r="2" fill="var(--ink)" stroke="none" />
         </>
       );
   }
