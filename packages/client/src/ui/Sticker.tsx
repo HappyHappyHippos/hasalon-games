@@ -14,13 +14,12 @@ interface Props {
  * The one card primitive: heavy outline, hard offset shadow, optional tilt.
  * Everything else in the UI is built from this.
  */
-export function Sticker({ children, tone, tilt = 0, className, style }: Props): JSX.Element {
+export function Sticker({ children, tone, className, style }: Props): JSX.Element {
   return (
     <div
       className={`sticker${className ? ` ${className}` : ''}`}
       style={{
         ...(tone ? { background: tone } : null),
-        ...(tilt ? { transform: `rotate(${tilt}deg)` } : null),
         ...style,
       }}
     >

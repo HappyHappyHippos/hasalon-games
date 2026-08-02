@@ -31,11 +31,10 @@ export function Reviews(): JSX.Element {
     <section className="home__reviews">
       <h2 className="eyebrow">{t.reviewsHeading}</h2>
       <div className="reviews">
-        {REVIEWS.map((review, index) => (
+        {REVIEWS.map((review) => (
           <figure
             key={review.quote}
             className="sticker review"
-            style={{ transform: `rotate(${index % 2 ? 1.2 : -1.2}deg)` }}
           >
             <blockquote className="review__quote" dir="rtl" lang="he">
               {review.quote}

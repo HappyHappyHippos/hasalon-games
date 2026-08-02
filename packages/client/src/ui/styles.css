@@ -747,17 +747,15 @@ strong,
   cursor: pointer;
   font: inherit;
   color: inherit;
-  transform: rotate(var(--tilt));
   transition: transform 140ms cubic-bezier(0.3, 1.4, 0.5, 1), box-shadow 140ms ease;
 }
 
 .gamecard:hover:not(:disabled) {
-  transform: rotate(0deg) translateY(-3px);
+  transform: translateY(-3px);
 }
 
 .gamecard--on {
   background: var(--accent);
-  transform: rotate(0deg);
 }
 
 .gamecard:disabled {
@@ -823,7 +821,6 @@ strong,
   text-transform: uppercase;
   padding: 5px 10px;
   border-radius: 999px;
-  transform: rotate(6deg);
 }
 
 /* ==========================================================================
@@ -1441,14 +1438,14 @@ strong,
 
 @keyframes intro-stamp {
   0% {
-    transform: scale(2.4) rotate(-7deg);
+    transform: scale(2.4);
     opacity: 0;
   }
   60% {
     opacity: 1;
   }
   100% {
-    transform: scale(1) rotate(0deg);
+    transform: scale(1);
     opacity: 1;
   }
 }

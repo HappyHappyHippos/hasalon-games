@@ -126,7 +126,6 @@ export function HomeScreen(): JSX.Element {
                 <div
                   key={id}
                   className="sticker minicard"
-                  style={{ transform: `rotate(${index % 2 ? 1.4 : -1.4}deg)` }}
                 >
                   <BoxArt />
                   <div className="minicard__text">
