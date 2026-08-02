@@ -150,6 +150,28 @@ game-agnostic — `Room.ts` only ever talks to the `GameInstance` interface.
 Any host that runs a Docker image and supports WebSockets works. The image
 builds the client, bundles the server, and serves both on `PORT` (default 3000).
 
+### Environment variables
+
+| Variable | Required | What it does |
+|---|---|---|
+| `PORT` | no (3000) | Port the server listens on. |
+| `CF_TURN_KEY_ID` | no | Cloudflare Realtime TURN key id. |
+| `CF_TURN_KEY_TOKEN` | no | Its API token. |
+
+The two Cloudflare variables are what make voice chat work for a player behind
+carrier-grade NAT — which is the norm on Israeli mobile networks. Create a TURN
+key under Cloudflare → Realtime → TURN (the free allowance is 1000 GB/month,
+far past a family game) and set both on **every** environment, `dev` included:
+
+```bash
+railway variables --set CF_TURN_KEY_ID=xxx --set CF_TURN_KEY_TOKEN=yyy
+```
+
+Without them `GET /ice` falls back to public STUN plus the free Open Relay
+Project TURN servers on TCP/TLS 443, so voice still works — just on a
+best-effort third party rather than one with an SLA. `curl <host>/ice` shows
+which of the two you are getting.
+
 > **Moving to Israel.** Every player is in Israel and Railway has no Middle East
 > region — EU West measures ~114 ms median round trip, against ~10–20 ms for a
 > box in-country. That gap is worth more than any netcode change, because

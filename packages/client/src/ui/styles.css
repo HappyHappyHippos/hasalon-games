@@ -1061,22 +1061,57 @@ strong,
   box-shadow: 0 0 0 3px var(--green);
 }
 
-/* Only rendered on a touch device, and only where the API exists — so it never
-   shows up on a desktop, where the browser already has F11. */
+/* Only rendered on a touch device — a desktop browser already has F11.
+ *
+ * Fixed, and deliberately not inside `.rail`: on a phone the rail is an overlay
+ * with `pointer-events: none` so it cannot swallow taps meant for the arena,
+ * which also made this button unpressable on exactly the devices it exists for.
+ * It sits one slot inboard of the options gear, which owns the same corner. */
+.fullscreenbtn__wrap {
+  position: fixed;
+  z-index: 15;
+  /* Top corner, one slot inboard of the options gear. Never the bottom: that is
+     where the shooting thumb lives, and both weapon buttons are there. */
+  top: calc(6px + env(safe-area-inset-top));
+  inset-inline-end: calc(58px + env(safe-area-inset-right));
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-start;
+  gap: 8px;
+}
+
 .fullscreenbtn {
-  align-self: flex-start;
-  width: 34px;
-  height: 34px;
+  width: 42px;
+  height: 42px;
   flex: none;
   border: 2px solid var(--ink);
-  border-radius: 10px;
-  background: rgba(253, 246, 232, 0.82);
+  border-radius: 999px;
+  background: rgba(253, 246, 232, 0.9);
+  box-shadow: var(--shadow-sm);
   color: var(--ink);
-  font-size: 15px;
+  font-size: 18px;
   line-height: 1;
   cursor: pointer;
   padding: 0;
   touch-action: manipulation;
+}
+.fullscreenbtn:active {
+  transform: translateY(1px);
+}
+
+/* Shown only on iPhone, where there is no fullscreen API to call and the button
+   has to explain the home-screen route instead of pretending to work. */
+.fullscreenbtn__hint {
+  max-width: 15rem;
+  margin: 0;
+  padding: 8px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: var(--shadow-sm);
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: start;
 }
 
 /* Achtung's whole-arena touch surface */
@@ -1143,49 +1178,69 @@ strong,
   text-shadow: none;
 }
 
-/* Left thumb: move and jump. Right thumb: shoot and bomb.
+/* Left thumb: the stick — direction, jump and drop in one gesture. Right thumb:
+ * shoot and bomb.
  *
- * Jump used to live bottom-right under the shooting thumb, which meant every
- * jump-and-shoot needed one thumb to do two things. It sits above the arrows
- * now — the three movement inputs under one thumb, the two weapons under the
- * other.
+ * Four separate movement buttons lived here before, and the arrangement had a
+ * specific failure: left and jump were distinct targets under the same thumb, so
+ * "run left and jump while shooting" needed three fingers across two sides and
+ * mostly did not happen.
  *
- * These stay physical `left`/`right` in RTL. A player pressing ◀ expects the
- * button on the left of the screen; the interface language has no opinion about
- * which way the character walks. */
+ * These stay physical `left`/`right` in RTL. A player pushing the stick left
+ * expects to walk left; the interface language has no opinion about which way
+ * the character faces. */
 
 /* Everything is offset by the safe area as well as its own margin. `index.html`
    has asked for `viewport-fit=cover` since forever and nothing consumed it, so
-   on a notched phone held in landscape the outermost buttons sat under the
+   on a notched phone held in landscape the outermost controls sat under the
    notch or the home indicator. */
-.pad__btn--left {
-  left: calc(14px + env(safe-area-inset-left));
-  bottom: calc(20px + env(safe-area-inset-bottom));
-  width: 76px;
-  height: 76px;
+.stick {
+  position: absolute;
+  pointer-events: auto;
+  left: env(safe-area-inset-left);
+  bottom: env(safe-area-inset-bottom);
+  width: 200px;
+  height: 180px;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
 }
-.pad__btn--right {
-  left: calc(100px + env(safe-area-inset-left));
-  bottom: calc(20px + env(safe-area-inset-bottom));
-  width: 76px;
-  height: 76px;
-}
-.pad__btn--jump {
-  left: calc(24px + env(safe-area-inset-left));
-  bottom: calc(106px + env(safe-area-inset-bottom));
-  width: 128px;
-  height: 66px;
+
+/* The ring rests at the pad's centre and re-anchors to wherever the thumb lands.
+   Positioned through custom properties on a single axis pair so a live drag can
+   override the resting default without fighting a second offset. */
+.stick__ring {
+  position: absolute;
+  left: var(--stick-x, 50%);
+  top: var(--stick-y, 50%);
+  transform: translate(-50%, -50%);
+  border: 3px solid rgba(255, 255, 255, 0.55);
   border-radius: 999px;
-  font-size: 16px;
+  background: rgba(20, 17, 15, 0.35);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  opacity: 0.65;
 }
-/* Drop-through is the rarest of the movement inputs, so it takes the awkward
-   corner rather than any of the other three. */
-.pad__btn--down {
-  left: calc(160px + env(safe-area-inset-left));
-  bottom: calc(112px + env(safe-area-inset-bottom));
-  width: 56px;
-  height: 50px;
+.stick__ring--live {
+  opacity: 1;
+  border-color: rgba(255, 255, 255, 0.85);
 }
+
+.stick__knob {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 62px;
+  height: 62px;
+  margin: 0;
+  border: 3px solid rgba(255, 255, 255, 0.85);
+  border-radius: 999px;
+  background: rgba(20, 17, 15, 0.72);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+}
+.stick__ring--live .stick__knob {
+  background: rgba(255, 210, 63, 0.85);
+  border-color: var(--ink);
+}
+
 .pad__btn--shoot {
   right: calc(14px + env(safe-area-inset-right));
   bottom: calc(20px + env(safe-area-inset-bottom));
@@ -1579,6 +1634,17 @@ strong,
     height: 36px;
     font-size: 16px;
   }
+
+  /* Tracks the gear, which shrinks to 36px here. This one does not shrink with
+     it — the gear is rarely wanted mid-match and this is the first thing you
+     reach for on a small screen, so it keeps a full 44px target. */
+  .fullscreenbtn__wrap {
+    inset-inline-end: calc(50px + env(safe-area-inset-right));
+  }
+  .fullscreenbtn {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 /* The panel is anchored to the window, not to the arena bezel like the
@@ -1752,33 +1818,21 @@ strong,
   display: block;
 }
 
-/* A landscape phone is barely 350px tall inside the bezel. The pad has to shrink
-   with it or the upper buttons sit on top of the action. */
+/* A landscape phone is barely 350px tall inside the bezel. The controls have to
+   shrink with it or they sit on top of the action. The stick keeps its travel
+   radius — that is set in JS and is what the thresholds are calibrated against —
+   and only the pad it lives in and the knob get smaller. */
 @media (max-height: 460px) {
   .pad__btn {
     font-size: 13px;
   }
-  .pad__btn--left,
-  .pad__btn--right {
-    width: 62px;
-    height: 62px;
-    bottom: calc(12px + env(safe-area-inset-bottom));
+  .stick {
+    width: 170px;
+    height: 150px;
   }
-  .pad__btn--right {
-    left: calc(82px + env(safe-area-inset-left));
-  }
-  .pad__btn--jump {
-    width: 108px;
-    height: 54px;
-    left: calc(18px + env(safe-area-inset-left));
-    bottom: calc(80px + env(safe-area-inset-bottom));
-    font-size: 14px;
-  }
-  .pad__btn--down {
-    width: 48px;
-    height: 42px;
-    left: calc(134px + env(safe-area-inset-left));
-    bottom: calc(84px + env(safe-area-inset-bottom));
+  .stick__knob {
+    width: 52px;
+    height: 52px;
   }
   .pad__btn--shoot {
     width: 74px;
@@ -1843,8 +1897,9 @@ strong,
     z-index: 4;
     top: calc(6px + env(safe-area-inset-top));
     inset-inline-start: calc(8px + env(safe-area-inset-left));
-    /* Stops short of the options gear, which takes this corner mid-match. */
-    inset-inline-end: calc(52px + env(safe-area-inset-right));
+    /* Stops short of the options gear and the maximize button, which share this
+       corner mid-match. */
+    inset-inline-end: calc(100px + env(safe-area-inset-right));
     width: auto;
     flex-direction: row;
     align-items: center;

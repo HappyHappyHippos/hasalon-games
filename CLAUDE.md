@@ -43,6 +43,25 @@ Production smoke test: `PORT=3900 node packages/server/dist/server.js`, then
 
 ## Deployment
 
+**Playtest on `dev` before `main`.** Anything that changes how the game feels —
+controls, netcode, tuning, voice — goes to the Railway `dev` environment first
+and gets played on real phones there. `main` is production and the people using
+it are family, not testers.
+
+```bash
+git push -u origin <branch>
+railway environment dev && railway service hasalon-dev
+railway service source connect --repo HappyHappyHippos/hasalon-games --branch <branch>
+railway environment production   # or later commands silently target dev
+```
+
+The service is `hasalon-dev` at https://hasalon-dev-dev.up.railway.app. That
+`source connect` prints **"ServiceInstance not found" and succeeds anyway** —
+confirm by reading the deploying commit hash out of `railway status --json`,
+never by trusting the exit message. The dev service draws Hobby-plan usage while
+it exists, so it is worth pointing at whatever branch is current rather than
+leaving a stale one deployed.
+
 Railway, connected to `main` — **`git push` is the deploy**, there is no deploy
 command. `railway.json` at the repo root holds the deploy config (Dockerfile
 builder, `/healthz` healthcheck, `numReplicas: 1`, `sleepApplication: true`);

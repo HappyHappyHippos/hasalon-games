@@ -1,4 +1,4 @@
-import type { JSX, ReactNode, RefObject } from 'react';
+import { useEffect, useState, type JSX, type ReactNode, type RefObject } from 'react';
 import { colorFor, type RoomView } from '@mg/shared';
 import { useStore } from '../store';
 import { useT } from '../strings';
@@ -8,7 +8,8 @@ import { VoiceBar } from './VoiceBar';
 import { useHasTouch } from './useTouchControls';
 import {
   enterFullscreen,
-  fullscreenSupported,
+  fullscreenNeedsInstall,
+  isStandalone,
   useIsFullscreen,
   useToggleFullscreen,
 } from './useFullscreen';
@@ -50,8 +51,6 @@ export function Screen({
   const playerId = useStore((s) => s.playerId);
   const t = useT();
   const hasTouch = useHasTouch();
-  const fullscreen = useIsFullscreen();
-  const toggleFullscreen = useToggleFullscreen();
 
   const isHost = room.players.find((p) => p.id === playerId)?.isHost ?? false;
   const spectating = mySeat < 0;
@@ -64,19 +63,16 @@ export function Screen({
         </div>
         <div className="rail__list">{hud}</div>
         <VoiceBar compact />
-        {hasTouch && fullscreenSupported() && (
-          <button
-            type="button"
-            className="fullscreenbtn"
-            onClick={toggleFullscreen}
-            aria-label={fullscreen ? t.exitFullscreen : t.enterFullscreen}
-            title={fullscreen ? t.exitFullscreen : t.enterFullscreen}
-          >
-            {fullscreen ? '⤡' : '⛶'}
-          </button>
-        )}
         <NetBadge />
       </aside>
+
+      {/*
+        Outside the rail, and fixed rather than laid out. On a phone the rail is
+        an overlay with `pointer-events: none` so it cannot eat taps meant for
+        the arena — which also made this button, sitting inside it, impossible
+        to press on exactly the devices it exists for.
+      */}
+      {hasTouch && !isStandalone() && <FullscreenButton />}
 
       <div
         className={`screenbox${paperArena ? ' screenbox--paper' : ''}`}
@@ -120,6 +116,45 @@ export function Screen({
         )}
       </div>
     </main>
+  );
+}
+
+/**
+ * The maximize button.
+ *
+ * On Android this is an ordinary fullscreen toggle. On iPhone there is no
+ * fullscreen API for a normal tab at all, so the button's job changes: it says
+ * how to get one — the home-screen shortcut, which opens standalone with no URL
+ * bar because of the manifest. Saying that out loud beats a button that quietly
+ * does nothing, and it is hidden entirely once you are already standalone.
+ */
+function FullscreenButton(): JSX.Element {
+  const [hint, setHint] = useState(false);
+  const fullscreen = useIsFullscreen();
+  const toggleFullscreen = useToggleFullscreen();
+  const t = useT();
+
+  useEffect(() => {
+    if (!hint) return;
+    const timer = window.setTimeout(() => setHint(false), 6000);
+    return () => window.clearTimeout(timer);
+  }, [hint]);
+
+  const needsInstall = fullscreenNeedsInstall();
+
+  return (
+    <div className="fullscreenbtn__wrap">
+      {hint && <p className="fullscreenbtn__hint">{t.fullscreenInstallHint}</p>}
+      <button
+        type="button"
+        className="fullscreenbtn"
+        onClick={() => (needsInstall ? setHint((on) => !on) : toggleFullscreen())}
+        aria-label={fullscreen ? t.exitFullscreen : t.enterFullscreen}
+        title={fullscreen ? t.exitFullscreen : t.enterFullscreen}
+      >
+        {fullscreen ? '⤡' : '⛶'}
+      </button>
+    </div>
   );
 }
 

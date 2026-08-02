@@ -98,6 +98,12 @@ const he = {
   rotateHint: 'סובבו את הטלפון לרוחב',
   enterFullscreen: 'מסך מלא',
   exitFullscreen: 'צאו ממסך מלא',
+  /** iPhone only: Safari cannot hide its own bars, so this is the way out. */
+  fullscreenInstallHint: 'ב־iPhone: שתפו ← «הוסף למסך הבית», ופתחו משם למסך מלא.',
+
+  // Touch controls. Short on purpose — they are printed inside the buttons.
+  padFire: 'ירי',
+  padBomb: 'פצצה',
 
   // Voice chat
   voiceHeading: 'צ׳אט קולי',
@@ -296,6 +302,10 @@ const en: Dict = {
   rotateHint: 'Turn your phone sideways',
   enterFullscreen: 'Fullscreen',
   exitFullscreen: 'Exit fullscreen',
+  fullscreenInstallHint: 'On iPhone: Share → "Add to Home Screen", then open it from there.',
+
+  padFire: 'FIRE',
+  padBomb: 'BOMB',
 
   voiceHeading: 'Voice chat',
   voiceJoin: 'Turn on mic',

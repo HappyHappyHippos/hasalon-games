@@ -15,6 +15,7 @@ import { Client } from './Client';
 import { RoomManager } from './RoomManager';
 import type { Room, RoomPlayer } from './Room';
 import { serveStatic } from './static';
+import { getIceConfig } from './ice';
 import { serverNow } from './serverClock';
 
 /** Above this many messages per second a socket is assumed to be misbehaving. */
@@ -70,6 +71,20 @@ export function createApp(options: AppOptions): App {
 
     if (req.method !== 'GET' && req.method !== 'HEAD') {
       res.writeHead(405).end('Method Not Allowed');
+      return;
+    }
+
+    // Voice chat's ICE servers, including TURN credentials that must not be
+    // baked into the client bundle. Never fails — see `ice.ts`.
+    if (url.pathname === '/ice') {
+      const config = await getIceConfig();
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        // The credentials are short-lived and per-request. A proxy holding them
+        // past their TTL would hand out relays that no longer authenticate.
+        'Cache-Control': 'no-store',
+      });
+      res.end(JSON.stringify(config));
       return;
     }
 

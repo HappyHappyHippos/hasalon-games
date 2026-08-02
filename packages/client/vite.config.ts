@@ -12,6 +12,9 @@ export default defineConfig({
     proxy: {
       '/ws': { target: `ws://localhost:${SERVER_PORT}`, ws: true },
       '/healthz': { target: `http://localhost:${SERVER_PORT}` },
+      // Voice chat's ICE/TURN config. Served by the game server because it
+      // carries credentials that must not be in the client bundle.
+      '/ice': { target: `http://localhost:${SERVER_PORT}` },
     },
   },
   build: {

@@ -1,0 +1,21 @@
+{
+  "name": "הסלון — משחקי כורסא עם כל המשפחה",
+  "short_name": "הסלון",
+  "description": "משחקי כורסא עם כל המשפחה. Gun Mayhem ו-Achtung die Kurve, ישר בדפדפן.",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#fdf6e8",
+  "theme_color": "#fdf6e8",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

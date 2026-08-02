@@ -1,7 +1,10 @@
+<!-- Grid and pen weights documented in default.svg. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <ellipse cx="30" cy="40" rx="10" ry="14" fill="#14110f"/>
-  <circle cx="32" cy="35" r="4" fill="white"/>
-  <path d="M 60 45 L 70 35 L 80 45" fill="none" stroke="#14110f" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M 35 65 Q 50 75 65 60" fill="none" stroke="#14110f" stroke-width="6" stroke-linecap="round"/>
-  <path d="M 50 60 C 50 75, 60 75, 65 60 Z" fill="#ff7675"/>
+  <!-- Left eye is `default`'s, unchanged, so the wink reads as one eye shutting. -->
+  <circle cx="32" cy="42" r="8" fill="#14110f"/>
+  <circle cx="34.5" cy="39" r="3.5" fill="white"/>
+  <path d="M 59 45 Q 68 33 77 45" fill="none" stroke="#14110f" stroke-width="9" stroke-linecap="round"/>
+  <path d="M 34 65 Q 50 75 66 63" fill="none" stroke="#14110f" stroke-width="9" stroke-linecap="round"/>
+  <!-- A small tongue at the raised corner. -->
+  <path d="M 55 68 Q 61 76 66 67 Z" fill="#ff7675"/>
 </svg>

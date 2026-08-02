@@ -1,6 +1,5 @@
 import type { JSX } from 'react';
 import { FACES, HATS, PLAYER_COLORS } from '@mg/shared';
-import { useT } from '../strings';
 import { sfx } from '../audio';
 import { Avatar } from './Avatar';
 import { Button } from './Button';
@@ -17,8 +16,6 @@ interface Props {
  * A unified carousel picker for Color, Hat, and Face.
  */
 export function AppearancePicker({ colorIndex, hat, face, takenColors, onChange }: Props): JSX.Element {
-  const t = useT();
-
   const handlePrevColor = () => {
     sfx.click();
     let prev = (colorIndex - 1 + PLAYER_COLORS.length) % PLAYER_COLORS.length;

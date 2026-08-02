@@ -6,7 +6,6 @@ import { socket } from '../net/socket';
 import { AppearancePicker } from '../ui/AppearancePicker';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
-import { ColorPicker } from '../ui/ColorPicker';
 import { GamePicker } from '../ui/GamePicker';
 import { VoiceBar } from '../ui/VoiceBar';
 import { useVoice } from '../ui/useVoice';

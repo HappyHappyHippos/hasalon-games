@@ -1,9 +1,13 @@
+<!-- Grid and pen weights documented in default.svg. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <path d="M 20 40 Q 30 35 40 40" fill="none" stroke="#14110f" stroke-width="5" stroke-linecap="round"/>
-  <path d="M 60 40 Q 70 35 80 40" fill="none" stroke="#14110f" stroke-width="5" stroke-linecap="round"/>
-  <ellipse cx="30" cy="45" rx="7" ry="3" fill="#14110f"/>
-  <ellipse cx="70" cy="45" rx="7" ry="3" fill="#14110f"/>
-  <path d="M 40 70 Q 50 65 60 70" fill="none" stroke="#14110f" stroke-width="5" stroke-linecap="round"/>
-  <path d="M 20 52 Q 30 60 40 52" fill="none" stroke="#0984e3" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
-  <path d="M 60 52 Q 70 60 80 52" fill="none" stroke="#0984e3" stroke-width="3" stroke-linecap="round" opacity="0.5"/>
+  <!-- Drooping brows, well clear of the lids. -->
+  <path d="M 22 30 Q 32 26 42 32" fill="none" stroke="#14110f" stroke-width="7" stroke-linecap="round"/>
+  <path d="M 78 30 Q 68 26 58 32" fill="none" stroke="#14110f" stroke-width="7" stroke-linecap="round"/>
+  <!-- Half-lidded: a heavy lid line rather than a squashed pupil. -->
+  <path d="M 24 41 H 40" fill="none" stroke="#14110f" stroke-width="9" stroke-linecap="round"/>
+  <path d="M 60 41 H 76" fill="none" stroke="#14110f" stroke-width="9" stroke-linecap="round"/>
+  <!-- Eye-bags in ink at the secondary weight; the old blue was off-palette. -->
+  <path d="M 25 49 Q 32 54 39 49" fill="none" stroke="#14110f" stroke-width="7" stroke-linecap="round" opacity="0.45"/>
+  <path d="M 61 49 Q 68 54 75 49" fill="none" stroke="#14110f" stroke-width="7" stroke-linecap="round" opacity="0.45"/>
+  <path d="M 40 69 Q 50 65 60 69" fill="none" stroke="#14110f" stroke-width="9" stroke-linecap="round"/>
 </svg>

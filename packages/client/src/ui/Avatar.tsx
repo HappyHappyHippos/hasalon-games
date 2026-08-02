@@ -5,7 +5,7 @@ interface Props {
   colorIndex: number;
   hat?: number;
   face?: number;
-  /** Used only to vary the mouth a little, so two reds still look different. */
+  /** Only used for the accessible label. */
   name?: string;
   size?: number;
   /** Dims and closes the eyes, for players who have dropped out. */
@@ -15,12 +15,14 @@ interface Props {
 /**
  * A little face per player, so the lobby is people rather than coloured dots.
  * Everything is derived from the identity, so the same person looks the same to
- * everyone in the room without any assets.
+ * everyone in the room.
  *
  * This is a front-facing portrait; `game/appearance.ts` draws the same hats and
- * faces side-on for the arena. Both switch exhaustively over the shared `Hat`
- * and `Face` unions, so adding an eighth hat fails to compile in both places
- * rather than silently rendering nothing in one of them.
+ * faces side-on for the arena. Hats are markup and switch exhaustively over the
+ * shared `Hat` union, so adding an eighth fails to compile in both places rather
+ * than silently rendering nothing in one of them. Faces do **not** get that
+ * safety net any more — they became assets in `public/faces/`, so a tenth entry
+ * in the `Face` union compiles fine and 404s at runtime. Add the file.
  */
 export function Avatar({
   colorIndex,
@@ -31,7 +33,6 @@ export function Avatar({
   away = false,
 }: Props): JSX.Element {
   const fill = colorFor(colorIndex);
-  const variant = hash(name) % 3;
 
   return (
     <svg
@@ -64,8 +65,18 @@ export function Avatar({
   );
 }
 
+/**
+ * The face is an asset, not markup — `public/faces/*.svg`, the same nine files
+ * the arena renderer blits onto a head in `game/appearance.ts`.
+ *
+ * The placement is arithmetic, not taste. Every face draws its eyes on y=42 and
+ * its mouth inside y=62..74 of a 100-unit box, so at this size and offset the
+ * eyes land at 13 + 0.42 × 26 ≈ 24 — clear of the helmet brim at y=20 — and the
+ * mouth at ≈ 30.7, inside the chin at y=34. Move `y` and both of those move
+ * together; the faces themselves have no opinion.
+ */
 function FaceMark({ face }: { face: Face }): JSX.Element {
-  return <image href={`/faces/${face}.svg`} x="7" y="14" width="26" height="26" />;
+  return <image href={`/faces/${face}.svg`} x="7" y="13" width="26" height="26" />;
 }
 
 function HatMark({ hat, fill }: { hat: Hat; fill: string }): JSX.Element | null {
@@ -122,10 +133,4 @@ function shade(hex: string, amount: number): string {
     Math.round(amount < 0 ? c * (1 + amount) : c + (255 - c) * amount),
   );
   return `rgb(${channels.join(', ')})`;
-}
-
-function hash(text: string): number {
-  let value = 0;
-  for (const ch of text) value = (value * 31 + ch.codePointAt(0)!) >>> 0;
-  return value;
 }

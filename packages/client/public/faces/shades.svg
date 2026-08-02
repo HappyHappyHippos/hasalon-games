@@ -1,5 +1,14 @@
+<!-- Grid and pen weights documented in default.svg. -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-  <path d="M 10 35 Q 50 45 90 35 L 85 55 Q 50 65 15 55 Z" fill="#14110f"/>
-  <path d="M 20 40 L 30 40 M 40 40 L 80 40" fill="none" stroke="white" stroke-width="4" opacity="0.6"/>
-  <path d="M 35 75 H 65" fill="none" stroke="#14110f" stroke-width="7" stroke-linecap="round"/>
+  <!--
+    Two lenses and a bridge, centred on the shared eye line. This used to be one
+    unbroken visor with no bridge, which read as a blindfold at avatar size.
+  -->
+  <path d="M 22 42 H 78" fill="none" stroke="#14110f" stroke-width="7" stroke-linecap="round"/>
+  <path d="M 20 34 H 44 L 41 50 H 25 Z" fill="#14110f"/>
+  <path d="M 80 34 H 56 L 59 50 H 75 Z" fill="#14110f"/>
+  <path d="M 25 39 L 33 39" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+  <path d="M 61 39 L 69 39" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" opacity="0.7"/>
+  <!-- A flat, unimpressed mouth, kicked up very slightly at one end. -->
+  <path d="M 35 69 H 65" fill="none" stroke="#14110f" stroke-width="9" stroke-linecap="round"/>
 </svg>

@@ -4,9 +4,7 @@ import { useStore } from '../store';
 import { useT } from '../strings';
 import { socket } from '../net/socket';
 import { Reviews } from '../ui/Reviews';
-import { ColorPicker } from '../ui/ColorPicker';
 import { AppearancePicker } from '../ui/AppearancePicker';
-import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
 import { Logo } from '../ui/Logo';
 import { CLIENT_GAMES, CLIENT_GAME_IDS } from '../games/registry';
@@ -119,7 +117,7 @@ export function HomeScreen(): JSX.Element {
         <section className="home__games">
           <h2 className="eyebrow">{t.gamesHeading}</h2>
           <div className="home__gamelist">
-            {CLIENT_GAME_IDS.map((id, index) => {
+            {CLIENT_GAME_IDS.map((id) => {
               const game = CLIENT_GAMES[id];
               const BoxArt = game.BoxArt;
               return (

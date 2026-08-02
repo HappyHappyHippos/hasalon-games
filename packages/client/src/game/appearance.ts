@@ -202,9 +202,3 @@ export function drawFace(ctx: CanvasRenderingContext2D, faceIndex: number, r: nu
     ctx.drawImage(img, -r, -r, r * 2, r * 2);
   }
 }
-
-function dot(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number): void {
-  ctx.beginPath();
-  ctx.arc(x, y, radius, 0, Math.PI * 2);
-  ctx.fill();
-}

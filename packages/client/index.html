@@ -13,6 +13,19 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
     />
     <meta name="theme-color" content="#fdf6e8" />
+    <!--
+      iOS Safari will not give a normal tab fullscreen, so the only way to lose
+      its URL bar is the home-screen shortcut: these three tags plus the manifest
+      are what make that shortcut open standalone instead of reopening Safari.
+      `black-translucent` lets the arena run under the status bar; the safe-area
+      insets already in the stylesheet keep the HUD out from under it.
+    -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="הסלון" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/icon.svg" />
     <meta
       name="description"
       content="הסלון — משחקי כורסא עם כל המשפחה. Gun Mayhem ו-Achtung die Kurve, ישר בדפדפן."

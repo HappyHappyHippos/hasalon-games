@@ -9,10 +9,13 @@
  *
  * Everything here is best-effort and every call is wrapped:
  *
- * - **iOS Safari has neither API** on a non-video element. That is fine and
- *   expected. `100dvh` plus the overlay HUD already reclaim most of the space
- *   there, so fullscreen is a bonus on Android rather than something the layout
- *   depends on.
+ * - **iOS Safari has neither API** on a non-video element, so there is no way to
+ *   hide its URL bar from a normal tab — none, not a scroll trick, not a meta
+ *   tag. The only route is the home-screen shortcut, which runs standalone with
+ *   no chrome at all because of the manifest and the `apple-mobile-web-app-*`
+ *   tags in `index.html`. {@link isStandalone} is how the UI knows whether that
+ *   has already happened, so the button can offer the tip exactly once and stay
+ *   quiet afterwards.
  * - **Both need a user gesture.** They are called from a real `pointerdown`
  *   inside the arena, never on mount — a promise rejection is the normal
  *   outcome of getting that wrong, not an error worth surfacing.
@@ -31,6 +34,28 @@ export function fullscreenSupported(): boolean {
 
 function isFullscreen(): boolean {
   return typeof document !== 'undefined' && document.fullscreenElement !== null;
+}
+
+/**
+ * Already running without browser chrome, via a home-screen shortcut.
+ *
+ * `navigator.standalone` is the old iOS-only flag and is still the only one
+ * older iOS reports; `display-mode: standalone` is the standard and covers
+ * Android's installed-PWA case. Either means there is no URL bar to reclaim.
+ */
+export function isStandalone(): boolean {
+  if (typeof window === 'undefined') return false;
+  const legacy = (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  return legacy || window.matchMedia('(display-mode: standalone)').matches;
+}
+
+/**
+ * True when there is nothing more this device can give us — real fullscreen is
+ * unavailable and we are not standalone either. The one case where the button
+ * has to explain itself instead of doing something.
+ */
+export function fullscreenNeedsInstall(): boolean {
+  return !fullscreenSupported() && !isStandalone();
 }
 
 function subscribe(onChange: () => void): () => void {

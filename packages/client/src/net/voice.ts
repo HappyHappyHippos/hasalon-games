@@ -5,19 +5,24 @@
  * `RTCPeerConnection` and the media flows directly between them; the server only
  * forwards offers, answers and ICE candidates, and does not read those either.
  *
- * ## STUN only, and what that costs
+ * ## Getting through carrier-grade NAT
  *
- * The ICE config below is public STUN and nothing else. That is enough for two
- * home routers to find each other, which is the common case, and it costs
- * nothing to run. It is **not** enough for a player behind carrier-grade NAT —
- * which is the norm on Israeli mobile networks, and this game does get played
- * phone-only. Those peers will fail to connect while everyone else is fine.
+ * This used to be STUN-only, and STUN is enough for two home routers to find
+ * each other and nothing else. A player behind carrier-grade NAT — the norm on
+ * Israeli mobile networks, and this game does get played phone-only — has no
+ * route a STUN candidate can describe, so those peers connected to nobody while
+ * everyone on wifi was fine.
  *
- * So failure is per-peer and has to be *visible*: `peerStates` carries a status
- * for every other player and the UI reports it. "I can't hear Yoni" should be
- * diagnosable from the screen rather than a mystery. Adding a TURN relay later
- * is a change to `ICE_SERVERS` plus credentials — none of the mesh logic below
- * moves.
+ * The ICE servers now come from the server's `/ice` endpoint, which adds a TURN
+ * relay (see `server/src/ice.ts` for which one and why it is free). That
+ * endpoint never fails: the worst case is the old STUN-only list plus some
+ * free public relays, so this module's fallback is only for the network being
+ * down entirely — in which case there is no signalling either.
+ *
+ * Failure is still per-peer and still has to be *visible*: `peers` carries a
+ * status for every other player and the UI reports it. "I can't hear Yoni"
+ * should be diagnosable from the screen rather than a mystery. TURN makes that
+ * rarer; it does not make it impossible.
  *
  * ## Why a mesh
  *
@@ -34,12 +39,15 @@
  * is talking — are mirrored into the store, and only when they change.
  */
 /**
- * Public STUN. Two of them because the first occasionally rate-limits, and ICE
- * gathering is happy to use whichever answers.
+ * Only used when `/ice` itself is unreachable. Public STUN, two of them because
+ * the first occasionally rate-limits and ICE is happy to use whichever answers.
  */
-const ICE_SERVERS: RTCIceServer[] = [
+const FALLBACK_ICE_SERVERS: RTCIceServer[] = [
   { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
 ];
+
+/** Voice is optional; do not let a slow config fetch hold the microphone open. */
+const ICE_FETCH_TIMEOUT_MS = 4000;
 
 /** How often levels are sampled for the speaking indicator. */
 const LEVEL_INTERVAL_MS = 100;
@@ -71,9 +79,48 @@ interface Peer {
   /** Last time this peer was over the speech threshold. */
   loudAt: number;
   status: PeerStatus;
+  /** True if we are the offering side, which decides who re-offers on a restart. */
+  weOffer: boolean;
+  /**
+   * Candidates that arrived before the remote description did.
+   *
+   * `addIceCandidate` throws if there is no remote description yet, and an
+   * offer and its answerer's first candidates genuinely race on a slow link.
+   * Buffering costs nothing and the alternative is dropping exactly the
+   * candidates a struggling connection most needs.
+   */
+  pending: RTCIceCandidateInit[];
+  /** One ICE restart is allowed per peer before we call it dead. */
+  restarted: boolean;
 }
 
 type Listener = (snapshot: VoiceSnapshot) => void;
+
+/**
+ * Ask the server which ICE servers to use.
+ *
+ * `/ice` is itself designed never to fail, so reaching the fallback here means
+ * the network is down — in which case there is no signalling either and the
+ * value hardly matters. It exists so a thrown fetch cannot stop the microphone
+ * from opening.
+ */
+async function loadIceServers(): Promise<RTCIceServer[]> {
+  const abort = new AbortController();
+  const timer = window.setTimeout(() => abort.abort(), ICE_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch('/ice', { signal: abort.signal });
+    if (!response.ok) return FALLBACK_ICE_SERVERS;
+    const body = (await response.json()) as { iceServers?: RTCIceServer[] };
+    if (!Array.isArray(body.iceServers) || body.iceServers.length === 0) {
+      return FALLBACK_ICE_SERVERS;
+    }
+    return body.iceServers;
+  } catch {
+    return FALLBACK_ICE_SERVERS;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
 
 function supported(): boolean {
   return (
@@ -105,6 +152,9 @@ class Voice {
 
   /** Our own id, needed to decide who offers to whom. */
   private selfId: string | null = null;
+
+  /** Fetched once per `start()` and reused for every peer in that session. */
+  private iceServers: RTCIceServer[] = FALLBACK_ICE_SERVERS;
 
   // -------------------------------------------------------------------------
   // Subscription — a store-shaped surface for `useSyncExternalStore`
@@ -155,6 +205,10 @@ class Voice {
       this.emit({ error: name === 'NotFoundError' ? 'nodevice' : 'denied' });
       return;
     }
+
+    // After the permission prompt, not before: the prompt is the slow part and
+    // there is nothing to connect to until it is answered.
+    this.iceServers = await loadIceServers();
 
     this.ctx = new AudioContext();
     this.localAnalyser = this.analyserFor(this.stream);
@@ -226,8 +280,17 @@ class Voice {
   }
 
   private createPeer(id: string, weOffer: boolean): Peer {
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-    const peer: Peer = { pc, audio: null, analyser: null, loudAt: 0, status: 'connecting' };
+    const pc = new RTCPeerConnection({ iceServers: this.iceServers });
+    const peer: Peer = {
+      pc,
+      audio: null,
+      analyser: null,
+      loudAt: 0,
+      status: 'connecting',
+      weOffer,
+      pending: [],
+      restarted: false,
+    };
     this.peers.set(id, peer);
     this.publishPeers();
 
@@ -247,11 +310,33 @@ class Voice {
 
     pc.onconnectionstatechange = () => {
       const state = pc.connectionState;
-      if (state === 'connected') this.setPeerStatus(id, 'connected');
-      // `failed` is the STUN-only outcome behind a symmetric NAT, and it is the
-      // one the UI has to say out loud rather than just going quiet.
-      else if (state === 'failed' || state === 'closed') this.setPeerStatus(id, 'failed');
-      else if (state === 'disconnected') this.setPeerStatus(id, 'connecting');
+      if (state === 'connected') {
+        this.setPeerStatus(id, 'connected');
+        return;
+      }
+      if (state === 'disconnected') {
+        this.setPeerStatus(id, 'connecting');
+        return;
+      }
+      if (state !== 'failed' && state !== 'closed') return;
+
+      // One restart before giving up. The case this recovers is a relay
+      // candidate that gathered after ICE had already run out of pairs to try
+      // — common on cellular, where the TURN allocation is the slowest
+      // candidate of the lot. A restart re-gathers with everything now known.
+      const current = this.peers.get(id);
+      if (state === 'failed' && current && !current.restarted && pc.restartIce) {
+        current.restarted = true;
+        pc.restartIce();
+        // Only the offering side may re-offer; the other end will answer the
+        // restart, and two simultaneous offers is the glare this design avoids.
+        if (current.weOffer) void this.offer(id, pc);
+        return;
+      }
+
+      // Genuinely unreachable. The UI has to say so out loud rather than just
+      // going quiet — a peer that is silently absent is undiagnosable.
+      this.setPeerStatus(id, 'failed');
     };
 
     if (weOffer) void this.offer(id, pc);
@@ -287,6 +372,23 @@ class Voice {
   // Signalling
   // -------------------------------------------------------------------------
 
+  /**
+   * Hand over every candidate that arrived early, now that there is somewhere
+   * to put them. Individually — one malformed candidate should not take the
+   * rest of the queue with it.
+   */
+  private async flushCandidates(peer: Peer): Promise<void> {
+    const queued = peer.pending;
+    peer.pending = [];
+    for (const candidate of queued) {
+      try {
+        await peer.pc.addIceCandidate(candidate);
+      } catch {
+        // Ignore this one and keep going.
+      }
+    }
+  }
+
   /** A payload relayed from another player. Shape is ours; treat it as untrusted. */
   async onSignal(from: string, data: unknown): Promise<void> {
     if (!this.stream || !this.selfId) return;
@@ -305,18 +407,24 @@ class Voice {
     try {
       if (message.kind === 'offer' && message.sdp) {
         await peer.pc.setRemoteDescription(message.sdp);
+        await this.flushCandidates(peer);
         const answer = await peer.pc.createAnswer();
         await peer.pc.setLocalDescription(answer);
         this.send?.(from, { kind: 'answer', sdp: peer.pc.localDescription?.toJSON() });
       } else if (message.kind === 'answer' && message.sdp) {
         await peer.pc.setRemoteDescription(message.sdp);
+        await this.flushCandidates(peer);
       } else if (message.kind === 'ice' && message.candidate) {
-        await peer.pc.addIceCandidate(message.candidate);
+        // Hold it rather than dropping it. This used to be an `addIceCandidate`
+        // whose throw was swallowed as "routine and recoverable" — routine it
+        // is, but the candidate was gone, and on a link slow enough for the
+        // race to happen it is the relay candidate you cannot spare.
+        if (peer.pc.remoteDescription) await peer.pc.addIceCandidate(message.candidate);
+        else peer.pending.push(message.candidate);
       }
     } catch {
-      // A candidate arriving before the remote description is routine and
-      // recoverable; a genuinely broken negotiation shows up as `failed` on the
-      // connection state, which is where it gets reported.
+      // A genuinely broken negotiation shows up as `failed` on the connection
+      // state, which is where it gets reported.
     }
   }
 
