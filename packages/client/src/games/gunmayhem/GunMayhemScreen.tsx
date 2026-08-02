@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, type JSX } from 'react';
 import { colorFor, type RoomView } from '@mg/shared';
 import { WEAPONS, type WeaponKind } from '@mg/shared/gunmayhem';
 import { useStore } from '../../store';
+import { useT } from '../../strings';
 import { socket } from '../../net/socket';
 import { GunMayhemRenderer } from './Renderer';
 import { attachGunMayhemInput, type InputController } from './input';
 import { TouchPad } from './TouchPad';
 import { Screen } from '../../ui/Screen';
 import { useShowTouchControls } from '../../ui/useTouchControls';
+import { useVoice } from '../../ui/useVoice';
 
 interface Props {
   room: RoomView;
@@ -93,6 +95,8 @@ export function GunMayhemScreen({ room, mySeat }: Props): JSX.Element {
 
 function GunMayhemHud({ room, mySeat }: Props): JSX.Element {
   const hud = useStore((s) => s.hud);
+  const t = useT();
+  const speaking = new Set(useVoice().speaking);
 
   const seated = room.players
     .filter((p) => p.seat >= 0)
@@ -112,12 +116,12 @@ function GunMayhemHud({ room, mySeat }: Props): JSX.Element {
             key={player.id}
             className={`hudcard${out ? ' hudcard--out' : ''}${
               player.seat === mySeat ? ' hudcard--me' : ''
-            }`}
+            }${speaking.has(player.id) ? ' hudcard--speaking' : ''}`}
           >
             <span className="hudcard__dot" style={{ background: colorFor(player.colorIndex) }} />
             <div className="hudcard__body">
               <span className="hudcard__name">{player.name}</span>
-              <span className="hudcard__stocks" aria-label={`${stocks} lives left`}>
+              <span className="hudcard__stocks" aria-label={t.livesLeft(stocks)}>
                 {'●'.repeat(Math.max(0, Math.min(stocks, 6)))}
                 {stocks > 6 ? `+${stocks - 6}` : ''}
               </span>

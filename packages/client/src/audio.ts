@@ -208,6 +208,22 @@ class Sfx {
   crash(): void {
     this.tone({ freq: 300, to: 60, duration: 0.35, gain: 0.2, type: 'sawtooth' });
   }
+
+  /**
+   * The title sting under the intro splash.
+   *
+   * A placeholder, and deliberately a synthesised one: it needs no asset, so the
+   * splash works the day it ships. `music.sting()` prefers a real file whenever
+   * one is dropped into `public/music` and falls back to this. Warmer waveform
+   * and a longer tail than the rest of the kit — this is a flourish, not a
+   * notification.
+   */
+  fanfare(): void {
+    [392, 523, 659, 784].forEach((freq, i) => {
+      this.tone({ freq, duration: 0.5, gain: 0.13, type: 'triangle', delay: i * 0.13 });
+    });
+    this.tone({ freq: 1047, duration: 0.9, gain: 0.11, type: 'sine', delay: 0.52 });
+  }
 }
 
 function loadMuted(): boolean {

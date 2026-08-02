@@ -1,5 +1,6 @@
 import type { CSSProperties, JSX } from 'react';
-import { COLOR_NAMES, PLAYER_COLORS } from '@mg/shared';
+import { PLAYER_COLORS } from '@mg/shared';
+import { useT } from '../strings';
 import { sfx } from '../audio';
 
 interface Props {
@@ -9,18 +10,21 @@ interface Props {
 }
 
 export function ColorPicker({ value, taken, onChange }: Props): JSX.Element {
+  const t = useT();
+
   return (
-    <div className="colors" role="radiogroup" aria-label="Your colour">
+    <div className="colors" role="radiogroup" aria-label={t.yourColour}>
       {PLAYER_COLORS.map((color, index) => {
         const isTaken = taken?.has(index) && index !== value;
+        const name = t.colorNames[index] ?? '';
         return (
           <button
             key={color}
             type="button"
             role="radio"
             aria-checked={index === value}
-            aria-label={COLOR_NAMES[index]}
-            title={isTaken ? `${COLOR_NAMES[index]} — taken` : COLOR_NAMES[index]}
+            aria-label={name}
+            title={isTaken ? t.colorTaken(name) : name}
             disabled={isTaken}
             className={`swatch${index === value ? ' swatch--on' : ''}`}
             style={{ '--swatch': color } as CSSProperties}

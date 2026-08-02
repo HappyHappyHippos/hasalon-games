@@ -3,6 +3,7 @@ import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
   BASE_RADIUS,
+  BASE_TURN_RATE,
   COUNTDOWN_TICKS,
   EFFECT_TICKS,
   HOLE_DURATION_TICKS,
@@ -122,8 +123,14 @@ describe('movement and collision', () => {
     player.angle = 0;
     applyInput(state, 'p0', 1);
 
-    // A full circle takes ~2*pi/turnRate seconds; stop just short of closing it.
-    for (let i = 0; i < 120; i++) stepTick(state);
+    // A full circle takes 2*pi/turnRate seconds; stop just short of closing it,
+    // because closing it is *supposed* to kill you — that is the next test.
+    // Derived from the turn rate rather than hardcoded: at 2.9 rad/s a circle
+    // was 130 ticks and a flat "120" was comfortably short of it, but the same
+    // 120 overshoots a full circle the moment the turn rate goes up, and the
+    // test then fails for the one reason it is not meant to catch.
+    const fullCircleTicks = ((2 * Math.PI) / BASE_TURN_RATE) * TICK_RATE;
+    for (let i = 0; i < Math.floor(fullCircleTicks * 0.9); i++) stepTick(state);
     expect(player.alive).toBe(true);
   });
 
@@ -297,9 +304,17 @@ describe('scoring', () => {
 
 describe('powerups', () => {
   it('expires timed effects on schedule and restores the base radius', () => {
-    const state = makeState(2, { powerupsEnabled: true });
+    // One player, no pickups, and pointed down the long axis with room to run.
+    // The timer is set by hand, so spawning actual powerups would only add a
+    // second thing that can change the radius — and the loop below has to keep
+    // the curve alive for five seconds to see the timer out, which it cannot do
+    // if it drives into a wall on the way.
+    const state = makeState(1, { powerupsEnabled: false });
     skipCountdown(state);
     const player = state.players[0]!;
+    player.x = 20;
+    player.y = ARENA_HEIGHT / 2;
+    player.angle = 0;
     player.timers.thick = EFFECT_TICKS;
 
     stepTick(state);

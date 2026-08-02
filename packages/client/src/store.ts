@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { isFaceIndex, isHatIndex } from '@mg/shared';
-import type { GameConfig, GameId, Identity, RoomView } from '@mg/shared';
+import type { ErrorCode, GameConfig, GameId, Identity, RoomView } from '@mg/shared';
+import { isLang, type Lang } from './i18n';
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'open' | 'closed';
 
@@ -64,7 +65,12 @@ export interface AppState {
   room: RoomView | null;
   playerId: string | null;
   identity: Identity;
-  error: string | null;
+  /**
+   * The *code*, not the server's message. The server speaks English into its
+   * logs and the client looks the wording up per language, so a toast that is
+   * already on screen when someone switches language switches with it.
+   */
+  error: ErrorCode | null;
   pendingCode: string;
   busy: boolean;
   hud: Hud;
@@ -75,11 +81,22 @@ export interface AppState {
   musicMuted: boolean;
   musicVolume: number;
   touchControls: TouchControlsMode;
+  lang: Lang;
+  /**
+   * Bumped once per `matchStarted`, which is the cue for the intro splash.
+   *
+   * Deliberately *not* derived from `room.phase` going to `playing`. Refreshing
+   * mid-match resumes straight into a running match, and a three-second curtain
+   * while everyone else is already playing is the opposite of helpful. The
+   * server only sends `matchStarted` when a match actually starts, so a counter
+   * on that message is the one signal that means "from the top".
+   */
+  matchNonce: number;
 
   setStatus(status: ConnectionStatus): void;
   setRoom(room: RoomView | null): void;
   setIdentity(patch: Partial<Identity>): void;
-  setError(error: string | null): void;
+  setError(error: ErrorCode | null): void;
   setPendingCode(code: string): void;
   setBusy(busy: boolean): void;
   setHud(hud: Hud): void;
@@ -88,6 +105,8 @@ export interface AppState {
   setMusicMuted(muted: boolean): void;
   setMusicVolume(volume: number): void;
   setTouchControls(mode: TouchControlsMode): void;
+  setLang(lang: Lang): void;
+  onMatchStarted(room: RoomView): void;
   onWelcome(room: RoomView, playerId: string): void;
   onMatchEnded(room: RoomView, winnerSeat: number | null): void;
   reset(): void;
@@ -101,6 +120,15 @@ const IDENTITY_KEY = 'mg.identity';
  * someone who had to turn it on once should never have to find it again.
  */
 const TOUCH_KEY = 'mg.touchControls';
+
+/**
+ * Language is the same kind of thing: a property of the person, not the room.
+ *
+ * The default is Hebrew rather than whatever the browser reports. An invite
+ * link opened on a phone set to en-US should still look like the site the host
+ * is describing down the phone — and one tap in the options changes it for good.
+ */
+const LANG_KEY = 'mg.lang';
 
 /**
  * The seat, however, belongs to *this tab*.
@@ -140,6 +168,16 @@ function loadTouchControls(): TouchControlsMode {
     // Storage disabled — detection alone decides.
   }
   return 'auto';
+}
+
+function loadLang(): Lang {
+  try {
+    const raw = localStorage.getItem(LANG_KEY);
+    if (isLang(raw)) return raw;
+  } catch {
+    // Storage disabled — Hebrew it is, every visit.
+  }
+  return 'he';
 }
 
 export function saveSession(session: Session | null): void {
@@ -184,6 +222,8 @@ export const useStore = create<AppState>((set) => ({
   musicMuted: false,
   musicVolume: 0.4,
   touchControls: loadTouchControls(),
+  lang: loadLang(),
+  matchNonce: 0,
 
   setStatus: (status) => set({ status }),
   setRoom: (room) => set({ room }),
@@ -216,6 +256,17 @@ export const useStore = create<AppState>((set) => ({
     }
     set({ touchControls });
   },
+
+  setLang: (lang) => {
+    try {
+      localStorage.setItem(LANG_KEY, lang);
+    } catch {
+      // Not fatal — it just won't be remembered next visit.
+    }
+    set({ lang });
+  },
+
+  onMatchStarted: (room) => set((state) => ({ room, matchNonce: state.matchNonce + 1 })),
 
   onWelcome: (room, playerId) =>
     set({ room, playerId, error: null, busy: false, matchWinnerSeat: null }),

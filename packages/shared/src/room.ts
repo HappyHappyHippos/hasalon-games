@@ -17,6 +17,14 @@ export interface PlayerView {
   /** Seat within the running match, or -1 while in the lobby or spectating. */
   seat: number;
   score: number;
+  /**
+   * Their microphone is on and they are in the voice mesh.
+   *
+   * Only ever a display fact — the audio itself is peer-to-peer and never
+   * touches the server, so this is what everyone else's UI reads to decide
+   * whether to draw a mic on somebody, not permission for anything.
+   */
+  voice: boolean;
 }
 
 export interface RoomView {

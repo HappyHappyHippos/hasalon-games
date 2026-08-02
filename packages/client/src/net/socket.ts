@@ -11,6 +11,7 @@ import {
 } from '@mg/shared';
 import { feed } from './feed';
 import { clock } from './clock';
+import { voice } from './voice';
 import { delayed, readNetSim } from './netsim';
 import { sfx } from '../audio';
 import { loadSession, saveSession, useStore, type Hud, type HudPlayer } from '../store';
@@ -227,6 +228,9 @@ class GameSocket {
     this.send({ t: 'leave' });
     saveSession(null);
     feed.reset();
+    // The mesh is per-room; leaving one without tearing it down leaves a live
+    // microphone open to people you are no longer in a room with.
+    voice.stop();
     useStore.getState().reset();
     setHashCode(null);
   }
@@ -234,6 +238,15 @@ class GameSocket {
   /** Game-specific input payload, sent unbuffered. */
   sendInput(payload: unknown): void {
     this.raw({ t: 'input', i: payload });
+  }
+
+  /** WebRTC signalling for one peer. Unbuffered — a stale offer is worse than none. */
+  sendRtc(to: string, data: unknown): void {
+    this.raw({ t: 'rtc', to, data });
+  }
+
+  setVoice(on: boolean): void {
+    this.send({ t: 'voice', on });
   }
 
   // -------------------------------------------------------------------------
@@ -258,7 +271,11 @@ class GameSocket {
       case 'matchStarted':
         feed.reset();
         this.lastCountdown = 0;
-        store.setRoom(message.room);
+        // `resumed` is the catch-up copy sent to a socket that reconnected into
+        // a running match, and reconnects happen on a half-second backoff. Only
+        // the real thing bumps the counter the intro splash watches.
+        if (message.resumed) store.setRoom(message.room);
+        else store.onMatchStarted(message.room);
         store.setHud({ phase: 'countdown', round: 0, countdown: 0, players: [] });
         return;
 
@@ -276,6 +293,10 @@ class GameSocket {
         clock.observe(message.ts, message.serverTime, performance.now());
         return;
 
+      case 'rtc':
+        void voice.onSignal(message.from, message.data);
+        return;
+
       case 'error': {
         if (message.code === 'RESUME_FAILED') {
           // The seat is gone — drop the stale session and show the home screen.
@@ -285,7 +306,9 @@ class GameSocket {
           setHashCode(null);
           return;
         }
-        store.setError(message.message);
+        // `message.message` is the server's English; it stays in the logs where
+        // it is useful. The toast renders `code` through the dictionary.
+        store.setError(message.code);
         return;
       }
     }
@@ -343,6 +366,12 @@ class GameSocket {
 }
 
 export const socket = new GameSocket();
+
+// Injected rather than imported the other way round: `voice` must not depend on
+// the socket, or the two modules form a cycle and whichever loads second sees
+// half of the other.
+voice.send = (to, data) => socket.sendRtc(to, data);
+voice.announce = (on) => socket.setVoice(on);
 
 // ---------------------------------------------------------------------------
 // Shareable #/room/CODE links

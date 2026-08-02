@@ -20,6 +20,15 @@ import { serverNow } from './serverClock';
 /** Above this many messages per second a socket is assumed to be misbehaving. */
 const MAX_MESSAGES_PER_SECOND = 200;
 /**
+ * Ceiling on one WebRTC signalling payload.
+ *
+ * A full SDP offer with a long candidate list is around 4 KB. This leaves plenty
+ * of headroom for that while keeping the relay from being usable as a general
+ * broadcast channel — the server never looks inside these, so the size is the
+ * only thing it can meaningfully police.
+ */
+const MAX_RTC_BYTES = 16_384;
+/**
  * A socket that has silently died is detected somewhere between one and two of
  * these. At 30 s that was up to a minute of a room broadcasting 30 snapshots a
  * second into a hole, and up to a minute before the seat freed up.
@@ -236,6 +245,31 @@ export function createApp(options: AppOptions): App {
       case 'input':
         // The payload is game-specific; the game module validates it.
         room.input(player, message.i);
+        return;
+
+      case 'rtc': {
+        // Signalling only, and opaque. The cap is the one thing worth checking:
+        // an SDP with a lot of candidates runs about 4 KB, so 16 KB is generous
+        // for the real thing and still stops a client using the relay as a
+        // free broadcast channel for something else.
+        if (typeof message.to !== 'string') return;
+        let size = 0;
+        try {
+          size = JSON.stringify(message.data ?? null).length;
+        } catch {
+          // Circular or otherwise unserialisable — it was never going to arrive.
+          return;
+        }
+        if (size > MAX_RTC_BYTES) {
+          client.sendError('BAD_MESSAGE', 'Signalling payload too large.');
+          return;
+        }
+        room.relayRtc(player, message.to, message.data);
+        return;
+      }
+
+      case 'voice':
+        room.setVoice(player, message.on === true);
         return;
 
       case 'leave':

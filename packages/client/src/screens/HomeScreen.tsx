@@ -1,7 +1,9 @@
 import { useState, type FormEvent, type JSX } from 'react';
 import { ROOM_CODE_LENGTH, isValidRoomCode } from '@mg/shared';
 import { useStore } from '../store';
+import { useT } from '../strings';
 import { socket } from '../net/socket';
+import { Reviews } from '../ui/Reviews';
 import { ColorPicker } from '../ui/ColorPicker';
 import { AppearancePicker } from '../ui/AppearancePicker';
 import { Avatar } from '../ui/Avatar';
@@ -15,6 +17,7 @@ export function HomeScreen(): JSX.Element {
   const pendingCode = useStore((s) => s.pendingCode);
   const setPendingCode = useStore((s) => s.setPendingCode);
   const busy = useStore((s) => s.busy);
+  const t = useT();
 
   // Null means "not chosen yet", so an invite code arriving after mount still
   // opens the join form without stranding the Back button.
@@ -40,9 +43,7 @@ export function HomeScreen(): JSX.Element {
       <div className="home__inner">
         <header className="home__hero">
           <Logo />
-          <p className="home__blurb">
-            Grab your friends, pick a game, make a mess. No accounts, no downloads — just a code.
-          </p>
+          <p className="home__blurb">{t.tagline}</p>
         </header>
 
         <div className="sticker home__card">
@@ -55,12 +56,12 @@ export function HomeScreen(): JSX.Element {
               size={64}
             />
             <label className="field">
-              <span className="field__label">Your name</span>
+              <span className="field__label">{t.yourName}</span>
               <input
                 className="input"
                 value={identity.name}
                 onChange={(event) => setIdentity({ name: event.target.value })}
-                placeholder="who are you?"
+                placeholder={t.namePlaceholder}
                 maxLength={14}
                 autoComplete="nickname"
                 autoFocus
@@ -69,7 +70,7 @@ export function HomeScreen(): JSX.Element {
           </div>
 
           <div className="field">
-            <span className="field__label">Your colour</span>
+            <span className="field__label">{t.yourColour}</span>
             <ColorPicker
               value={identity.colorIndex}
               onChange={(colorIndex) => setIdentity({ colorIndex })}
@@ -77,7 +78,7 @@ export function HomeScreen(): JSX.Element {
           </div>
 
           <div className="field">
-            <span className="field__label">Your look</span>
+            <span className="field__label">{t.yourLook}</span>
             <AppearancePicker
               colorIndex={identity.colorIndex}
               hat={identity.hat}
@@ -89,18 +90,21 @@ export function HomeScreen(): JSX.Element {
           {effectiveMode === 'idle' ? (
             <div className="home__actions">
               <Button variant="primary" size="lg" full disabled={!name || busy} onClick={create}>
-                Start a room
+                {t.startRoom}
               </Button>
               <Button full onClick={() => setMode('join')}>
-                Join with a code
+                {t.joinWithCode}
               </Button>
             </div>
           ) : (
             <form className="home__actions" onSubmit={join}>
               <label className="field">
-                <span className="field__label">Room code</span>
+                <span className="field__label">{t.roomCode}</span>
                 <input
                   className="input input--code"
+                  // Room codes are latin letters wherever the UI points, so the
+                  // field keeps its own direction rather than inheriting.
+                  dir="ltr"
                   value={pendingCode}
                   onChange={(event) =>
                     setPendingCode(event.target.value.toUpperCase().slice(0, ROOM_CODE_LENGTH))
@@ -120,17 +124,17 @@ export function HomeScreen(): JSX.Element {
                 full
                 disabled={!name || !codeReady || busy}
               >
-                Join room
+                {t.joinRoom}
               </Button>
               <Button variant="ghost" full onClick={() => setMode('idle')}>
-                Back
+                {t.back}
               </Button>
             </form>
           )}
         </div>
 
         <section className="home__games">
-          <h2 className="eyebrow">In the room right now</h2>
+          <h2 className="eyebrow">{t.gamesHeading}</h2>
           <div className="home__gamelist">
             {CLIENT_GAME_IDS.map((id, index) => {
               const game = CLIENT_GAMES[id];
@@ -144,13 +148,15 @@ export function HomeScreen(): JSX.Element {
                   <BoxArt />
                   <div className="minicard__text">
                     <strong>{game.meta.name}</strong>
-                    <span>{game.meta.tagline}</span>
+                    <span>{t.games[id].tagline}</span>
                   </div>
                 </div>
               );
             })}
           </div>
         </section>
+
+        <Reviews />
       </div>
     </main>
   );

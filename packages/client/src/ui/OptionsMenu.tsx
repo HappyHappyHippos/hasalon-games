@@ -1,6 +1,7 @@
 import { useEffect, useState, type JSX } from 'react';
 import { GAMES } from '@mg/shared';
 import { selectMySeat, useStore } from '../store';
+import { useT } from '../strings';
 import { socket } from '../net/socket';
 import { sfx } from '../audio';
 import { music } from '../music';
@@ -8,12 +9,20 @@ import { Button } from './Button';
 import { Toggle } from './Toggle';
 import { useHasTouch } from './useTouchControls';
 import type { TouchControlsMode } from '../store';
+import { LANGS, type Dict, type Lang } from '../i18n';
 
-const TOUCH_MODES: Array<{ mode: TouchControlsMode; label: string }> = [
-  { mode: 'auto', label: 'Auto' },
-  { mode: 'on', label: 'On' },
-  { mode: 'off', label: 'Off' },
+const TOUCH_MODES: Array<{ mode: TouchControlsMode; label: (t: Dict) => string }> = [
+  { mode: 'auto', label: (t) => t.touchAuto },
+  { mode: 'on', label: (t) => t.touchOn },
+  { mode: 'off', label: (t) => t.touchOff },
 ];
+
+/**
+ * Language labels are each written in their own language, never translated.
+ * Someone stuck in the wrong one has to be able to find their way out, and
+ * "אנגלית" is no help to a reader who cannot read the alphabet it is in.
+ */
+const LANG_LABELS: Record<Lang, string> = { he: 'עברית', en: 'English' };
 
 /**
  * The one menu. Sound, match control, and how to play — all behind a single
@@ -36,7 +45,10 @@ export function OptionsMenu(): JSX.Element {
   const setMusicVolume = useStore((s) => s.setMusicVolume);
   const touchControls = useStore((s) => s.touchControls);
   const setTouchControls = useStore((s) => s.setTouchControls);
+  const lang = useStore((s) => s.lang);
+  const setLang = useStore((s) => s.setLang);
   const hasTouch = useHasTouch();
+  const t = useT();
 
   // Escape is the reflex for "get this off my screen", and it should also be
   // able to *open* the menu — that's the fast way to pause without hunting for
@@ -63,8 +75,8 @@ export function OptionsMenu(): JSX.Element {
       <button
         type="button"
         className="options"
-        aria-label="Options"
-        title="Options (Esc)"
+        aria-label={t.options}
+        title={t.optionsHint}
         onClick={() => {
           sfx.click();
           setOpen(true);
@@ -89,20 +101,20 @@ export function OptionsMenu(): JSX.Element {
         className="sticker overlay__card options__panel"
         role="dialog"
         aria-modal="true"
-        aria-label="Options"
+        aria-label={t.options}
         onClick={(event) => event.stopPropagation()}
       >
         <div className="options__head">
-          <h2 className="overlay__title">Options</h2>
-          <Button variant="ghost" size="sm" onClick={close} aria-label="Close options">
+          <h2 className="overlay__title">{t.options}</h2>
+          <Button variant="ghost" size="sm" onClick={close} aria-label={t.close}>
             ✕
           </Button>
         </div>
 
         <section className="options__section">
-          <h3 className="eyebrow">Sound</h3>
+          <h3 className="eyebrow">{t.sectionSound}</h3>
           <Toggle
-            label="Sound effects"
+            label={t.soundEffects}
             checked={!muted}
             onChange={(on) => {
               sfx.setMuted(!on);
@@ -111,7 +123,7 @@ export function OptionsMenu(): JSX.Element {
             }}
           />
           <Toggle
-            label="Music"
+            label={t.musicLabel}
             checked={!musicMuted}
             onChange={(on) => {
               music.setMuted(!on);
@@ -119,7 +131,7 @@ export function OptionsMenu(): JSX.Element {
             }}
           />
           <label className="options__slider">
-            <span className="toggle__label">Music volume</span>
+            <span className="toggle__label">{t.musicVolume}</span>
             <input
               type="range"
               min={0}
@@ -136,9 +148,33 @@ export function OptionsMenu(): JSX.Element {
         </section>
 
         <section className="options__section">
-          <h3 className="eyebrow">Controls</h3>
+          <h3 className="eyebrow">{t.sectionLanguage}</h3>
           <div className="options__choice">
-            <span className="toggle__label">On-screen controls</span>
+            <span className="toggle__label">{t.sectionLanguage}</span>
+            <div className="options__segmented">
+              {LANGS.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  lang={option}
+                  className={`seg${lang === option ? ' seg--on' : ''}`}
+                  aria-pressed={lang === option}
+                  onClick={() => {
+                    sfx.click();
+                    setLang(option);
+                  }}
+                >
+                  {LANG_LABELS[option]}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="options__section">
+          <h3 className="eyebrow">{t.sectionControls}</h3>
+          <div className="options__choice">
+            <span className="toggle__label">{t.onScreenControls}</span>
             <div className="options__segmented">
               {TOUCH_MODES.map(({ mode, label }) => (
                 <button
@@ -151,7 +187,7 @@ export function OptionsMenu(): JSX.Element {
                     setTouchControls(mode);
                   }}
                 >
-                  {label}
+                  {label(t)}
                 </button>
               ))}
             </div>
@@ -159,17 +195,17 @@ export function OptionsMenu(): JSX.Element {
           <p className="muted small">
             {touchControls === 'auto'
               ? hasTouch
-                ? 'Auto: this device looks like a touchscreen, so the pad is shown.'
-                : 'Auto: no touchscreen detected. Turn them On if you are on a phone and cannot see the buttons.'
+                ? t.touchHelpAutoTouch
+                : t.touchHelpAutoNone
               : touchControls === 'on'
-                ? 'Always shown, whatever the browser reports about this device.'
-                : 'Never shown. Keyboard only.'}
+                ? t.touchHelpOn
+                : t.touchHelpOff}
           </p>
         </section>
 
         {inMatch && (
           <section className="options__section">
-            <h3 className="eyebrow">Match</h3>
+            <h3 className="eyebrow">{t.sectionMatch}</h3>
 
             {playing &&
               (seated ? (
@@ -181,10 +217,10 @@ export function OptionsMenu(): JSX.Element {
                     if (room.paused) close();
                   }}
                 >
-                  {room.paused ? 'Resume' : 'Pause for everyone'}
+                  {room.paused ? t.resume : t.pauseForEveryone}
                 </Button>
               ) : (
-                <p className="muted small">Only players in the match can pause it.</p>
+                <p className="muted small">{t.onlyPlayersPause}</p>
               ))}
 
             {isHost ? (
@@ -196,26 +232,26 @@ export function OptionsMenu(): JSX.Element {
                     close();
                   }}
                 >
-                  Restart match
+                  {t.restartMatch}
                 </Button>
                 <Button variant="danger" full onClick={() => socket.rematch()}>
-                  End match
+                  {t.endMatch}
                 </Button>
               </>
             ) : (
-              <p className="muted small">Only the host can restart or end the match.</p>
+              <p className="muted small">{t.onlyHostRestart}</p>
             )}
           </section>
         )}
 
-        {meta && (
+        {meta && room && (
           <section className="options__section">
-            <h3 className="eyebrow">{meta.name} — controls</h3>
-            <p className="muted small">{meta.controls}</p>
+            <h3 className="eyebrow">{t.controlsFor(meta.name)}</h3>
+            <p className="muted small">{t.games[room.gameId].controls}</p>
 
-            <h3 className="eyebrow">How to play</h3>
+            <h3 className="eyebrow">{t.howToPlay}</h3>
             <ul className="rules">
-              {meta.rules.map((rule) => (
+              {t.games[room.gameId].rules.map((rule) => (
                 <li key={rule}>{rule}</li>
               ))}
             </ul>
@@ -224,11 +260,11 @@ export function OptionsMenu(): JSX.Element {
 
         <div className="options__foot">
           <Button variant="primary" size="lg" full onClick={close}>
-            Back to the game
+            {t.backToGame}
           </Button>
           {room && (
             <Button variant="ghost" full onClick={() => socket.leave()}>
-              Leave room
+              {t.leaveRoom}
             </Button>
           )}
         </div>

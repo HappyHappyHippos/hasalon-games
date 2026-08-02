@@ -3,6 +3,7 @@ import { SPEED_PRESETS, suggestedTargetScore, type AchtungConfig } from '@mg/sha
 import type { GameConfig } from '@mg/shared';
 import { Segmented } from '../../ui/Segmented';
 import { Toggle } from '../../ui/Toggle';
+import { useT } from '../../strings';
 
 interface Props {
   settings: GameConfig;
@@ -11,35 +12,34 @@ interface Props {
   onChange: (patch: Record<string, unknown>) => void;
 }
 
-const SPEED_LABELS = ['Relaxed', 'Normal', 'Fast'];
-
 export function AchtungSettings({ settings, isHost, playerCount, onChange }: Props): JSX.Element | null {
+  const t = useT();
   if (settings.game !== 'achtung') return null;
   const config: AchtungConfig = settings;
 
   return (
     <div className="settings">
       <Toggle
-        label="Powerups"
+        label={t.setPowerups}
         checked={config.powerupsEnabled}
         disabled={!isHost}
         onChange={(powerupsEnabled) => onChange({ powerupsEnabled })}
       />
       <Toggle
-        label="Win by two"
+        label={t.setWinByTwo}
         checked={config.winByTwo}
         disabled={!isHost}
         onChange={(winByTwo) => onChange({ winByTwo })}
       />
       <Segmented
-        label="Speed"
+        label={t.setSpeed}
         value={config.speedScale}
         disabled={!isHost}
-        options={SPEED_PRESETS.map((value, i) => ({ value, label: SPEED_LABELS[i]! }))}
+        options={SPEED_PRESETS.map((value, i) => ({ value, label: t.speedLabels[i]! }))}
         onChange={(speedScale) => onChange({ speedScale })}
       />
       <label className="setting">
-        <span>Play to</span>
+        <span>{t.setPlayTo}</span>
         <input
           className="input input--number"
           type="number"
@@ -52,8 +52,7 @@ export function AchtungSettings({ settings, isHost, playerCount, onChange }: Pro
       </label>
       {isHost && (
         <p className="muted small">
-          Suggested for {playerCount} {playerCount === 1 ? 'player' : 'players'}:{' '}
-          {suggestedTargetScore(playerCount)}
+          {t.suggestedFor(playerCount, suggestedTargetScore(playerCount))}
         </p>
       )}
     </div>

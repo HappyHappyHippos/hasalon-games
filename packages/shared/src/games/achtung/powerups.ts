@@ -52,11 +52,20 @@ const SPAWN_POOL: PowerupKind[] = [
   'clearAll',
 ];
 
-/** Scope colour used by the renderer and the HUD. */
+/**
+ * Scope colour used by the renderer and the HUD: green helps you, red is aimed
+ * at everyone else, violet hits the whole board.
+ *
+ * These are the site's own accents (`--green` / `--red` / `--violet`) rather
+ * than seat colours. They used to be literally `PLAYER_COLORS[1]`, `[0]` and
+ * `[2]`, which meant a pickup ring was the exact hue of somebody's curve —
+ * three of the eight players could never tell at a glance whether a ring was a
+ * powerup or a bit of trail.
+ */
 export const SCOPE_COLORS: Record<PowerupScope, string> = {
-  self: '#32d74b',
-  others: '#ff453a',
-  all: '#0a84ff',
+  self: '#3ddc84',
+  others: '#ff5252',
+  all: '#7b6cf6',
 };
 
 export function rollNextPickupDelay(rng: RngState): number {

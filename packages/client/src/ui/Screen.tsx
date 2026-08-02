@@ -1,8 +1,17 @@
 import type { JSX, ReactNode, RefObject } from 'react';
 import { colorFor, type RoomView } from '@mg/shared';
 import { useStore } from '../store';
+import { useT } from '../strings';
 import { socket } from '../net/socket';
 import { Button } from './Button';
+import { VoiceBar } from './VoiceBar';
+import { useHasTouch } from './useTouchControls';
+import {
+  enterFullscreen,
+  fullscreenSupported,
+  useIsFullscreen,
+  useToggleFullscreen,
+} from './useFullscreen';
 
 interface Props {
   room: RoomView;
@@ -12,6 +21,13 @@ interface Props {
   hud: ReactNode;
   /** Per-game touch controls, overlaid on the arena. */
   controls?: ReactNode;
+  /**
+   * Whether this game's arena is paper rather than the dark screen. Only affects
+   * the letterbox bars either side of it — the canvas paints its own background,
+   * but the bars are the bezel's, and a cream arena in a black frame reads as a
+   * mistake.
+   */
+  paperArena?: boolean;
 }
 
 /**
@@ -19,12 +35,23 @@ interface Props {
  * bezel. The dark screen inside a cream room is the whole conceit — it is the
  * television in הסלון.
  */
-export function Screen({ room, mySeat, canvasRef, hud, controls }: Props): JSX.Element {
+export function Screen({
+  room,
+  mySeat,
+  canvasRef,
+  hud,
+  controls,
+  paperArena = false,
+}: Props): JSX.Element {
   const countdown = useStore((s) => s.hud.countdown);
   const round = useStore((s) => s.hud.round);
   const phase = useStore((s) => s.hud.phase);
   const winnerSeat = useStore((s) => s.matchWinnerSeat);
   const playerId = useStore((s) => s.playerId);
+  const t = useT();
+  const hasTouch = useHasTouch();
+  const fullscreen = useIsFullscreen();
+  const toggleFullscreen = useToggleFullscreen();
 
   const isHost = room.players.find((p) => p.id === playerId)?.isHost ?? false;
   const spectating = mySeat < 0;
@@ -33,16 +60,37 @@ export function Screen({ room, mySeat, canvasRef, hud, controls }: Props): JSX.E
     <main className="play">
       <aside className="rail">
         <div className="rail__head">
-          <span className="rail__round">Round {round || 1}</span>
+          <span className="rail__round">{t.round(round || 1)}</span>
         </div>
         <div className="rail__list">{hud}</div>
+        <VoiceBar compact />
+        {hasTouch && fullscreenSupported() && (
+          <button
+            type="button"
+            className="fullscreenbtn"
+            onClick={toggleFullscreen}
+            aria-label={fullscreen ? t.exitFullscreen : t.enterFullscreen}
+            title={fullscreen ? t.exitFullscreen : t.enterFullscreen}
+          >
+            {fullscreen ? '⤡' : '⛶'}
+          </button>
+        )}
         <NetBadge />
       </aside>
 
-      <div className="screenbox">
+      <div
+        className={`screenbox${paperArena ? ' screenbox--paper' : ''}`}
+        // The first touch of the arena is the gesture fullscreen needs, and it
+        // is one the player was making anyway. Capture phase so it still fires
+        // when the pad swallows the event, and it is a no-op everywhere the API
+        // is missing or already satisfied.
+        onPointerDownCapture={hasTouch ? () => void enterFullscreen() : undefined}
+      >
         <canvas ref={canvasRef} className="screenbox__canvas" />
 
         {controls}
+
+        <p className="rotatehint">{t.rotateHint}</p>
 
         {countdown > 0 && (
           <div className="overlay overlay--pass">
@@ -52,18 +100,14 @@ export function Screen({ room, mySeat, canvasRef, hud, controls }: Props): JSX.E
 
         {phase === 'roundOver' && room.phase === 'playing' && (
           <div className="overlay overlay--pass">
-            <div className="roundbanner">Round over</div>
+            <div className="roundbanner">{t.roundOver}</div>
           </div>
         )}
 
         {spectating && (
           <div className="spectating">
-            <strong>Watching</strong>
-            <span>
-              {isHost
-                ? 'You have no seat in this match — “Restart match” in the menu deals you in.'
-                : 'You have no seat in this match. The host can deal you in with “Restart match”, or you’re in the next one.'}
-            </span>
+            <strong>{t.watching}</strong>
+            <span>{isHost ? t.watchingHost : t.watchingGuest}</span>
           </div>
         )}
 
@@ -90,6 +134,7 @@ export function Screen({ room, mySeat, canvasRef, hud, controls }: Props): JSX.E
  */
 function NetBadge(): JSX.Element | null {
   const net = useStore((s) => s.net);
+  const t = useT();
   if (net.rtt <= 0) return null;
 
   const grade = net.delay > 130 ? 'bad' : net.delay > 80 ? 'ok' : 'good';
@@ -97,7 +142,10 @@ function NetBadge(): JSX.Element | null {
   return (
     <div
       className={`netbadge netbadge--${grade}`}
-      title={`Ping ${net.rtt}ms · jitter ${net.jitter}ms · others drawn ${net.delay}ms behind`}
+      title={t.netTitle(net.rtt, net.jitter, net.delay)}
+      // A numeric readout, not prose — it reads the same way round in both
+      // languages and mirrors into nonsense if left to inherit.
+      dir="ltr"
     >
       <span className="netbadge__dot" />
       <span>{net.rtt}ms</span>
@@ -112,19 +160,20 @@ function NetBadge(): JSX.Element | null {
  */
 function Paused({ room, spectating }: { room: RoomView; spectating: boolean }): JSX.Element {
   const pauser = room.players.find((p) => p.id === room.pausedBy);
+  const t = useT();
 
   return (
     <div className="overlay overlay--solid">
       <div className="sticker overlay__card paused__card">
-        <p className="eyebrow">Paused</p>
+        <p className="eyebrow">{t.paused}</p>
         <h2 className="overlay__title">
-          {pauser ? `${pauser.name} stopped the game` : 'The game is stopped'}
+          {pauser ? t.pausedBy(pauser.name) : t.pausedByNobody}
         </h2>
         {spectating ? (
-          <p className="muted center">Waiting for a player to resume…</p>
+          <p className="muted center">{t.waitingForPlayer}</p>
         ) : (
           <Button variant="primary" size="lg" full onClick={() => socket.setPaused(false)}>
-            Resume
+            {t.resume}
           </Button>
         )}
       </div>
@@ -143,6 +192,7 @@ function MatchOver({
   winnerSeat: number | null;
   isHost: boolean;
 }): JSX.Element {
+  const t = useT();
   const standings = room.players
     .filter((p) => p.seat >= 0)
     .sort((a, b) => b.score - a.score || a.seat - b.seat);
@@ -151,9 +201,9 @@ function MatchOver({
   return (
     <div className="overlay overlay--solid">
       <div className="sticker overlay__card">
-        <p className="eyebrow">Match over</p>
+        <p className="eyebrow">{t.matchOver}</p>
         <h2 className="overlay__title" style={winner ? { color: colorFor(winner.colorIndex) } : undefined}>
-          {winner ? `${winner.name} wins` : 'Nobody wins'}
+          {winner ? t.winner(winner.name) : t.nobodyWins}
         </h2>
 
         <ol className="standings">
@@ -169,13 +219,13 @@ function MatchOver({
 
         {isHost ? (
           <Button variant="primary" size="lg" full onClick={() => socket.rematch()}>
-            Back to the lobby
+            {t.backToLobby}
           </Button>
         ) : (
-          <p className="muted center">Waiting for the host…</p>
+          <p className="muted center">{t.waitingForHost}</p>
         )}
         <Button variant="ghost" full onClick={() => socket.leave()}>
-          Leave room
+          {t.leaveRoom}
         </Button>
       </div>
     </div>

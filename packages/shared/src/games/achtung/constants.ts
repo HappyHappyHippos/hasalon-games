@@ -19,14 +19,20 @@ export const ARENA_HEIGHT = 700;
 // Movement
 // ---------------------------------------------------------------------------
 
-/** Units per second. One tick of travel is BASE_SPEED * DT ≈ 1.83 units. */
-export const BASE_SPEED = 110;
+/** Units per second. One tick of travel is BASE_SPEED * DT ≈ 2.03 units. */
+export const BASE_SPEED = 122;
 
-/** Radians per second. Turning circle radius = BASE_SPEED / BASE_TURN_RATE ≈ 38u. */
-export const BASE_TURN_RATE = 2.9;
+/**
+ * Radians per second. Turning circle radius = BASE_SPEED / BASE_TURN_RATE ≈ 38u.
+ *
+ * This has to move whenever BASE_SPEED does. Left where it was, a faster curve
+ * gets a *wider* turning circle and the game feels less responsive rather than
+ * more — the opposite of what raising the speed was for.
+ */
+export const BASE_TURN_RATE = 3.25;
 
-/** Half the line width. */
-export const BASE_RADIUS = 2.2;
+/** Half the line width, so a curve is 5.2 units across. */
+export const BASE_RADIUS = 2.6;
 
 // ---------------------------------------------------------------------------
 // Collision probing (see grid.ts)
@@ -57,8 +63,12 @@ export const SELF_GRACE_TICKS = 16;
 
 export const HOLE_MIN_GAP_TICKS = 45;
 export const HOLE_MAX_GAP_TICKS = 115;
-/** ~15 units of gap at base speed — comfortably wider than the line. */
-export const HOLE_DURATION_TICKS = 9;
+/**
+ * ~21 units of clear gap at base speed: four line widths, which is what it takes
+ * to thread one at an angle rather than only head-on. At nine ticks it was ~14,
+ * barely three widths, and threading a gap was mostly luck.
+ */
+export const HOLE_DURATION_TICKS = 12;
 /** No gap can start during the first moments of a round. */
 export const HOLE_FIRST_MIN_TICKS = 30;
 

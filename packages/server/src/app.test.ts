@@ -394,7 +394,16 @@ describe('match', () => {
     host!.send({ t: 'settings', settings: { targetScore: 1, winByTwo: false } });
     host!.send({ t: 'start' });
     await host!.next('matchStarted');
-    for (const client of clients) client.send({ t: 'input', i: 1 });
+
+    // Straight into a wall, not a full-rate turn. This test is about the
+    // rematch, so how the round ends only needs to be *fast and certain* — and
+    // a wall is the one death in this game that is both. Circling used to work
+    // because a tight loop closed onto its own trail almost immediately; with
+    // wider gaps a curve now often slips through its own line and keeps going,
+    // which pushed the worst case from about five seconds to seventeen, against
+    // a twenty-five second budget on a real socket. Driving straight lands
+    // between four and nine seconds across every seed.
+    for (const client of clients) client.send({ t: 'input', i: 0 });
     await host!.next('matchEnded', 25_000);
 
     host!.send({ t: 'rematch' });

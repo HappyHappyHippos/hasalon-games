@@ -1,8 +1,9 @@
 import type { JSX } from 'react';
-import { LEVELS, LEVEL_IDS, type GunMayhemConfig, type LevelId } from '@mg/shared/gunmayhem';
+import { LEVEL_IDS, type GunMayhemConfig, type LevelId } from '@mg/shared/gunmayhem';
 import type { GameConfig } from '@mg/shared';
 import { Segmented } from '../../ui/Segmented';
 import { Toggle } from '../../ui/Toggle';
+import { useT } from '../../strings';
 
 interface Props {
   settings: GameConfig;
@@ -11,44 +12,47 @@ interface Props {
   onChange: (patch: Record<string, unknown>) => void;
 }
 
-const LEVEL_OPTIONS: Array<{ value: LevelId | 'random'; label: string }> = [
-  ...LEVEL_IDS.map((id) => ({ value: id, label: LEVELS[id].name })),
-  { value: 'random' as const, label: 'Random' },
-];
-
 export function GunMayhemSettings({ settings, isHost, onChange }: Props): JSX.Element | null {
+  const t = useT();
   if (settings.game !== 'gunmayhem') return null;
   const config: GunMayhemConfig = settings;
+
+  // Stage names are translated by position rather than read off `LEVELS`: the
+  // level ids are the stable thing, the display names belong to the UI.
+  const levelOptions: Array<{ value: LevelId | 'random'; label: string }> = [
+    ...LEVEL_IDS.map((id, index) => ({ value: id, label: t.stageNames[index] ?? id })),
+    { value: 'random' as const, label: t.stageRandom },
+  ];
 
   return (
     <div className="settings">
       <Segmented
-        label="Stage"
+        label={t.setStage}
         value={config.levelId}
         disabled={!isHost}
-        options={LEVEL_OPTIONS}
+        options={levelOptions}
         onChange={(levelId) => onChange({ levelId })}
       />
       <Toggle
-        label="Weapon crates"
+        label={t.setWeaponCrates}
         checked={config.weaponsEnabled}
         disabled={!isHost}
         onChange={(weaponsEnabled) => onChange({ weaponsEnabled })}
       />
       <Toggle
-        label="Bombs"
+        label={t.setBombs}
         checked={config.bombsEnabled}
         disabled={!isHost}
         onChange={(bombsEnabled) => onChange({ bombsEnabled })}
       />
       <Toggle
-        label="Powerups"
+        label={t.setPowerups}
         checked={config.powerupsEnabled}
         disabled={!isHost}
         onChange={(powerupsEnabled) => onChange({ powerupsEnabled })}
       />
       <label className="setting">
-        <span>Lives each</span>
+        <span>{t.setLivesEach}</span>
         <input
           className="input input--number"
           type="number"
@@ -60,7 +64,7 @@ export function GunMayhemSettings({ settings, isHost, onChange }: Props): JSX.El
         />
       </label>
       <label className="setting">
-        <span>Rounds to win</span>
+        <span>{t.setRoundsToWin}</span>
         <input
           className="input input--number"
           type="number"

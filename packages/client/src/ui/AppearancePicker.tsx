@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
-import { FACES, FACE_NAMES, HATS, HAT_NAMES } from '@mg/shared';
+import { FACES, HATS } from '@mg/shared';
+import { useT } from '../strings';
 import { sfx } from '../audio';
 import { Avatar } from './Avatar';
 
@@ -15,6 +16,8 @@ interface Props {
  * exclusive, so there's no `taken` set — the whole room can wear crowns.
  */
 export function AppearancePicker({ colorIndex, hat, face, onChange }: Props): JSX.Element {
+  const t = useT();
+
   return (
     <div className="appearance">
       <div className="appearance__preview">
@@ -22,15 +25,15 @@ export function AppearancePicker({ colorIndex, hat, face, onChange }: Props): JS
       </div>
 
       <div className="appearance__rows">
-        <div className="appearance__row" role="radiogroup" aria-label="Your hat">
+        <div className="appearance__row" role="radiogroup" aria-label={t.yourHat}>
           {HATS.map((_, index) => (
             <button
               key={HATS[index]}
               type="button"
               role="radio"
               aria-checked={index === hat}
-              aria-label={HAT_NAMES[index]}
-              title={HAT_NAMES[index]}
+              aria-label={t.hatNames[index]}
+              title={t.hatNames[index]}
               className={`chip${index === hat ? ' chip--on' : ''}`}
               onClick={() => {
                 sfx.click();
@@ -42,15 +45,15 @@ export function AppearancePicker({ colorIndex, hat, face, onChange }: Props): JS
           ))}
         </div>
 
-        <div className="appearance__row" role="radiogroup" aria-label="Your face">
+        <div className="appearance__row" role="radiogroup" aria-label={t.yourFace}>
           {FACES.map((_, index) => (
             <button
               key={FACES[index]}
               type="button"
               role="radio"
               aria-checked={index === face}
-              aria-label={FACE_NAMES[index]}
-              title={FACE_NAMES[index]}
+              aria-label={t.faceNames[index]}
+              title={t.faceNames[index]}
               className={`chip${index === face ? ' chip--on' : ''}`}
               onClick={() => {
                 sfx.click();

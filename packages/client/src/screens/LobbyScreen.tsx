@@ -1,12 +1,15 @@
 import { useState, type JSX } from 'react';
 import { colorFor } from '@mg/shared';
 import { useStore } from '../store';
+import { useT } from '../strings';
 import { socket } from '../net/socket';
 import { AppearancePicker } from '../ui/AppearancePicker';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
 import { ColorPicker } from '../ui/ColorPicker';
 import { GamePicker } from '../ui/GamePicker';
+import { VoiceBar } from '../ui/VoiceBar';
+import { useVoice } from '../ui/useVoice';
 import { CLIENT_GAMES } from '../games/registry';
 
 export function LobbyScreen(): JSX.Element {
@@ -14,6 +17,8 @@ export function LobbyScreen(): JSX.Element {
   const playerId = useStore((s) => s.playerId);
   const identity = useStore((s) => s.identity);
   const setIdentity = useStore((s) => s.setIdentity);
+  const t = useT();
+  const speaking = new Set(useVoice().speaking);
   const [copied, setCopied] = useState(false);
 
   const me = room.players.find((p) => p.id === playerId);
@@ -37,7 +42,7 @@ export function LobbyScreen(): JSX.Element {
     } catch {
       // Clipboard blocked (insecure origin, permissions) — the code is on
       // screen anyway, so this is only a convenience.
-      window.prompt('Copy this link:', link);
+      window.prompt(t.copyThisLink, link);
     }
   };
 
@@ -46,16 +51,38 @@ export function LobbyScreen(): JSX.Element {
       <div className="lobby__inner">
         <header className="sticker lobby__head">
           <div>
-            <p className="eyebrow">Room code</p>
-            <p className="lobby__code">{room.code}</p>
+            <p className="eyebrow">{t.roomCode}</p>
+            <p className="lobby__code" dir="ltr">
+              {room.code}
+            </p>
           </div>
-          <Button onClick={() => void copyLink()}>{copied ? 'Copied!' : 'Copy invite'}</Button>
+          <Button onClick={() => void copyLink()}>{copied ? t.copied : t.copyInvite}</Button>
         </header>
+
+        {/* Directly under the code, above everything else. Being ready is the
+            only thing a guest has to do in here, and it used to be at the very
+            bottom of a page that scrolls on a phone. */}
+        <div className="sticker lobby__ready">
+          <Button
+            variant={me?.ready ? 'plain' : 'primary'}
+            size="lg"
+            full
+            tone={me?.ready ? undefined : colorFor(identity.colorIndex)}
+            onClick={() => socket.setReady(!me?.ready)}
+          >
+            {me?.ready ? t.notReady : t.ready}
+          </Button>
+          {!canStart && (
+            <p className="muted small center">
+              {t.readyCount(readyPlayers.length, game.meta.minPlayers, game.meta.name)}
+            </p>
+          )}
+        </div>
 
         <div className="lobby__grid">
           <section className="sticker lobby__people">
             <h2 className="eyebrow">
-              Who&apos;s here <span className="muted">({room.players.length}/8)</span>
+              {t.whosHere} <span className="muted">{t.outOf(room.players.length, 8)}</span>
             </h2>
             <ul className="people">
               {room.players.map((player) => (
@@ -63,7 +90,7 @@ export function LobbyScreen(): JSX.Element {
                   key={player.id}
                   className={`person${player.ready ? ' person--ready' : ''}${
                     player.connected ? '' : ' person--away'
-                  }`}
+                  }${speaking.has(player.id) ? ' person--speaking' : ''}`}
                 >
                   <Avatar
                     colorIndex={player.colorIndex}
@@ -73,14 +100,23 @@ export function LobbyScreen(): JSX.Element {
                     size={38}
                     away={!player.connected}
                   />
+                  {player.voice && (
+                    <span className="person__mic" aria-hidden="true">
+                      🎤
+                    </span>
+                  )}
                   <div className="person__text">
                     <span className="person__name">
                       {player.name}
-                      {player.id === playerId ? ' (you)' : ''}
+                      {player.id === playerId ? t.suffixYou : ''}
                     </span>
                     <span className="person__meta">
-                      {player.isHost ? 'host · ' : ''}
-                      {!player.connected ? 'away' : player.ready ? 'ready' : 'not ready'}
+                      {player.isHost ? t.metaHost : ''}
+                      {!player.connected
+                        ? t.metaAway
+                        : player.ready
+                          ? t.metaReady
+                          : t.metaNotReady}
                     </span>
                   </div>
                   <span
@@ -94,7 +130,7 @@ export function LobbyScreen(): JSX.Element {
               ))}
             </ul>
 
-            <h2 className="eyebrow">Your colour</h2>
+            <h2 className="eyebrow">{t.yourColour}</h2>
             <ColorPicker
               value={identity.colorIndex}
               taken={takenColors}
@@ -104,7 +140,10 @@ export function LobbyScreen(): JSX.Element {
               }}
             />
 
-            <h2 className="eyebrow">Your look</h2>
+            <h2 className="eyebrow">{t.voiceHeading}</h2>
+            <VoiceBar />
+
+            <h2 className="eyebrow">{t.yourLook}</h2>
             <AppearancePicker
               colorIndex={identity.colorIndex}
               hat={identity.hat}
@@ -117,9 +156,7 @@ export function LobbyScreen(): JSX.Element {
           </section>
 
           <section className="lobby__choice">
-            <h2 className="eyebrow">
-              {isHost ? 'Pick a game' : 'The host is picking'}
-            </h2>
+            <h2 className="eyebrow">{isHost ? t.pickAGame : t.hostIsPicking}</h2>
             <GamePicker
               selected={room.gameId}
               canChoose={isHost}
@@ -127,58 +164,43 @@ export function LobbyScreen(): JSX.Element {
             />
 
             <div className="sticker lobby__settings">
-              <h2 className="eyebrow">{game.meta.name} settings</h2>
+              <h2 className="eyebrow">{t.gameSettings(game.meta.name)}</h2>
               <SettingsPanel
                 settings={room.settings}
                 isHost={isHost}
                 playerCount={room.players.length}
                 onChange={(patch) => socket.setSettings(patch)}
               />
-              <p className="muted small controls-hint">{game.meta.controls}</p>
+              <p className="muted small controls-hint">{t.games[room.gameId].controls}</p>
             </div>
           </section>
         </div>
 
         <footer className="sticker lobby__foot">
-          <Button
-            variant={me?.ready ? 'plain' : 'primary'}
-            size="lg"
-            tone={me?.ready ? undefined : colorFor(identity.colorIndex)}
-            onClick={() => socket.setReady(!me?.ready)}
-          >
-            {me?.ready ? "Wait, I'm not ready" : "I'm ready"}
-          </Button>
-
           {isHost && (
             <Button
               variant="primary"
               size="lg"
               disabled={!canStart}
               onClick={() => socket.start()}
-              title={canStart ? undefined : `Need ${game.meta.minPlayers} ready players`}
+              title={canStart ? undefined : t.needReady(game.meta.minPlayers)}
             >
-              Start {game.meta.name}
+              {t.startGame(game.meta.name)}
             </Button>
           )}
 
           <Button variant="ghost" onClick={() => socket.leave()}>
-            Leave
+            {t.leave}
           </Button>
         </footer>
 
-        <div className="lobby__notes">
-          {!canStart && (
+        {overflow > 0 && (
+          <div className="lobby__notes">
             <p className="muted small center">
-              {readyPlayers.length} ready — {game.meta.name} needs at least {game.meta.minPlayers}.
+              {t.overflow(game.meta.name, game.meta.maxPlayers, overflow)}
             </p>
-          )}
-          {overflow > 0 && (
-            <p className="muted small center">
-              {game.meta.name} seats {game.meta.maxPlayers}. {overflow}{' '}
-              {overflow === 1 ? 'person watches' : 'people watch'} this match and rotate in next.
-            </p>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </main>
   );

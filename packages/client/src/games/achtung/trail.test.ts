@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { DT } from '@mg/shared';
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
+  BASE_SPEED,
+  SPEED_UP_MUL,
   createState,
   defaultConfig,
   makeSnapshot,
@@ -9,6 +12,18 @@ import {
   type AchtungState,
 } from '@mg/shared/achtung';
 import { trailOps, type Point, type TrailOp } from './trail';
+
+/**
+ * The longest one tick of travel can ever be: base speed, the fastest speed
+ * preset, and a speed powerup on top.
+ *
+ * Derived rather than written down. This used to be a hardcoded 4, which had
+ * roughly a unit of headroom over the real figure and no explanation — exactly
+ * the kind of constant a later speed bump sails straight past without anyone
+ * noticing the test stopped meaning anything.
+ */
+const FASTEST_PRESET = 1.25;
+const MAX_TICK_TRAVEL = BASE_SPEED * FASTEST_PRESET * SPEED_UP_MUL * DT;
 
 describe('trailOps', () => {
   it('starts a stroke with a dot when the pen was up', () => {
@@ -101,7 +116,7 @@ describe('what is drawn matches what the server stamped', () => {
     for (const op of drawn) {
       if (op.type !== 'line') continue;
       const distance = Math.hypot(op.to.x - op.from.x, op.to.y - op.from.y);
-      expect(distance).toBeLessThan(4 + maxStep);
+      expect(distance).toBeLessThan(MAX_TICK_TRAVEL + maxStep);
     }
   });
 });

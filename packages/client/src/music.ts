@@ -12,10 +12,22 @@
  */
 
 import type { GameId } from '@mg/shared';
+import { sfx } from './audio';
 
 const SETTINGS_KEY = 'mg.music';
 
 export type MusicTrack = 'lobby' | GameId;
+
+/**
+ * ── ASSET SWAP POINT ────────────────────────────────────────────────────────
+ * The intro sting, played once under the logo splash at the start of a match.
+ *
+ * Nothing here yet: drop a file at this path in `packages/client/public/music/`
+ * and it plays instead of the synthesised placeholder, no code change. Keep it
+ * under `INTRO_MS` (see `ui/Intro.tsx`) so it does not outlive the animation.
+ * ────────────────────────────────────────────────────────────────────────────
+ */
+export const INTRO_STING_URL = '/music/intro.ogg';
 
 /**
  * Two of these are Ogg because the machine they were fetched on had no ffmpeg.
@@ -110,6 +122,47 @@ class Music {
 
     this.start(player);
     this.crossfade(player, previous);
+  }
+
+  /**
+   * The one-shot under the intro splash.
+   *
+   * Tries the real file and falls back to the synthesised fanfare if it is not
+   * there — which is the normal case until an asset is dropped in, so the
+   * fallback is the feature rather than the error path. `canplaythrough` is what
+   * decides: a missing file fires `error` instead, and neither fires twice.
+   *
+   * Follows the SFX mute rather than the music mute. It is a flourish attached
+   * to an animation, not part of the bed, and someone who turned the music off
+   * to hear their family talk still expects the game to make noises.
+   */
+  sting(): void {
+    if (sfx.isMuted) return;
+
+    const player = new Audio(INTRO_STING_URL);
+    player.volume = Math.max(0.25, this.settings.volume);
+    let settled = false;
+
+    const fallback = (): void => {
+      if (settled) return;
+      settled = true;
+      release(player);
+      sfx.fanfare();
+    };
+
+    player.oncanplaythrough = () => {
+      if (settled) return;
+      settled = true;
+      // A rejected play() here means no gesture yet. The splash only ever
+      // follows a button press, so this is close to unreachable — but silence
+      // beats an unhandled rejection either way.
+      void player.play().catch(fallback);
+    };
+    player.onerror = fallback;
+
+    // Belt and braces: if neither event fires (a proxy holding the request
+    // open, say), the placeholder still plays rather than nothing at all.
+    window.setTimeout(fallback, 600);
   }
 
   stopAll(): void {

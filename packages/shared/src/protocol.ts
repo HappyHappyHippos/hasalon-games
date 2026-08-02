@@ -2,7 +2,7 @@ import type { GameConfig, GameId, GameSnapshot } from './gameModule';
 import type { RoomView } from './room';
 
 /** Bump when the message shapes change so stale tabs fail loudly, not weirdly. */
-export const PROTOCOL_VERSION = 8;
+export const PROTOCOL_VERSION = 9;
 
 export const WS_PATH = '/ws';
 
@@ -43,6 +43,17 @@ export type ClientMessage =
   | { t: 'leave' }
   /** Game-specific payload; the game module validates it. */
   | { t: 'input'; i: unknown }
+  /**
+   * WebRTC signalling, addressed to one other player in the same room.
+   *
+   * `data` is opaque: offers, answers and ICE candidates, forwarded verbatim.
+   * The server is a post box and never a participant — it does not parse this,
+   * and no audio ever passes through it. Anything not in the sender's own room
+   * is dropped without comment.
+   */
+  | { t: 'rtc'; to: string; data: unknown }
+  /** "My microphone is live" / "I muted myself", for everyone else's UI. */
+  | { t: 'voice'; on: boolean }
   | { t: 'ping'; ts: number };
 
 // ---------------------------------------------------------------------------
@@ -75,10 +86,22 @@ export type ServerMessage =
    * its original `st`, because it genuinely is that old.
    */
   | { t: 'snapshot'; snap: GameSnapshot; st: number }
-  /** Seats are assigned; `room.players[].seat` carries who is where. */
-  | { t: 'matchStarted'; room: RoomView }
+  /**
+   * Seats are assigned; `room.players[].seat` carries who is where.
+   *
+   * `resumed` marks the *catch-up* copy — the one sent to a single socket that
+   * joined or reconnected into a match already in progress, rather than the
+   * broadcast that goes out when a match actually begins. The two were
+   * indistinguishable on the wire, so anything keying off "a match started"
+   * also fired on every reconnect, and the client's reconnect backoff is half a
+   * second. The intro splash is the first thing that cared; it will not be the
+   * last.
+   */
+  | { t: 'matchStarted'; room: RoomView; resumed?: true }
   | { t: 'matchEnded'; room: RoomView; winnerSeat: number | null }
   | { t: 'error'; code: ErrorCode; message: string }
+  /** A relayed `rtc` payload, stamped with who actually sent it. */
+  | { t: 'rtc'; from: string; data: unknown }
   | { t: 'pong'; ts: number; serverTime: number };
 
 // ---------------------------------------------------------------------------

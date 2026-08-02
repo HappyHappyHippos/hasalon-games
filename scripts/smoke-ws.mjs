@@ -385,6 +385,40 @@ console.log(
     `arrived ${arrival.mean.toFixed(1)}±${arrival.sd.toFixed(1)}ms (target 33.3ms)`,
 );
 
+// ---------------------------------------------------------------------------
+// Voice signalling
+// ---------------------------------------------------------------------------
+
+/**
+ * The relay, not the audio.
+ *
+ * Voice chat is peer-to-peer: no media passes through the server, so there is
+ * nothing here that a deploy could break except the post box. That part *is*
+ * worth checking against a real host, because it is a new message type going
+ * through the same proxy that has broken WebSockets before, and because the
+ * failure is silent — everyone's microphone appears to work and nobody can hear
+ * anyone.
+ *
+ * Whether two particular players can actually reach each other is a NAT
+ * question this cannot answer. The mesh is STUN-only, so a player behind
+ * carrier-grade NAT — the norm on Israeli mobile — may still fail; the client
+ * reports that per-peer on screen.
+ */
+host.send(JSON.stringify({ t: 'rtc', to: welcomeGuest.playerId, data: { kind: 'probe' } }));
+const relayed = await next(reloaded, (m) => m.t === 'rtc', 'rtc relayed to the guest');
+if (relayed.from !== welcome.playerId) {
+  throw new Error(`rtc arrived stamped from ${relayed.from}, expected the host`);
+}
+console.log('  ✓ webrtc signalling relayed between the two clients');
+
+reloaded.send(JSON.stringify({ t: 'voice', on: true }));
+await next(
+  host,
+  (m) => m.t === 'room' && m.room.players.some((p) => p.id === welcomeGuest.playerId && p.voice),
+  'host sees the guest unmute',
+);
+console.log('  ✓ mic state broadcast to the room');
+
 host.send(JSON.stringify({ t: 'leave' }));
 reloaded.send(JSON.stringify({ t: 'leave' }));
 host.close();

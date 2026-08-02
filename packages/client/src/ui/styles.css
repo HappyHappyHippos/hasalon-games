@@ -21,10 +21,35 @@ body {
   background-image:
     radial-gradient(circle at 1px 1px, rgba(20, 17, 15, 0.07) 1px, transparent 0);
   background-size: 22px 22px;
+
+  /* Long-pressing anything on iOS used to raise the text loupe and the
+     copy/define callout — over the game pad, over the scores, over the lobby
+     buttons. These three were scoped to `.screenbox` only, which covered the
+     arena and nothing else. They belong on the whole app.
+
+     Inputs opt back in below: a name field you cannot select text in is its own
+     bug, and the room code is the one thing people actually want to copy. */
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea,
+.lobby__code,
+.selectable {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
 }
 
 .app {
+  /* `dvh` first for phones, where the browser toolbar collapses on scroll and
+     `100vh` is consequently taller than the window ever is; the `%` line before
+     it is what anything without `dvh` support falls back to. */
   height: 100%;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   position: relative;
@@ -96,6 +121,8 @@ strong,
   padding: 11px 18px;
   min-height: 46px;
   cursor: pointer;
+  /* Skips the 300ms wait for a possible double-tap-to-zoom. */
+  touch-action: manipulation;
   transition: transform 60ms ease, box-shadow 60ms ease, filter 120ms ease;
 }
 
@@ -202,7 +229,7 @@ strong,
 .input--number {
   width: 84px;
   padding: 8px 10px;
-  text-align: right;
+  text-align: end;
 }
 
 .setting {
@@ -263,7 +290,7 @@ strong,
 .toggle__knob {
   position: absolute;
   top: 2px;
-  left: 2px;
+  inset-inline-start: 2px;
   width: 24px;
   height: 24px;
   border-radius: 50%;
@@ -271,8 +298,14 @@ strong,
   border: 2.5px solid var(--ink);
   transition: transform 140ms cubic-bezier(0.3, 1.4, 0.5, 1);
 }
+/* `translateX` is physical, so the direction of travel has to be flipped by
+   hand — `inset-inline-start` moved the resting position but nothing tells a
+   transform which way "on" is. */
 .toggle__track--on .toggle__knob {
   transform: translateX(26px);
+}
+[dir='rtl'] .toggle__track--on .toggle__knob {
+  transform: translateX(-26px);
 }
 
 /* Segmented */
@@ -289,7 +322,7 @@ strong,
   flex: 1;
   background: var(--surface);
   border: none;
-  border-right: var(--outline-width) solid var(--ink);
+  border-inline-end: var(--outline-width) solid var(--ink);
   color: var(--ink-soft);
   cursor: pointer;
   font-family: var(--font-display);
@@ -299,7 +332,7 @@ strong,
   min-height: 42px;
 }
 .segmented__item:last-child {
-  border-right: none;
+  border-inline-end: none;
 }
 .segmented__item--on {
   background: var(--yellow);
@@ -491,6 +524,54 @@ strong,
   color: var(--ink-soft);
 }
 
+/* Reviews. Same tilted-sticker trick as the game minicards — a wall of pull
+   quotes taped to the fridge, not a testimonials carousel. */
+
+.home__reviews {
+  display: flex;
+  flex-direction: column;
+}
+
+.reviews {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.review {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  margin: 0;
+}
+
+.review__quote {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+/* The quotes are always Hebrew, so the marks have to sit on the correct side
+   of them regardless of which way the page is pointing. */
+.review__quote::before {
+  content: '„';
+}
+.review__quote::after {
+  content: '”';
+}
+
+.review__by {
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  font-style: normal;
+}
+.review__by::before {
+  content: '— ';
+}
+
 /* ==========================================================================
    Lobby
    ========================================================================== */
@@ -525,6 +606,15 @@ strong,
   font-weight: 800;
   letter-spacing: 0.16em;
   line-height: 1;
+}
+
+/* The one thing a guest has to do in the lobby, directly under the code and
+   above the fold on a phone. Teal so it reads as the action bar it replaced. */
+.lobby__ready {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: var(--teal);
 }
 
 .lobby__grid {
@@ -647,7 +737,7 @@ strong,
   display: flex;
   flex-direction: column;
   gap: 12px;
-  text-align: left;
+  text-align: start;
 
   background: var(--surface);
   border: var(--outline);
@@ -723,7 +813,7 @@ strong,
 .gamecard__badge {
   position: absolute;
   top: -12px;
-  right: -8px;
+  inset-inline-end: -8px;
   background: var(--ink);
   color: var(--paper);
   font-family: var(--font-display);
@@ -874,7 +964,7 @@ strong,
   font-weight: 800;
   font-size: 16px;
   min-width: 20px;
-  text-align: right;
+  text-align: end;
 }
 
 /* The television */
@@ -894,24 +984,125 @@ strong,
   -webkit-touch-callout: none;
 }
 
+/* Achtung's arena is paper rather than the dark screen, so its letterbox bars
+   have to be too. The ink bezel stays either way — it is the television. */
+.screenbox--paper {
+  background: var(--paper);
+}
+
 .screenbox__canvas {
   display: block;
   width: 100%;
   height: 100%;
 }
 
+/* ==========================================================================
+   Voice chat
+   ========================================================================== */
+
+.voicebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.voicebar--compact {
+  flex-direction: row;
+  pointer-events: auto;
+}
+
+.voicebtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 9px 14px;
+  min-height: 42px;
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.voicebtn--live {
+  background: var(--green);
+}
+.voicebtn:active {
+  transform: translate(var(--lift-sm), var(--lift-sm));
+  box-shadow: 0 0 0 var(--ink);
+}
+
+.voicebar--compact .voicebtn {
+  min-height: 34px;
+  padding: 4px 10px;
+  background: rgba(253, 246, 232, 0.82);
+}
+.voicebar--compact .voicebtn--live {
+  background: var(--green);
+}
+
+/* Speaking. A ring rather than a colour change, so it reads at a glance without
+   competing with ready/away, which already own this row's colours. */
+.person__mic {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.person--speaking {
+  box-shadow: 0 0 0 3px var(--green);
+  border-radius: 12px;
+}
+
+.hudcard--speaking {
+  box-shadow: 0 0 0 3px var(--green);
+}
+
+/* Only rendered on a touch device, and only where the API exists — so it never
+   shows up on a desktop, where the browser already has F11. */
+.fullscreenbtn {
+  align-self: flex-start;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border: 2px solid var(--ink);
+  border-radius: 10px;
+  background: rgba(253, 246, 232, 0.82);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  touch-action: manipulation;
+}
+
 /* Achtung's whole-arena touch surface */
 
+/* Off by default: a spectator has nothing to steer, and someone on a keyboard
+   should be able to click through to the arena. `--on` is set by React from
+   `useShowTouchControls`, never by a media query. */
 .touchsurface {
   position: absolute;
   inset: 0;
+  pointer-events: none;
+  touch-action: none;
+}
+
+.touchsurface--on {
+  pointer-events: auto;
 }
 
 .touchsurface__hint {
   position: absolute;
   bottom: 14px;
   font-size: 22px;
-  color: rgba(255, 255, 255, 0.16);
+  /* Ink, not white — the arena underneath is paper now. */
+  color: rgba(20, 17, 15, 0.18);
   display: none;
 }
 .touchsurface__hint--left {
@@ -954,42 +1145,61 @@ strong,
   text-shadow: none;
 }
 
+/* Left thumb: move and jump. Right thumb: shoot and bomb.
+ *
+ * Jump used to live bottom-right under the shooting thumb, which meant every
+ * jump-and-shoot needed one thumb to do two things. It sits above the arrows
+ * now — the three movement inputs under one thumb, the two weapons under the
+ * other.
+ *
+ * These stay physical `left`/`right` in RTL. A player pressing ◀ expects the
+ * button on the left of the screen; the interface language has no opinion about
+ * which way the character walks. */
+
+/* Everything is offset by the safe area as well as its own margin. `index.html`
+   has asked for `viewport-fit=cover` since forever and nothing consumed it, so
+   on a notched phone held in landscape the outermost buttons sat under the
+   notch or the home indicator. */
 .pad__btn--left {
-  left: 14px;
-  bottom: 20px;
+  left: calc(14px + env(safe-area-inset-left));
+  bottom: calc(20px + env(safe-area-inset-bottom));
   width: 76px;
   height: 76px;
 }
 .pad__btn--right {
-  left: 100px;
-  bottom: 20px;
+  left: calc(100px + env(safe-area-inset-left));
+  bottom: calc(20px + env(safe-area-inset-bottom));
   width: 76px;
   height: 76px;
 }
-.pad__btn--down {
-  left: 57px;
-  bottom: 104px;
-  width: 62px;
-  height: 54px;
-}
 .pad__btn--jump {
-  right: 14px;
-  bottom: 20px;
+  left: calc(24px + env(safe-area-inset-left));
+  bottom: calc(106px + env(safe-area-inset-bottom));
+  width: 128px;
+  height: 66px;
+  border-radius: 999px;
+  font-size: 16px;
+}
+/* Drop-through is the rarest of the movement inputs, so it takes the awkward
+   corner rather than any of the other three. */
+.pad__btn--down {
+  left: calc(160px + env(safe-area-inset-left));
+  bottom: calc(112px + env(safe-area-inset-bottom));
+  width: 56px;
+  height: 50px;
+}
+.pad__btn--shoot {
+  right: calc(14px + env(safe-area-inset-right));
+  bottom: calc(20px + env(safe-area-inset-bottom));
   width: 92px;
   height: 92px;
   font-size: 16px;
 }
-.pad__btn--shoot {
-  right: 112px;
-  bottom: 34px;
-  width: 78px;
-  height: 78px;
-}
 .pad__btn--bomb {
-  right: 24px;
-  bottom: 122px;
-  width: 68px;
-  height: 60px;
+  right: calc(112px + env(safe-area-inset-right));
+  bottom: calc(34px + env(safe-area-inset-bottom));
+  width: 72px;
+  height: 72px;
   font-size: 13px;
 }
 
@@ -1124,6 +1334,160 @@ strong,
 }
 
 /* ==========================================================================
+   Intro splash
+   ==========================================================================
+
+   Sits over everything for three seconds at the start of a match, exactly
+   covering the countdown nobody can act during. Everything is transform and
+   opacity, and every shadow is hard — see the note in tokens.css. */
+
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  background: var(--paper);
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(20, 17, 15, 0.07) 1px, transparent 0);
+  background-size: 22px 22px;
+  animation: intro-out 380ms ease-in 2620ms both;
+}
+
+.intro--leaving {
+  pointer-events: none;
+}
+
+.intro__stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+}
+
+/* Drops in, overshoots, squashes on landing, settles. */
+.intro__couch {
+  animation: intro-drop 900ms cubic-bezier(0.34, 1.3, 0.5, 1) both;
+  transform-origin: 50% 100%;
+  filter: drop-shadow(6px 6px 0 var(--ink));
+}
+
+.intro__couch .couch {
+  width: min(46vw, 260px);
+  height: auto;
+}
+
+.intro__word {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(48px, 13vw, 96px);
+  line-height: 1;
+  color: var(--ink);
+  animation: intro-stamp 420ms cubic-bezier(0.2, 1.6, 0.4, 1) 780ms both;
+}
+
+/* Three accent shapes flung out on the couch's landing. */
+.intro__pop {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  animation: intro-pop 700ms cubic-bezier(0.2, 1.4, 0.4, 1) 720ms both;
+}
+.intro__pop--1 {
+  background: var(--red);
+  top: 4%;
+  left: -12%;
+  --pop-x: -46px;
+  --pop-y: -34px;
+}
+.intro__pop--2 {
+  background: var(--teal);
+  top: -6%;
+  right: -14%;
+  border-radius: 6px;
+  --pop-x: 52px;
+  --pop-y: -28px;
+}
+.intro__pop--3 {
+  background: var(--yellow);
+  top: 34%;
+  right: -20%;
+  --pop-x: 40px;
+  --pop-y: 30px;
+}
+
+@keyframes intro-drop {
+  0% {
+    transform: translateY(-70vh) scale(1, 1.12);
+    opacity: 0;
+  }
+  55% {
+    transform: translateY(0) scale(1, 1);
+    opacity: 1;
+  }
+  68% {
+    transform: translateY(0) scale(1.14, 0.82);
+  }
+  82% {
+    transform: translateY(0) scale(0.96, 1.05);
+  }
+  100% {
+    transform: translateY(0) scale(1, 1);
+  }
+}
+
+@keyframes intro-stamp {
+  0% {
+    transform: scale(2.4) rotate(-7deg);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+@keyframes intro-pop {
+  0% {
+    transform: translate(0, 0) scale(0);
+    opacity: 0;
+  }
+  40% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--pop-x), var(--pop-y)) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes intro-out {
+  to {
+    opacity: 0;
+  }
+}
+
+/* Reduced motion gets the beat and none of the choreography: the mark appears,
+   holds briefly, and fades. Nothing moves. */
+.intro--reduced {
+  animation: intro-out 200ms linear 200ms both;
+}
+.intro--reduced .intro__couch,
+.intro--reduced .intro__word,
+.intro--reduced .intro__pop {
+  animation: none;
+}
+.intro--reduced .intro__pop {
+  transform: translate(var(--pop-x), var(--pop-y));
+}
+
+/* ==========================================================================
    Toast & mute
    ========================================================================== */
 
@@ -1180,7 +1544,7 @@ strong,
 
 .options {
   position: fixed;
-  right: 12px;
+  inset-inline-end: 12px;
   bottom: 12px;
   z-index: 15;
   width: 42px;
@@ -1203,6 +1567,20 @@ strong,
 }
 .app--playing .options:hover {
   opacity: 1;
+}
+
+/* Bottom-right is where the shooting thumb lives, and the gear was sitting
+   exactly on top of the biggest button on the pad — the 92px one. Mid-match on
+   a phone it moves to the top corner, where nothing else is. */
+@media (max-width: 760px), (max-height: 560px) {
+  .app--playing .options {
+    top: calc(6px + env(safe-area-inset-top));
+    bottom: auto;
+    inset-inline-end: calc(8px + env(safe-area-inset-right));
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
 }
 
 /* The panel is anchored to the window, not to the arena bezel like the
@@ -1261,7 +1639,7 @@ strong,
 
 .rules {
   margin: 0;
-  padding-left: 20px;
+  padding-inline-start: 20px;
   display: flex;
   flex-direction: column;
   gap: 7px;
@@ -1369,10 +1747,11 @@ strong,
    Touch & small screens
    ========================================================================== */
 
-@media (hover: none) and (pointer: coarse) {
-  .touchsurface__hint {
-    display: block;
-  }
+/* Shown whenever the surface is live, which is a React decision — this used to
+   be a `(hover: none) and (pointer: coarse)` media query, so on an Android phone
+   with "Desktop site" on the hints vanished while the steering still worked. */
+.touchsurface--on .touchsurface__hint {
+  display: block;
 }
 
 /* A landscape phone is barely 350px tall inside the bezel. The pad has to shrink
@@ -1385,33 +1764,34 @@ strong,
   .pad__btn--right {
     width: 62px;
     height: 62px;
-    bottom: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
   }
   .pad__btn--right {
-    left: 82px;
-  }
-  .pad__btn--down {
-    width: 52px;
-    height: 44px;
-    left: 47px;
-    bottom: 78px;
+    left: calc(82px + env(safe-area-inset-left));
   }
   .pad__btn--jump {
-    width: 74px;
-    height: 74px;
-    bottom: 12px;
+    width: 108px;
+    height: 54px;
+    left: calc(18px + env(safe-area-inset-left));
+    bottom: calc(80px + env(safe-area-inset-bottom));
     font-size: 14px;
   }
+  .pad__btn--down {
+    width: 48px;
+    height: 42px;
+    left: calc(134px + env(safe-area-inset-left));
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
   .pad__btn--shoot {
-    width: 64px;
-    height: 64px;
-    right: 94px;
-    bottom: 22px;
+    width: 74px;
+    height: 74px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
   }
   .pad__btn--bomb {
-    width: 58px;
-    height: 50px;
-    bottom: 92px;
+    width: 60px;
+    height: 60px;
+    right: calc(94px + env(safe-area-inset-right));
+    bottom: calc(22px + env(safe-area-inset-bottom));
     font-size: 11px;
   }
 }
@@ -1422,45 +1802,113 @@ strong,
   }
 }
 
-@media (max-width: 760px) {
+/* ==========================================================================
+   The phone
+   ==========================================================================
+
+   A phone in landscape has around 350–390px of usable height, and the arenas
+   are 16:9 and 10:7. Every pixel the chrome takes off the top is multiplied by
+   the letterbox: the canvas can only get as wide as its height allows.
+
+   The rail used to be a strip stacked *above* the canvas — between the page
+   padding, the gap, the rail's border and padding, and the screen's 6px bezel
+   that was ~100px, a quarter of the screen, before the aspect ratio had its
+   turn. So on a phone the arena goes full bleed and the scores float on top of
+   it instead.
+
+   Note the `max-height` arm. A phone held the way you actually play — landscape
+   — is *wide*: an iPhone 14 is 844x390, comfortably past a 760px width
+   breakpoint, so a width-only query gives a landscape phone the full desktop
+   side rail and leaves the arena 592px across on an 844px screen. Height is the
+   dimension that is actually scarce, and on a 16:9 arena it is the one that
+   decides the width too. */
+@media (max-width: 760px), (max-height: 560px) {
   .play {
+    position: relative;
     flex-direction: column;
-    padding: 8px;
-    gap: 8px;
+    padding: 0;
+    gap: 0;
   }
 
+  .screenbox {
+    position: absolute;
+    inset: 0;
+    border-width: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* Floating, and transparent to touches except on the cards themselves —
+     otherwise the top-left corner of the arena stops steering. */
   .rail {
-    width: 100%;
+    position: absolute;
+    z-index: 4;
+    top: calc(6px + env(safe-area-inset-top));
+    inset-inline-start: calc(8px + env(safe-area-inset-left));
+    /* Stops short of the options gear, which takes this corner mid-match. */
+    inset-inline-end: calc(52px + env(safe-area-inset-right));
+    width: auto;
     flex-direction: row;
     align-items: center;
-    gap: 10px;
-    padding: 7px 10px;
-    overflow-x: auto;
-    overflow-y: hidden;
+    gap: 8px;
+    padding: 0;
+    background: none;
+    border: none;
+    box-shadow: none;
+    overflow: visible;
+    pointer-events: none;
   }
 
   .rail__head {
     flex: none;
   }
 
+  .rail__round {
+    font-size: 13px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(253, 246, 232, 0.82);
+    border: 2px solid var(--ink);
+  }
+
   .rail__list {
     flex-direction: row;
-    gap: 7px;
+    gap: 6px;
+    flex-wrap: wrap;
   }
 
   .hudcard {
-    padding: 4px 7px;
+    padding: 3px 7px;
     gap: 6px;
+    /* Translucent so the arena still reads underneath, opaque enough that a
+       curve passing behind a card does not make the score unreadable. */
+    background: rgba(253, 246, 232, 0.82);
+    border-width: 2px;
+    pointer-events: auto;
   }
 
   .hudcard__name {
-    max-width: 68px;
+    max-width: 60px;
   }
 
   .hudcard__right {
     font-size: 10px;
   }
 
+  /* Opposite corner from the scores, out of the way of both thumbs. */
+  .netbadge {
+    position: absolute;
+    top: 0;
+    inset-inline-end: 0;
+    margin: 0;
+    background: rgba(253, 246, 232, 0.82);
+    pointer-events: auto;
+  }
+}
+
+/* Everything below is about a *narrow* screen rather than a short one — a wide
+   laptop window that happens to be 500px tall should not get a shrunken logo. */
+@media (max-width: 760px) {
   .logo__word {
     font-size: 42px;
   }
@@ -1480,18 +1928,33 @@ strong,
   }
 }
 
-/* Landscape is strongly preferred: the arenas are wide. */
+/* Landscape is strongly preferred: the arenas are wide.
+
+   The text used to be a CSS `content` string, which cannot be translated and
+   cannot be read by a screen reader. It is a real element now (`Screen.tsx`),
+   and this only decides when it is visible. */
+.rotatehint {
+  display: none;
+}
+
 @media (max-width: 900px) and (orientation: portrait) and (hover: none) {
-  .play::before {
-    content: 'Turn your phone sideways';
+  .rotatehint {
+    position: absolute;
+    z-index: 6;
     display: block;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    white-space: nowrap;
     text-align: center;
-    padding: 5px;
-    font-size: 12px;
-    font-weight: 700;
+    padding: 8px 18px;
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 800;
     background: var(--yellow);
     border: 2.5px solid var(--ink);
     border-radius: 999px;
+    box-shadow: var(--shadow);
   }
 }
 

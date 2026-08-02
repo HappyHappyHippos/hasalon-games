@@ -1,6 +1,7 @@
 import type { CSSProperties, JSX } from 'react';
 import type { GameId } from '@mg/shared';
 import { CLIENT_GAMES, CLIENT_GAME_IDS } from '../games/registry';
+import { useT } from '../strings';
 import { sfx } from '../audio';
 
 interface Props {
@@ -14,8 +15,10 @@ interface Props {
  * The host chooses; everyone else watches the choice land.
  */
 export function GamePicker({ selected, canChoose, onSelect }: Props): JSX.Element {
+  const t = useT();
+
   return (
-    <div className="picker" role="radiogroup" aria-label="Choose a game">
+    <div className="picker" role="radiogroup" aria-label={t.chooseAGame}>
       {CLIENT_GAME_IDS.map((id, index) => {
         const game = CLIENT_GAMES[id];
         const isSelected = id === selected;
@@ -46,12 +49,12 @@ export function GamePicker({ selected, canChoose, onSelect }: Props): JSX.Elemen
             </span>
             <span className="gamecard__body">
               <span className="gamecard__name">{game.meta.name}</span>
-              <span className="gamecard__tagline">{game.meta.tagline}</span>
+              <span className="gamecard__tagline">{t.games[id].tagline}</span>
               <span className="gamecard__players">
-                {game.meta.minPlayers}–{game.meta.maxPlayers} players
+                {t.playersRange(game.meta.minPlayers, game.meta.maxPlayers)}
               </span>
             </span>
-            {isSelected && <span className="gamecard__badge">Playing this</span>}
+            {isSelected && <span className="gamecard__badge">{t.playingThis}</span>}
           </button>
         );
       })}

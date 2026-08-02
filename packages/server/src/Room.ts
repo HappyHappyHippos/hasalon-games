@@ -50,6 +50,8 @@ export interface RoomPlayer {
   /** Seat in the running match, or -1 if not playing this match. */
   seat: number;
   score: number;
+  /** Their mic is live. Display only — the audio is peer-to-peer. */
+  voice: boolean;
 }
 
 export class Room {
@@ -148,6 +150,7 @@ export class Room {
       disconnectedAt: null,
       seat: -1,
       score: 0,
+      voice: false,
     };
 
     this.players.push(player);
@@ -275,6 +278,27 @@ export class Room {
   setReady(player: RoomPlayer, ready: boolean): void {
     player.ready = ready;
     this.broadcastRoom();
+  }
+
+  setVoice(player: RoomPlayer, on: boolean): void {
+    if (player.voice === on) return;
+    player.voice = on;
+    this.broadcastRoom();
+  }
+
+  /**
+   * Forward one WebRTC signalling payload to one other player in this room.
+   *
+   * The server is a post box. It does not read `data`, it cannot read the audio
+   * (there isn't any here — the media is peer-to-peer), and it will not deliver
+   * to anyone outside this room. An unknown or disconnected target is dropped
+   * silently: signalling races are routine, and an error for each one would be
+   * noise rather than information.
+   */
+  relayRtc(from: RoomPlayer, to: string, data: unknown): void {
+    const target = this.players.find((p) => p.id === to);
+    if (!target || target.id === from.id) return;
+    target.client?.send({ t: 'rtc', from: from.id, data });
   }
 
   setGame(gameId: GameId): void {
@@ -575,6 +599,7 @@ export class Room {
           isHost: p.id === this.hostId,
           seat: p.seat,
           score: p.score,
+          voice: p.voice,
         }),
       ),
     };
@@ -599,7 +624,9 @@ export class Room {
    */
   sendCatchUp(player: RoomPlayer): void {
     if (this.phase !== 'playing' || !this.instance) return;
-    player.client?.send({ t: 'matchStarted', room: this.view() });
+    // `resumed` so the client can tell this from the broadcast that goes out
+    // when a match really starts — see the note on the message in protocol.ts.
+    player.client?.send({ t: 'matchStarted', room: this.view(), resumed: true });
 
     // Sent with the timestamp it was *authored*, not the one it is forwarded
     // at. It is genuinely up to a snapshot interval old, and the joiner builds
