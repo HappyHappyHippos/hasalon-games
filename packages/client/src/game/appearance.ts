@@ -192,7 +192,7 @@ export function drawHat(
  */
 export function drawFace(ctx: CanvasRenderingContext2D, faceIndex: number, r: number): void {
   const face = faceFor(faceIndex);
-  const eye = Math.max(1.4, r * 0.22);
+  const eye = Math.max(1.4, r * 0.16); // Slightly smaller for 3/4 view
 
   ctx.save();
   ctx.fillStyle = INK;
@@ -200,49 +200,79 @@ export function drawFace(ctx: CanvasRenderingContext2D, faceIndex: number, r: nu
   ctx.lineWidth = Math.max(1.2, r * 0.14);
   ctx.lineCap = 'round';
 
+  const leftEye = r * 0.15;
+  const rightEye = r * 0.65;
+  const eyeY = -r * 0.05;
+
   switch (face) {
     case 'default':
-      dot(ctx, r * 0.45, 0, eye);
+      // Skribbl neutral: ._.
+      dot(ctx, leftEye, eyeY, eye);
+      dot(ctx, rightEye, eyeY, eye);
+      ctx.beginPath();
+      ctx.moveTo(r * 0.3, r * 0.25);
+      ctx.lineTo(r * 0.5, r * 0.25);
+      ctx.stroke();
       break;
 
     case 'happy':
-      // Two upward arcs — the ^^ face.
-      for (const x of [r * 0.15, r * 0.7]) {
-        ctx.beginPath();
-        ctx.arc(x, r * 0.05, eye, Math.PI * 1.15, Math.PI * 1.85);
-        ctx.stroke();
-      }
+      // Skribbl happy: dots and big smile
+      dot(ctx, leftEye, eyeY, eye);
+      dot(ctx, rightEye, eyeY, eye);
+      ctx.beginPath();
+      ctx.arc(r * 0.4, r * 0.15, r * 0.25, 0, Math.PI);
+      ctx.stroke();
       break;
 
     case 'angry':
-      dot(ctx, r * 0.45, r * 0.1, eye);
-      // A brow slanting in over it.
+      // Angry brows and frown
+      dot(ctx, leftEye, eyeY, eye);
+      dot(ctx, rightEye, eyeY, eye);
       ctx.beginPath();
-      ctx.moveTo(r * 0.05, -r * 0.35);
-      ctx.lineTo(r * 0.8, -r * 0.05);
+      ctx.moveTo(leftEye - eye, eyeY - r * 0.2);
+      ctx.lineTo(leftEye + eye, eyeY - r * 0.05);
+      ctx.moveTo(rightEye + eye, eyeY - r * 0.2);
+      ctx.lineTo(rightEye - eye, eyeY - r * 0.05);
+      ctx.moveTo(r * 0.25, r * 0.4);
+      ctx.quadraticCurveTo(r * 0.4, r * 0.25, r * 0.55, r * 0.4);
       ctx.stroke();
       break;
 
     case 'shades':
-      ctx.fillRect(-r * 0.15, -r * 0.2, r * 1.05, r * 0.42);
+      // Sunglasses with a straight mouth
+      ctx.fillRect(-r * 0.05, eyeY - r * 0.15, r * 0.95, r * 0.35);
+      ctx.beginPath();
+      ctx.moveTo(r * 0.3, r * 0.35);
+      ctx.lineTo(r * 0.5, r * 0.35);
+      ctx.stroke();
       break;
 
     case 'dead':
-      // Two little crosses.
-      for (const x of [r * 0.15, r * 0.7]) {
+      // x_x
+      for (const x of [leftEye, rightEye]) {
         ctx.beginPath();
-        ctx.moveTo(x - eye, -eye);
-        ctx.lineTo(x + eye, eye);
-        ctx.moveTo(x + eye, -eye);
-        ctx.lineTo(x - eye, eye);
+        ctx.moveTo(x - eye, eyeY - eye);
+        ctx.lineTo(x + eye, eyeY + eye);
+        ctx.moveTo(x + eye, eyeY - eye);
+        ctx.lineTo(x - eye, eyeY + eye);
         ctx.stroke();
       }
+      ctx.beginPath();
+      ctx.moveTo(r * 0.3, r * 0.35);
+      ctx.lineTo(r * 0.5, r * 0.35);
+      ctx.stroke();
       break;
 
     case 'cyclops':
-      dot(ctx, r * 0.35, 0, eye * 1.7);
+      // One big eye and a mouth
+      dot(ctx, r * 0.4, eyeY, eye * 1.7);
       ctx.fillStyle = '#fdf6e8';
-      dot(ctx, r * 0.45, -eye * 0.4, eye * 0.5);
+      dot(ctx, r * 0.45, eyeY - eye * 0.4, eye * 0.5);
+      ctx.strokeStyle = INK;
+      ctx.beginPath();
+      ctx.moveTo(r * 0.3, r * 0.4);
+      ctx.lineTo(r * 0.5, r * 0.4);
+      ctx.stroke();
       break;
   }
 
