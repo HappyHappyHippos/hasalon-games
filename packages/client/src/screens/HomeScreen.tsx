@@ -47,14 +47,8 @@ export function HomeScreen(): JSX.Element {
         </header>
 
         <div className="sticker home__card">
-          <div className="home__you">
-            <AppearancePicker
-              colorIndex={identity.colorIndex}
-              hat={identity.hat}
-              face={identity.face}
-              onChange={(patch) => setIdentity(patch)}
-            />
-            <label className="field">
+          <div className="home__you" style={{ justifyContent: 'center' }}>
+            <label className="field" style={{ flex: 1, maxWidth: '200px' }}>
               <span className="field__label">{t.yourName}</span>
               <input
                 className="input"
@@ -66,6 +60,12 @@ export function HomeScreen(): JSX.Element {
                 autoFocus
               />
             </label>
+            <AppearancePicker
+              colorIndex={identity.colorIndex}
+              hat={identity.hat}
+              face={identity.face}
+              onChange={(patch) => setIdentity(patch)}
+            />
           </div>
 
 
