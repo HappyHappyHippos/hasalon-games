@@ -47,7 +47,7 @@ export function HomeScreen(): JSX.Element {
         </header>
 
         <div className="sticker home__card">
-          <div className="home__you" style={{ justifyContent: 'center', alignItems: 'center', gap: '2rem' }}>
+          <div className="home__you" style={{ justifyContent: 'center', alignItems: 'center', gap: '2rem', flexWrap: 'wrap' }}>
             <label className="field" style={{ width: '180px', flex: 'none' }}>
               <span className="field__label" style={{ textAlign: 'center', display: 'block', width: '100%' }}>{t.yourName}</span>
               <input
