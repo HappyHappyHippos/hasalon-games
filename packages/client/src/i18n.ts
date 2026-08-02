@@ -115,6 +115,8 @@ const he = {
   voiceNoDevice: 'לא נמצא מיקרופון במכשיר הזה.',
   voiceUnsupported: 'הדפדפן הזה לא תומך בשיחות קוליות.',
   voiceConnecting: 'מתחברים…',
+  voiceConnected: 'מחובר',
+  voiceIosNote: 'באייפון: בדקו שהטלפון לא על שקט (המתג בצד), שהווליום מוגבר, ושהרשיתם לספארי להשתמש במיקרופון.',
   voiceFailed: (n: number) =>
     n === 1
       ? 'אין חיבור קולי לשחקן אחד — קורה בעיקר ברשת סלולרית.'
@@ -316,6 +318,8 @@ const en: Dict = {
   voiceNoDevice: 'No microphone found on this device.',
   voiceUnsupported: 'This browser does not support voice chat.',
   voiceConnecting: 'Connecting…',
+  voiceConnected: 'Connected',
+  voiceIosNote: 'On iPhone: make sure the physical silent switch is off, volume is up, and Safari has microphone permission.',
   voiceFailed: (n: number) =>
     n === 1
       ? "Couldn't reach 1 player's audio — usually a mobile network."

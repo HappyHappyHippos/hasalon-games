@@ -21,7 +21,8 @@ export const JUMP_ON = 0.5;
  * - A thumb resting near the line would chatter the bit on and off, and the sim
  *   jumps on the **rising** edge (`sim.ts`: `pendingPress & IN_JUMP`), so chatter
  *   is a burst of jumps rather than one.
- * - The held bit controls jump *height* (`physics.ts`: `jumpHeld`), so it has to
+ *   is a burst of jumps rather than one.
+ * - The held bit feeds the jetpack (`physics.ts`: `jumpHeld`), so it has to
  *   stay set for as long as the player means it to.
  *
  * Releasing well below the trigger also means the next jump costs a small dip
@@ -31,13 +32,18 @@ export const JUMP_OFF = 0.3;
 /** Downward deflection that drops through a one-way platform. */
 export const DROP_Y = 0.55;
 
+export const HOLD_REJUMP_MS = 500;
+export const REARM_RELEASE_MS = 50;
+
 export interface StickState {
   /** Latch for the jump Schmitt trigger. */
   jumpHeld: boolean;
+  /** When jump was first held in this continuous press. */
+  jumpHeldSince: number;
 }
 
 export function newStickState(): StickState {
-  return { jumpHeld: false };
+  return { jumpHeld: false, jumpHeldSince: 0 };
 }
 
 /**
@@ -48,7 +54,7 @@ export function newStickState(): StickState {
  * thumb still free to shoot. That combination is what the four-button pad could
  * not express.
  */
-export function stickToBits(vector: StickVector, state: StickState): number {
+export function stickToBits(vector: StickVector, state: StickState, now: number): number {
   let bits = 0;
 
   if (vector.x <= -LEAN_X) bits |= IN_LEFT;
@@ -56,13 +62,28 @@ export function stickToBits(vector: StickVector, state: StickState): number {
 
   // Up is negative y.
   if (state.jumpHeld) {
-    if (vector.y > -JUMP_OFF) state.jumpHeld = false;
+    if (vector.y > -JUMP_OFF) {
+      state.jumpHeld = false;
+      state.jumpHeldSince = 0;
+    }
   } else if (vector.y <= -JUMP_ON) {
     state.jumpHeld = true;
+    state.jumpHeldSince = now;
   }
 
-  if (state.jumpHeld) bits |= IN_JUMP;
-  else if (vector.y >= DROP_Y) bits |= IN_DOWN;
+  if (state.jumpHeld) {
+    // Timed re-arm: holding up past HOLD_REJUMP_MS drops the bit for REARM_RELEASE_MS,
+    // then raises it again to trigger another air jump.
+    const timeHeld = now - state.jumpHeldSince;
+    const period = HOLD_REJUMP_MS + REARM_RELEASE_MS;
+    const inPeriod = timeHeld % period;
+    
+    if (timeHeld < HOLD_REJUMP_MS || inPeriod < HOLD_REJUMP_MS) {
+      bits |= IN_JUMP;
+    }
+  } else if (vector.y >= DROP_Y) {
+    bits |= IN_DOWN;
+  }
 
   return bits;
 }

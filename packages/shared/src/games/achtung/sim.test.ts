@@ -226,7 +226,7 @@ describe('gaps', () => {
     player.trailBreaks.length = 0;
     player.lastStampTick = -1;
 
-    for (let i = 0; i < 30; i++) stepTick(state);
+    for (let i = 0; i < 40; i++) stepTick(state);
 
     // One break for the first stamp, one for resuming after the gap.
     expect(player.trailBreaks.length).toBe(2);

@@ -36,12 +36,18 @@ export function useVoiceMesh(): void {
 
   // The join order of `room.players` is stable, so a plain id list is enough to
   // tell "somebody joined or left" from "somebody changed their hat".
-  const ids = room?.players.map((p) => p.id).join(',') ?? '';
+  // We filter by `voice` to only sync peers who have their mic on (in the mesh).
+  const voices = room?.players.filter((p) => p.voice).map((p) => p.id).join(',') ?? '';
+  const status = useStore((s) => s.status);
 
   useEffect(() => {
-    if (!active || !playerId) return;
-    voice.syncPeers(ids ? ids.split(',') : []);
-  }, [ids, active, playerId]);
+    if (status === 'closed') {
+      voice.clearPeers();
+      return;
+    }
+    if (!active || !playerId || status !== 'open') return;
+    voice.syncPeers(voices ? voices.split(',') : []);
+  }, [voices, active, playerId, status]);
 
   // Leaving the room entirely closes the microphone; `socket.leave` covers the
   // deliberate exit, this covers being dropped.

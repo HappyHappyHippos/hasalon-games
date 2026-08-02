@@ -44,6 +44,14 @@
  */
 const FALLBACK_ICE_SERVERS: RTCIceServer[] = [
   { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+  {
+    urls: [
+      'turn:openrelay.metered.ca:443?transport=tcp',
+      'turns:openrelay.metered.ca:443?transport=tcp',
+    ],
+    username: 'openrelayproject',
+    credential: 'openrelayproject',
+  },
 ];
 
 /** Voice is optional; do not let a slow config fetch hold the microphone open. */
@@ -122,11 +130,11 @@ async function loadIceServers(): Promise<RTCIceServer[]> {
   }
 }
 
-function supported(): boolean {
+export function supported(): boolean {
   return (
-    typeof window !== 'undefined' &&
-    typeof RTCPeerConnection !== 'undefined' &&
-    !!navigator.mediaDevices?.getUserMedia
+    !!window.RTCPeerConnection &&
+    !!navigator.mediaDevices?.getUserMedia &&
+    !!(window.AudioContext || (window as any).webkitAudioContext)
   );
 }
 
@@ -210,7 +218,6 @@ class Voice {
     // there is nothing to connect to until it is answered.
     this.iceServers = await loadIceServers();
 
-    this.ctx = new AudioContext();
     this.localAnalyser = this.analyserFor(this.stream);
     this.startLevels();
 
@@ -238,6 +245,11 @@ class Voice {
     this.emit({ active: false, muted: false, peers: {}, speaking: [] });
   }
 
+  /** Drop all peers without closing the microphone. Used when socket reconnects. */
+  clearPeers(): void {
+    for (const id of [...this.peers.keys()]) this.dropPeer(id);
+  }
+
   /**
    * Mute by disabling the track rather than dropping the stream.
    *
@@ -248,7 +260,6 @@ class Voice {
     if (!this.stream) return;
     for (const track of this.stream.getAudioTracks()) track.enabled = !muted;
     this.emit({ muted });
-    this.announce?.(!muted);
   }
 
   // -------------------------------------------------------------------------
@@ -305,27 +316,34 @@ class Voice {
     pc.ontrack = (event) => {
       const [remote] = event.streams;
       if (!remote) return;
+      
+      // Handle repeat ontrack
+      const current = this.peers.get(id);
+      if (current && current.audio && current.audio.srcObject === remote) return;
+
       this.attach(id, remote);
     };
 
-    pc.onconnectionstatechange = () => {
+    const checkState = () => {
       const state = pc.connectionState;
-      if (state === 'connected') {
+      const iceState = pc.iceConnectionState;
+      if (state === 'connected' || iceState === 'connected' || iceState === 'completed') {
         this.setPeerStatus(id, 'connected');
         return;
       }
-      if (state === 'disconnected') {
+      if (state === 'disconnected' || iceState === 'disconnected') {
         this.setPeerStatus(id, 'connecting');
         return;
       }
-      if (state !== 'failed' && state !== 'closed') return;
+      if (state !== 'failed' && state !== 'closed' && iceState !== 'failed' && iceState !== 'closed') return;
 
       // One restart before giving up. The case this recovers is a relay
       // candidate that gathered after ICE had already run out of pairs to try
       // — common on cellular, where the TURN allocation is the slowest
       // candidate of the lot. A restart re-gathers with everything now known.
       const current = this.peers.get(id);
-      if (state === 'failed' && current && !current.restarted && pc.restartIce) {
+      const isFailed = state === 'failed' || iceState === 'failed';
+      if (isFailed && current && !current.restarted && pc.restartIce) {
         current.restarted = true;
         pc.restartIce();
         // Only the offering side may re-offer; the other end will answer the
@@ -338,6 +356,9 @@ class Voice {
       // going quiet — a peer that is silently absent is undiagnosable.
       this.setPeerStatus(id, 'failed');
     };
+
+    pc.onconnectionstatechange = checkState;
+    pc.oniceconnectionstatechange = checkState;
 
     if (weOffer) void this.offer(id, pc);
     return peer;
@@ -406,6 +427,13 @@ class Voice {
 
     try {
       if (message.kind === 'offer' && message.sdp) {
+        const collision = peer.pc.signalingState !== 'stable' || peer.weOffer;
+        if (collision) {
+          const polite = this.selfId > from;
+          if (!polite) return;
+          // Polite implies rolling back. In perfect negotiation, a polite peer receiving an offer
+          // will rollback automatically via setRemoteDescription on modern browsers.
+        }
         await peer.pc.setRemoteDescription(message.sdp);
         await this.flushCandidates(peer);
         const answer = await peer.pc.createAnswer();
@@ -450,15 +478,16 @@ class Voice {
     // iOS refuses playback until a gesture. Voice is always started by a tap, so
     // this rarely fires — but the retry is the same pattern `music.ts` uses, and
     // the failure mode without it is silence nobody can explain.
-    void peer.audio.play().catch(() => {
-      const retry = (): void => {
-        window.removeEventListener('pointerdown', retry);
-        void peer.audio?.play().catch(() => undefined);
-      };
-      window.addEventListener('pointerdown', retry, { once: true });
-    });
-
-    peer.analyser = this.analyserFor(remote);
+    const attemptPlay = () => {
+      void peer.audio?.play().catch(() => {
+        const retry = (): void => {
+          window.removeEventListener('pointerdown', retry);
+          attemptPlay();
+        };
+        window.addEventListener('pointerdown', retry, { once: true });
+      });
+    };
+    attemptPlay();
   }
 
   private analyserFor(stream: MediaStream): AnalyserNode | null {
@@ -509,10 +538,36 @@ class Voice {
       }
 
       for (const [id, peer] of this.peers) {
-        if (!peer.analyser) continue;
-        const level = rms(peer.analyser);
-        if (level > SPEAKING_ON) peer.loudAt = now;
-        if (level > SPEAKING_OFF && now - peer.loudAt < SPEAKING_HANG_MS) speaking.push(id);
+        let level = 0;
+        let hasSyncSource = false;
+        const receivers = peer.pc.getReceivers();
+        
+        for (const receiver of receivers) {
+          const sources = receiver.getSynchronizationSources?.() ?? [];
+          for (const source of sources) {
+            if (source.audioLevel !== undefined) {
+              level = Math.max(level, source.audioLevel);
+              hasSyncSource = true;
+            }
+          }
+        }
+        
+        if (hasSyncSource) {
+          if (level > SPEAKING_ON) peer.loudAt = now;
+        } else {
+          // Fallback to getStats for browsers where getSynchronizationSources lacks audioLevel
+          peer.pc.getStats().then(stats => {
+            let sLevel = 0;
+            stats.forEach(report => {
+              if (report.type === 'inbound-rtp' && report.kind === 'audio' && report.audioLevel !== undefined) {
+                sLevel = Math.max(sLevel, report.audioLevel);
+              }
+            });
+            if (sLevel > SPEAKING_ON) peer.loudAt = performance.now();
+          }).catch(() => undefined);
+        }
+
+        if (now - peer.loudAt < SPEAKING_HANG_MS) speaking.push(id);
       }
 
       // Only publish on a change, so the HUD is not re-rendered ten times a

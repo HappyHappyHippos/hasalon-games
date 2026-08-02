@@ -10,6 +10,7 @@ import {
   makeSnapshot,
   stepTick,
   type AchtungState,
+  SPEED_PRESETS,
 } from '@mg/shared/achtung';
 import { trailOps, type Point, type TrailOp } from './trail';
 
@@ -22,7 +23,7 @@ import { trailOps, type Point, type TrailOp } from './trail';
  * the kind of constant a later speed bump sails straight past without anyone
  * noticing the test stopped meaning anything.
  */
-const FASTEST_PRESET = 1.25;
+const FASTEST_PRESET = Math.max(...SPEED_PRESETS);
 const MAX_TICK_TRAVEL = BASE_SPEED * FASTEST_PRESET * SPEED_UP_MUL * DT;
 
 describe('trailOps', () => {

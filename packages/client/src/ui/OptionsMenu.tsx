@@ -8,6 +8,7 @@ import { music } from '../music';
 import { Button } from './Button';
 import { Toggle } from './Toggle';
 import { useHasTouch } from './useTouchControls';
+import { useVoice } from './useVoice';
 import type { TouchControlsMode } from '../store';
 import { LANGS, type Dict, type Lang } from '../i18n';
 
@@ -48,7 +49,10 @@ export function OptionsMenu(): JSX.Element {
   const lang = useStore((s) => s.lang);
   const setLang = useStore((s) => s.setLang);
   const hasTouch = useHasTouch();
+  const voice = useVoice();
   const t = useT();
+
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
   // Escape is the reflex for "get this off my screen", and it should also be
   // able to *open* the menu — that's the fast way to pause without hunting for
@@ -145,6 +149,25 @@ export function OptionsMenu(): JSX.Element {
               }}
             />
           </label>
+          
+          {voice.active && (
+            <div className="options__voice-debug">
+              {Object.entries(voice.peers).length > 0 && (
+                <ul style={{ margin: '1rem 0 0 0', padding: 0, listStyle: 'none', fontSize: '0.875rem' }}>
+                  {Object.entries(voice.peers).map(([id, status]) => {
+                    const peerName = room?.players.find((p) => p.id === id)?.name || id;
+                    return (
+                      <li key={id} style={{ display: 'flex', justifyContent: 'space-between', opacity: status === 'connected' ? 1 : 0.6 }}>
+                        <span>{peerName}</span>
+                        <span>{status === 'connected' ? t.voiceConnected : status === 'connecting' ? t.voiceConnecting : t.voiceFailed(1)}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+              {isIOS && <p className="muted small" style={{ marginTop: '1rem' }}>{t.voiceIosNote}</p>}
+            </div>
+          )}
         </section>
 
         <section className="options__section">

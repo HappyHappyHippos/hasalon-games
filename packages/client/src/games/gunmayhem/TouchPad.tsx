@@ -47,14 +47,14 @@ export function TouchPad({ onButton }: Props): JSX.Element {
     };
   }, [onButton]);
 
-  const onMove = useCallback(
+  const lastVector = useRef<StickVector | null>(null);
+
+  const applyVector = useCallback(
     (vector: StickVector) => {
-      const next = stickToBits(vector, stick.current);
+      const next = stickToBits(vector, stick.current, performance.now());
       const previous = stickBits.current;
       if (next === previous) return;
       stickBits.current = next;
-      // Diff rather than replace: `setButton` is a per-bit call, and pushing a
-      // bit that is already down would re-arm the tap latch it feeds.
       for (const bit of STICK_BITS) {
         const was = (previous & bit) !== 0;
         const is = (next & bit) !== 0;
@@ -62,6 +62,22 @@ export function TouchPad({ onButton }: Props): JSX.Element {
       }
     },
     [onButton],
+  );
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (lastVector.current) applyVector(lastVector.current);
+    }, 16);
+    return () => window.clearInterval(timer);
+  }, [applyVector]);
+
+  const onMove = useCallback(
+    (vector: StickVector) => {
+      if (vector.x === 0 && vector.y === 0) lastVector.current = null;
+      else lastVector.current = vector;
+      applyVector(vector);
+    },
+    [applyVector],
   );
 
   const press = (event: React.PointerEvent<HTMLButtonElement>, bit: number): void => {

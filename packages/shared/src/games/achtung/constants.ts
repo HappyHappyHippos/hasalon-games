@@ -31,8 +31,8 @@ export const BASE_SPEED = 122;
  */
 export const BASE_TURN_RATE = 3.25;
 
-/** Half the line width, so a curve is 5.2 units across. */
-export const BASE_RADIUS = 2.6;
+/** Half the line width, so a curve is 6.0 units across. */
+export const BASE_RADIUS = 3.0;
 
 // ---------------------------------------------------------------------------
 // Collision probing (see grid.ts)
@@ -64,11 +64,13 @@ export const SELF_GRACE_TICKS = 16;
 export const HOLE_MIN_GAP_TICKS = 45;
 export const HOLE_MAX_GAP_TICKS = 115;
 /**
- * ~21 units of clear gap at base speed: four line widths, which is what it takes
- * to thread one at an angle rather than only head-on. At nine ticks it was ~14,
- * barely three widths, and threading a gap was mostly luck.
+ * How many ticks a hole lasts.
+ *
+ * Gap is `HOLE_DURATION_TICKS * BASE_SPEED * DT` minus a line width at each
+ * end. At normal speed this is ~26.5 units of daylight between two curves of
+ * radius 3.0.
  */
-export const HOLE_DURATION_TICKS = 12;
+export const HOLE_DURATION_TICKS = 16;
 /** No gap can start during the first moments of a round. */
 export const HOLE_FIRST_MIN_TICKS = 30;
 
@@ -84,9 +86,9 @@ export const SPAWN_PLACEMENT_ATTEMPTS = 200;
 // Round & match flow
 // ---------------------------------------------------------------------------
 
-export const COUNTDOWN_TICKS = 3 * TICK_RATE;
+export const COUNTDOWN_TICKS = 2 * TICK_RATE;
 /** Pause after the last death so you can see how you died. */
-export const ROUND_OVER_TICKS = 3 * TICK_RATE;
+export const ROUND_OVER_TICKS = 1.5 * TICK_RATE;
 
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 8;

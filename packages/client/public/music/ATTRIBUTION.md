@@ -6,9 +6,9 @@ came from.
 
 | File | Track | Author | Licence | Source |
 | --- | --- | --- | --- | --- |
-| `lobby.ogg` | Simple menu/background music loop | polosik | CC0 | https://opengameart.org/content/simple-menubackground-music-loop |
-| `gunmayhem.mp3` | 8-bit — Jester Battle | HydiaGene | CC0 | https://opengameart.org/content/8-bit-jester-battle |
-| `achtung.ogg` | Cynic Battle Loop | Alex Smith (cynicmusic), looped by Ferk | CC0 | https://opengameart.org/content/cynic-battle-loop |
+| `lobby.ogg` | Menu Music | mrpoly | CC0 | https://opengameart.org/content/menu-music |
+| `gunmayhem.mp3` | Epic Boss Battle Music | Juhani Junkala | CC0 | https://opengameart.org/content/boss-battle-music |
+| `achtung.ogg` | QaziJamJam | Emma_MA | CC0 | https://opengameart.org/content/qazijamjam-orchestral-battle-theme |
 
 ## Swapping a track
 

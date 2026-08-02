@@ -3,9 +3,9 @@ import { IN_DOWN, IN_JUMP, IN_LEFT, IN_RIGHT } from '@mg/shared/gunmayhem';
 import { JUMP_OFF, JUMP_ON, newStickState, stickToBits } from './stickBits';
 
 /** Reads a whole gesture and returns the bits at each step. */
-function drag(points: Array<[number, number]>): number[] {
+function drag(points: Array<[number, number]>, now = 0): number[] {
   const state = newStickState();
-  return points.map(([x, y]) => stickToBits({ x, y }, state));
+  return points.map(([x, y]) => stickToBits({ x, y }, state, now));
 }
 
 describe('stickToBits', () => {
@@ -53,23 +53,35 @@ describe('stickToBits', () => {
 
   it('re-arms after a dip below the release line, without returning to centre', () => {
     const state = newStickState();
-    expect(stickToBits({ x: 0, y: -1 }, state) & IN_JUMP).toBeTruthy();
+    expect(stickToBits({ x: 0, y: -1 }, state, 0) & IN_JUMP).toBeTruthy();
     // A small dip, nowhere near centre.
-    expect(stickToBits({ x: 0, y: -0.2 }, state) & IN_JUMP).toBeFalsy();
+    expect(stickToBits({ x: 0, y: -0.2 }, state, 100) & IN_JUMP).toBeFalsy();
     // ...and the bit rises again, which is the edge the sim jumps on.
-    expect(stickToBits({ x: 0, y: -1 }, state) & IN_JUMP).toBeTruthy();
+    expect(stickToBits({ x: 0, y: -1 }, state, 200) & IN_JUMP).toBeTruthy();
+  });
+
+  it('re-arms on a timer when held', () => {
+    const state = newStickState();
+    // Press down
+    expect(stickToBits({ x: 0, y: -1 }, state, 0) & IN_JUMP).toBeTruthy();
+    // Held for 400ms: still outputting jump
+    expect(stickToBits({ x: 0, y: -1 }, state, 400) & IN_JUMP).toBeTruthy();
+    // Held past HOLD_REJUMP_MS (500ms): drops the bit
+    expect(stickToBits({ x: 0, y: -1 }, state, 525) & IN_JUMP).toBeFalsy();
+    // Past HOLD_REJUMP_MS + REARM_RELEASE_MS (550ms): raises the bit again
+    expect(stickToBits({ x: 0, y: -1 }, state, 560) & IN_JUMP).toBeTruthy();
   });
 
   it('never asks to jump and drop at once', () => {
     for (const y of [-1, -0.4, 0, 0.4, 1]) {
-      const bits = stickToBits({ x: 0, y }, newStickState());
+      const bits = stickToBits({ x: 0, y }, newStickState(), 0);
       expect((bits & IN_JUMP) !== 0 && (bits & IN_DOWN) !== 0).toBe(false);
     }
   });
 
   it('releases everything at centre', () => {
     const state = newStickState();
-    stickToBits({ x: -1, y: -1 }, state);
-    expect(stickToBits({ x: 0, y: 0 }, state)).toBe(0);
+    stickToBits({ x: -1, y: -1 }, state, 0);
+    expect(stickToBits({ x: 0, y: 0 }, state, 0)).toBe(0);
   });
 });

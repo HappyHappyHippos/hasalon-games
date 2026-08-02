@@ -111,8 +111,8 @@ export const RESPAWN_INVULN_TICKS = seconds(1.8);
 /** Height above the spawn platform that players drop in from. */
 export const RESPAWN_HEIGHT = 120;
 
-export const COUNTDOWN_TICKS = seconds(3);
-export const ROUND_OVER_TICKS = seconds(3);
+export const COUNTDOWN_TICKS = seconds(2);
+export const ROUND_OVER_TICKS = seconds(1.5);
 
 export const MIN_PLAYERS = 2;
 /** Four, like the original. More than this and levels stop being readable. */

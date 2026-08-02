@@ -12,7 +12,7 @@ import { music } from '../music';
  * countdown and every player spends the difference being shot at behind a
  * curtain.
  */
-export const INTRO_MS = 3000;
+export const INTRO_MS = 2000;
 
 /** Reduced motion gets the beat, not the choreography. */
 const REDUCED_MS = 400;
