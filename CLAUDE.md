@@ -245,3 +245,9 @@ array (see the HMR gotcha below before "fixing" that pattern).
   protocol. Extend that script rather than reaching for tabs again.
 - Rooms and everything in them are in-memory; there is no persistence layer
   to reach for and none should be added casually.
+
+## Recent Architecture & UI Changes
+- **Face Asset Pipeline**: Replaced programmatic face drawing paths with SVG assets (`public/faces/*.svg`). Added new expressive faces ('surprised', 'tired', 'wink').
+- **Character Customizer UI**: Redesigned the character appearance picker on the Home Screen and Lobby Screen to be a sleek, inline Carousel Picker that visually flanks the Avatar using left/right SVG chevrons, replacing the bulky grid of buttons and text labels. Handled RTL (Right-to-Left) layout logic to ensure arrows point correctly in Hebrew.
+- **Card Aesthetics**: Removed `transform: rotate` and tilt mechanics from game cards, minicards, reviews, stickers, and animations for a strictly aligned, cleaner UI layout.
+- **Avatar Anchoring**: Shifted the face assets down in `Avatar.tsx` to ensure hats sit above the eyes without clipping.
