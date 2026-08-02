@@ -33,9 +33,29 @@ export const HAT_NAMES = [
   'Beanie',
 ] as const;
 
-export const FACES = ['default', 'happy', 'angry', 'shades', 'dead', 'cyclops'] as const;
+export const FACES = [
+  'default',
+  'happy',
+  'angry',
+  'shades',
+  'dead',
+  'cyclops',
+  'surprised',
+  'tired',
+  'wink',
+] as const;
 
-export const FACE_NAMES = ['Normal', 'Happy', 'Angry', 'Shades', 'Dizzy', 'Cyclops'] as const;
+export const FACE_NAMES = [
+  'Normal',
+  'Happy',
+  'Angry',
+  'Shades',
+  'Dizzy',
+  'Cyclops',
+  'Surprised',
+  'Tired',
+  'Wink',
+] as const;
 
 export type Hat = (typeof HATS)[number];
 export type Face = (typeof FACES)[number];

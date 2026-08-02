@@ -1,68 +1,100 @@
 import type { JSX } from 'react';
-import { FACES, HATS } from '@mg/shared';
+import { FACES, HATS, PLAYER_COLORS } from '@mg/shared';
 import { useT } from '../strings';
 import { sfx } from '../audio';
 import { Avatar } from './Avatar';
+import { Button } from './Button';
 
 interface Props {
   colorIndex: number;
   hat: number;
   face: number;
-  onChange: (patch: { hat?: number; face?: number }) => void;
+  takenColors?: Set<number>;
+  onChange: (patch: { colorIndex?: number; hat?: number; face?: number }) => void;
 }
 
 /**
- * Hats and faces, next to the colour swatches. Unlike colours these aren't
- * exclusive, so there's no `taken` set — the whole room can wear crowns.
+ * A unified carousel picker for Color, Hat, and Face.
  */
-export function AppearancePicker({ colorIndex, hat, face, onChange }: Props): JSX.Element {
+export function AppearancePicker({ colorIndex, hat, face, takenColors, onChange }: Props): JSX.Element {
   const t = useT();
+
+  const handlePrevColor = () => {
+    sfx.click();
+    let prev = (colorIndex - 1 + PLAYER_COLORS.length) % PLAYER_COLORS.length;
+    while (takenColors?.has(prev) && prev !== colorIndex) {
+      prev = (prev - 1 + PLAYER_COLORS.length) % PLAYER_COLORS.length;
+    }
+    onChange({ colorIndex: prev });
+  };
+
+  const handleNextColor = () => {
+    sfx.click();
+    let next = (colorIndex + 1) % PLAYER_COLORS.length;
+    while (takenColors?.has(next) && next !== colorIndex) {
+      next = (next + 1) % PLAYER_COLORS.length;
+    }
+    onChange({ colorIndex: next });
+  };
+
+  const handlePrevHat = () => {
+    sfx.click();
+    onChange({ hat: (hat - 1 + HATS.length) % HATS.length });
+  };
+
+  const handleNextHat = () => {
+    sfx.click();
+    onChange({ hat: (hat + 1) % HATS.length });
+  };
+
+  const handlePrevFace = () => {
+    sfx.click();
+    onChange({ face: (face - 1 + FACES.length) % FACES.length });
+  };
+
+  const handleNextFace = () => {
+    sfx.click();
+    onChange({ face: (face + 1) % FACES.length });
+  };
+
+  const carouselStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    background: 'var(--surface-sunken)',
+    borderRadius: 'var(--radius-md)',
+    padding: '0.25rem',
+  };
+
+  const labelStyle = {
+    fontWeight: 600,
+    fontSize: '0.875rem',
+    color: 'var(--ink)',
+  };
 
   return (
     <div className="appearance">
-      <div className="appearance__preview">
-        <Avatar colorIndex={colorIndex} hat={hat} face={face} size={72} />
+      <div className="appearance__preview" style={{ display: 'flex', justifyContent: 'center', marginBottom: '1.5rem' }}>
+        <Avatar colorIndex={colorIndex} hat={hat} face={face} size={96} />
       </div>
 
-      <div className="appearance__rows">
-        <div className="appearance__row" role="radiogroup" aria-label={t.yourHat}>
-          {HATS.map((_, index) => (
-            <button
-              key={HATS[index]}
-              type="button"
-              role="radio"
-              aria-checked={index === hat}
-              aria-label={t.hatNames[index]}
-              title={t.hatNames[index]}
-              className={`chip${index === hat ? ' chip--on' : ''}`}
-              onClick={() => {
-                sfx.click();
-                onChange({ hat: index });
-              }}
-            >
-              <Avatar colorIndex={colorIndex} hat={index} face={face} size={30} />
-            </button>
-          ))}
+      <div className="appearance__rows" style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+        <div style={carouselStyle}>
+          <Button variant="ghost" size="sm" onClick={handlePrevColor}>&lt;</Button>
+          <span style={labelStyle}>{t.colorNames[colorIndex] ?? 'Color'}</span>
+          <Button variant="ghost" size="sm" onClick={handleNextColor}>&gt;</Button>
         </div>
 
-        <div className="appearance__row" role="radiogroup" aria-label={t.yourFace}>
-          {FACES.map((_, index) => (
-            <button
-              key={FACES[index]}
-              type="button"
-              role="radio"
-              aria-checked={index === face}
-              aria-label={t.faceNames[index]}
-              title={t.faceNames[index]}
-              className={`chip${index === face ? ' chip--on' : ''}`}
-              onClick={() => {
-                sfx.click();
-                onChange({ face: index });
-              }}
-            >
-              <Avatar colorIndex={colorIndex} hat={0} face={index} size={30} />
-            </button>
-          ))}
+        <div style={carouselStyle}>
+          <Button variant="ghost" size="sm" onClick={handlePrevHat}>&lt;</Button>
+          <span style={labelStyle}>{t.hatNames[hat] ?? 'Hat'}</span>
+          <Button variant="ghost" size="sm" onClick={handleNextHat}>&gt;</Button>
+        </div>
+
+        <div style={carouselStyle}>
+          <Button variant="ghost" size="sm" onClick={handlePrevFace}>&lt;</Button>
+          <span style={labelStyle}>{t.faceNames[face] ?? 'Face'}</span>
+          <Button variant="ghost" size="sm" onClick={handleNextFace}>&gt;</Button>
         </div>
       </div>
     </div>

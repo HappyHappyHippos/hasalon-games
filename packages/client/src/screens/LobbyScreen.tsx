@@ -110,16 +110,6 @@ export function LobbyScreen(): JSX.Element {
               ))}
             </ul>
 
-            <h2 className="eyebrow">{t.yourColour}</h2>
-            <ColorPicker
-              value={identity.colorIndex}
-              taken={takenColors}
-              onChange={(colorIndex) => {
-                setIdentity({ colorIndex });
-                socket.setIdentity({ colorIndex });
-              }}
-            />
-
             <h2 className="eyebrow">{t.voiceHeading}</h2>
             <VoiceBar />
 
@@ -145,6 +135,7 @@ export function LobbyScreen(): JSX.Element {
               colorIndex={identity.colorIndex}
               hat={identity.hat}
               face={identity.face}
+              takenColors={takenColors}
               onChange={(patch) => {
                 setIdentity(patch);
                 socket.setIdentity(patch);

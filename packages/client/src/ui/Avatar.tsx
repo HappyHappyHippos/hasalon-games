@@ -65,7 +65,7 @@ export function Avatar({
 }
 
 function FaceMark({ face }: { face: Face }): JSX.Element {
-  return <image href={`/faces/${face}.svg`} x="7" y="8" width="26" height="26" />;
+  return <image href={`/faces/${face}.svg`} x="7" y="11" width="26" height="26" />;
 }
 
 function HatMark({ hat, fill }: { hat: Hat; fill: string }): JSX.Element | null {
