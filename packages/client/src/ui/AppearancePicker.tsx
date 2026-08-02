@@ -71,17 +71,17 @@ export function AppearancePicker({ colorIndex, hat, face, takenColors, onChange 
 
   return (
     <div className="appearance" dir="ltr" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', marginRight: '-0.25rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', marginRight: '-1rem', zIndex: 1 }}>
         <Button variant="ghost" size="sm" onClick={handlePrevHat} style={{ padding: '0.25rem' }}><ChevronLeft /></Button>
         <Button variant="ghost" size="sm" onClick={handlePrevFace} style={{ padding: '0.25rem' }}><ChevronLeft /></Button>
         <Button variant="ghost" size="sm" onClick={handlePrevColor} style={{ padding: '0.25rem' }}><ChevronLeft /></Button>
       </div>
 
-      <div className="appearance__preview" style={{ flexShrink: 0 }}>
+      <div className="appearance__preview" style={{ flexShrink: 0, zIndex: 2 }}>
         <Avatar colorIndex={colorIndex} hat={hat} face={face} size={72} />
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', marginLeft: '-0.25rem' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', marginLeft: '-1rem', zIndex: 1 }}>
         <Button variant="ghost" size="sm" onClick={handleNextHat} style={{ padding: '0.25rem' }}><ChevronRight /></Button>
         <Button variant="ghost" size="sm" onClick={handleNextFace} style={{ padding: '0.25rem' }}><ChevronRight /></Button>
         <Button variant="ghost" size="sm" onClick={handleNextColor} style={{ padding: '0.25rem' }}><ChevronRight /></Button>
