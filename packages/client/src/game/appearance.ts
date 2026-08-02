@@ -12,6 +12,7 @@
  */
 
 import { faceFor, hatFor } from '@mg/shared';
+import { getImage } from './images';
 
 const INK = '#14110f';
 
@@ -192,165 +193,14 @@ export function drawHat(
  */
 export function drawFace(ctx: CanvasRenderingContext2D, faceIndex: number, r: number): void {
   const face = faceFor(faceIndex);
+  const img = getImage(`/faces/${face}.svg`);
 
-  ctx.save();
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  const leftEye = r * 0.15;
-  const rightEye = r * 0.65;
-  const eyeY = -r * 0.1;
-  const eyeW = Math.max(1.5, r * 0.12);
-  const eyeH = Math.max(2, r * 0.18);
-
-  switch (face) {
-    case 'default':
-      // Expressive eyes with catchlights
-      ctx.fillStyle = INK;
-      ctx.beginPath(); ctx.ellipse(leftEye, eyeY, eyeW, eyeH, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(rightEye, eyeY, eyeW, eyeH, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = 'white';
-      ctx.beginPath(); ctx.arc(leftEye + r*0.04, eyeY - r*0.04, r*0.05, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(rightEye + r*0.04, eyeY - r*0.04, r*0.05, 0, Math.PI*2); ctx.fill();
-      
-      // Smirk
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = Math.max(1.2, r * 0.1);
-      ctx.beginPath();
-      ctx.moveTo(r * 0.25, r * 0.25);
-      ctx.quadraticCurveTo(r * 0.45, r * 0.35, r * 0.65, r * 0.2);
-      ctx.stroke();
-      break;
-
-    case 'happy':
-      // ^^ eyes
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = Math.max(1.5, r * 0.12);
-      ctx.beginPath();
-      ctx.arc(leftEye, eyeY + r*0.05, eyeW*1.2, Math.PI*1.2, Math.PI*1.8);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(rightEye, eyeY + r*0.05, eyeW*1.2, Math.PI*1.2, Math.PI*1.8);
-      ctx.stroke();
-      
-      // Blush
-      ctx.fillStyle = '#ff7675';
-      ctx.globalAlpha = 0.7;
-      ctx.beginPath(); ctx.ellipse(leftEye - r*0.1, eyeY + r*0.15, eyeW, eyeW*0.6, 0, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.ellipse(rightEye + r*0.1, eyeY + r*0.15, eyeW, eyeW*0.6, 0, 0, Math.PI*2); ctx.fill();
-      ctx.globalAlpha = 1.0;
-      
-      // Big open mouth
-      ctx.fillStyle = INK;
-      ctx.beginPath();
-      ctx.moveTo(r * 0.25, r * 0.2);
-      ctx.quadraticCurveTo(r * 0.45, r * 0.5, r * 0.65, r * 0.2);
-      ctx.closePath();
-      ctx.fill();
-      break;
-
-    case 'angry':
-      // Intense eyes and brows
-      ctx.fillStyle = INK;
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = Math.max(1.5, r * 0.14);
-      ctx.beginPath(); ctx.arc(leftEye, eyeY + r*0.05, eyeW*0.8, 0, Math.PI*2); ctx.fill();
-      ctx.beginPath(); ctx.arc(rightEye, eyeY + r*0.05, eyeW*0.8, 0, Math.PI*2); ctx.fill();
-      
-      ctx.beginPath();
-      ctx.moveTo(leftEye - r*0.15, eyeY - r*0.15);
-      ctx.lineTo(leftEye + r*0.15, eyeY - r*0.02);
-      ctx.moveTo(rightEye + r*0.15, eyeY - r*0.15);
-      ctx.lineTo(rightEye - r*0.15, eyeY - r*0.02);
-      ctx.stroke();
-
-      // Jagged mouth
-      ctx.lineWidth = Math.max(1, r * 0.1);
-      ctx.beginPath();
-      ctx.moveTo(r * 0.25, r * 0.35);
-      ctx.lineTo(r * 0.35, r * 0.25);
-      ctx.lineTo(r * 0.45, r * 0.35);
-      ctx.lineTo(r * 0.55, r * 0.25);
-      ctx.lineTo(r * 0.65, r * 0.35);
-      ctx.stroke();
-      break;
-
-    case 'shades':
-      // Wrap-around shades
-      ctx.fillStyle = INK;
-      ctx.beginPath();
-      ctx.moveTo(-r * 0.1, eyeY - r*0.1);
-      ctx.quadraticCurveTo(r * 0.4, eyeY + r*0.05, r * 0.95, eyeY - r*0.1);
-      ctx.lineTo(r * 0.9, eyeY + r*0.25);
-      ctx.quadraticCurveTo(r * 0.4, eyeY + r*0.35, -r * 0.05, eyeY + r*0.25);
-      ctx.closePath();
-      ctx.fill();
-      
-      // Reflection
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-      ctx.lineWidth = r * 0.08;
-      ctx.beginPath();
-      ctx.moveTo(r * 0.1, eyeY);
-      ctx.lineTo(r * 0.25, eyeY);
-      ctx.moveTo(r * 0.35, eyeY);
-      ctx.lineTo(r * 0.8, eyeY);
-      ctx.stroke();
-      
-      // Smirk
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = Math.max(1.2, r * 0.1);
-      ctx.beginPath();
-      ctx.moveTo(r * 0.35, r * 0.35);
-      ctx.lineTo(r * 0.65, r * 0.35);
-      ctx.stroke();
-      break;
-
-    case 'dead':
-      // Swirly/X eyes
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = Math.max(1.2, r * 0.1);
-      for (const x of [leftEye, rightEye]) {
-        ctx.beginPath();
-        ctx.moveTo(x - eyeW, eyeY - eyeW); ctx.lineTo(x + eyeW, eyeY + eyeW);
-        ctx.moveTo(x + eyeW, eyeY - eyeW); ctx.lineTo(x - eyeW, eyeY + eyeW);
-        ctx.stroke();
-      }
-      
-      // Tongue
-      ctx.beginPath();
-      ctx.moveTo(r * 0.3, r * 0.25);
-      ctx.quadraticCurveTo(r * 0.45, r * 0.15, r * 0.6, r * 0.25);
-      ctx.stroke();
-      
-      ctx.fillStyle = '#ff7675';
-      ctx.beginPath();
-      ctx.ellipse(r * 0.45, r * 0.35, r * 0.08, r * 0.15, 0, 0, Math.PI * 2);
-      ctx.fill();
-      break;
-
-    case 'cyclops':
-      // Giant detailed eye
-      ctx.fillStyle = 'white';
-      ctx.beginPath(); ctx.arc(r * 0.4, eyeY, r * 0.35, 0, Math.PI * 2); ctx.fill();
-      ctx.strokeStyle = INK;
-      ctx.lineWidth = Math.max(1.5, r * 0.1);
-      ctx.beginPath(); ctx.arc(r * 0.4, eyeY, r * 0.35, 0, Math.PI * 2); ctx.stroke();
-      
-      // Iris and pupil
-      ctx.fillStyle = '#0984e3';
-      ctx.beginPath(); ctx.arc(r * 0.45, eyeY, r * 0.15, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = INK;
-      ctx.beginPath(); ctx.arc(r * 0.45, eyeY, r * 0.08, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = 'white';
-      ctx.beginPath(); ctx.arc(r * 0.48, eyeY - r * 0.05, r * 0.04, 0, Math.PI * 2); ctx.fill();
-      
-      // Open mouth
-      ctx.fillStyle = INK;
-      ctx.beginPath(); ctx.arc(r * 0.4, r * 0.35, r * 0.12, 0, Math.PI * 2); ctx.fill();
-      break;
+  if (img) {
+    // The SVGs are 100x100, and we want to fit them to the head size (radius r).
+    // The head's top-left in drawing coordinates is (-r, -r).
+    // Drawing it at width = r * 2, height = r * 2 covers the head perfectly.
+    ctx.drawImage(img, -r, -r, r * 2, r * 2);
   }
-
-  ctx.restore();
 }
 
 function dot(ctx: CanvasRenderingContext2D, x: number, y: number, radius: number): void {
