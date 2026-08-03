@@ -6,10 +6,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 הסלון (hasalon, "the living room") — a room-based multiplayer game site. Create
 a room, share the code/link, everyone joins, the host picks a game from a
-live game picker, then plays. No accounts, rooms live in memory only. Two
+live game picker, then plays. No accounts, rooms live in memory only. Three
 games ship today: **Gun Mayhem** (4-player platform fighter, the priority —
-this is the flagship game and should get the most care) and **Achtung die
-Kurve** (up to 8-player curve/Snake game).
+this is the flagship game and should get the most care), **Achtung die Kurve**
+(up to 8-player curve/Snake game) and **Skribbl** (up to 8-player draw and
+guess, Hebrew or English).
 
 npm workspaces monorepo. Git repo with `origin` at
 `github.com/HappyHappyHippos/hasalon-games` (public), deployed on Railway at
@@ -123,9 +124,10 @@ packages/client/   React UI, canvas renderers, prediction                (@mg/cl
 browser, `tsx` runs it under the dev server, esbuild bundles it into the
 server's single-file production output. `@mg/shared` root export is
 room/protocol/registry only; each game's internals are behind their own
-subpath (`@mg/shared/achtung`, `@mg/shared/gunmayhem`) because both games
-export same-named symbols (`createState`, `stepTick`, `ARENA_WIDTH`, ...) —
-importing from the root never gives you game internals.
+subpath (`@mg/shared/achtung`, `@mg/shared/gunmayhem`, `@mg/shared/skribbl`)
+because the games export same-named symbols (`createState`, `stepTick`,
+`defaultConfig`, ...) — importing from the root never gives you game internals.
+A new game needs its subpath added to `packages/shared/package.json`.
 
 ### The GameModule seam
 
@@ -135,15 +137,45 @@ This is the one abstraction the whole codebase hangs off. A game is a
 `GameInstance` is a closure over one match's state exposing
 `applyInput`/`stepTick`/`snapshot`/`status`/`scores`/`winnerSeat` — no
 generics, no switch-on-game-id anywhere outside the module itself.
-`packages/shared/src/registry.ts` (`GAMES`) is the whole catalogue; adding a
-third game means one new `games/<id>/module.ts` plus one line in `registry.ts`
-plus a matching entry in the **client** registry
-(`packages/client/src/games/registry.tsx`, maps id → box art / screen /
-settings panel component). `Room.ts` and the lobby never branch on which game
-is active — they only ever call through the interface.
+`packages/shared/src/registry.ts` (`GAMES`) is the whole catalogue. `Room.ts`
+and the lobby never branch on which game is active — they only ever call
+through the interface.
+
+**Adding a game touches more than the registry comment claims.** Write
+`games/<id>/` in shared, then let `tsc` find the rest — every one of these is a
+compile error until it is done, which is the point:
+
+- `gameModule.ts` — the `GameId` union, and the `GameConfig`/`GameSnapshot` unions
+- `registry.ts` — `GAMES` and `GAME_IDS`
+- `shared/package.json` — an `exports` subpath, so the client can import internals
+- `Room.ts` — `settingsByGame` is a hand-written literal, one key per game
+- `client/games/registry.tsx` — `CLIENT_GAMES` and `CLIENT_GAME_IDS`
+- `client/i18n.ts` — a `games.<id>` block in **both** dictionaries
+- `client/music.ts` — `MusicTrack` is `'lobby' | GameId`, so it needs a track
+- `client/net/socket.ts` — `mirrorHud` switches on `snap.game`; the missing case
+  is a type error rather than a silent misread (it used to be a two-way ternary,
+  which would have read a third game's snapshot as Gun Mayhem's)
+
+### Private per-player state
+
+`Room.broadcastSnapshot` builds the snapshot **once**, encodes it **once**, and
+pushes the identical string to every socket in the room. That single encode is
+most of why the tick loop is cheap, and it means **a snapshot can never hold a
+secret** — anything in one is readable in devtools by every player.
+
+Games with hidden information implement the optional
+`GameInstance.privateFor(playerId)` instead. `Room` calls it once per player per
+broadcast and sends a `private` message only when the serialised value changed,
+so a value that changes once a round costs nothing in the steady state. It is
+re-sent from `sendCatchUp` and forgotten on `detach`/`resume`, because a player
+who reconnects must get their private view back.
+
+Unlike `snapshot()`, `privateFor` must **not** drain — it is called repeatedly
+and has to be cheap to answer with `null`, which is what it returns for every
+game that has no secrets.
 
 `GameConfig` and `GameSnapshot` are unions discriminated by a `game` field
-(`'achtung' | 'gunmayhem'`). Narrow with `settings.game === 'achtung'` before
+(`'achtung' | 'gunmayhem' | 'skribbl'`). Narrow with `settings.game === 'achtung'` before
 reading game-specific fields — see `Room.settings` getter and
 `store.ts:selectSettings` for the pattern. Room settings are kept **per game**
 (`Room.settingsByGame`), so switching games in the lobby and back doesn't
@@ -219,6 +251,54 @@ client replay unacknowledged inputs after a correction
 player is actually in control (not respawning or out of stocks) —
 knockback isn't predictable so the code deliberately doesn't try.
 
+### Skribbl specifics
+
+**The word is the whole design constraint.** `SkribblState.word` never leaves the
+server. The snapshot carries only `masked` — the pattern with unrevealed letters
+replaced — computed server-side, so a guesser is never sent letters they have not
+earned. The drawer gets the real word through `privateFor` (see above). There is
+deliberately no variant that ships the word plus a count of how much to hide.
+
+Three tests guard that, and they are the ones to keep green: the mask is checked
+at every reveal step for every word in both lists; `privateFor` is asserted to
+answer the drawer and `null` for everyone else; and an end-to-end test in
+`app.test.ts` reads back a guesser's entire received-frame buffer and greps it.
+
+**Ink** is a flat op stream in the snapshot (`OP_BEGIN`/`OP_TO`/`OP_CLEAR` in
+`skribbl/constants.ts`), drained as it is sent — so `droppableSnapshots: false`,
+same as Achtung's trail. Two paths it cannot use, both learned the hard way:
+
+- **not `mirrorHud`** — that returns early inside its 120 ms throttle, which
+  would silently drop most strokes. `socket.ts` hands Skribbl snapshots to
+  `games/skribbl/inkBus.ts` *before* the throttle instead.
+- **not `SnapshotFeed`** — it keeps one second of history, so a tab backgrounded
+  for two seconds would lose that ink permanently. The client accumulates into an
+  offscreen canvas that `CanvasStage.begin()` never wipes.
+
+Undo is a clear plus a full replay, because a delta already accumulated on
+everyone's surface cannot be un-drawn.
+
+**Guess matching** (`skribbl/guess.ts`) folds Hebrew final letters, strips
+niqqud, and — the one that decides whether the Hebrew half feels broken — treats
+interior vav and yod as optional, so שלחן and שולחן both count. Which spelling
+someone types is habit rather than knowledge, and rejecting either is rejecting a
+right answer. Only for words of four or more normalised letters, or the fold
+equates שר and שיר.
+
+**Language is a room setting** (`SkribblConfig.lang`), because the server has no
+other notion of one — `lang` is client-only everywhere else. The settings panel
+patches it once to match the host's UI language.
+
+Word lists are `words.he.ts` / `words.en.ts`, tagged easy/medium/hard, one word
+per line so growing them is appending. The three choices are always one per tier.
+A test asserts no duplicates within a language — watch for homographs, which is
+how ביצה (egg / swamp) and ספר (book / barber) got listed twice.
+
+Known limit: a player joining **mid-round** sees the drawing from the moment they
+arrived, because catch-up replays the last snapshot and for a delta format that is
+nearly empty. Reconnects are fine — the client keeps its surface across a socket
+reopen.
+
 ### Client structure
 
 Shared canvas machinery both games reuse: `game/CanvasStage.ts` (DPR,
@@ -229,6 +309,37 @@ Each game's `Renderer.ts` owns a `requestAnimationFrame` loop calling
 predicts inline in its renderer) does the reconciliation math. The renderer
 instance is constructed once per mount in a `useEffect` with an empty dep
 array (see the HMR gotcha below before "fixing" that pattern).
+
+## Testing multiplayer without two tabs
+
+`npm run smoke` covers create/join/ready against a live deploy. For anything
+game-specific, the fast pattern is **one browser tab plus a throwaway `ws` bot**
+in a scratch file at the repo root — a real second player over the real wire,
+sharing the protocol constants so it cannot drift:
+
+```bash
+npx tsx bot.tmp.mjs ROOMCODE   # then delete it
+```
+
+The bot imports `PROTOCOL_VERSION` and `WS_PATH` from
+`./packages/shared/src/protocol.ts`, joins with `{ t: 'join', v, code, identity }`,
+and drives the game with `{ t: 'input', i: ... }`. Three traps, each of which has
+made a working feature look broken:
+
+- **Re-`ready` on every room broadcast, not just on `welcome`.** `rematch` clears
+  ready flags, so a bot that readies once silently blocks the next match.
+- **A witness that joins mid-round sees nothing that already happened.** Drained
+  state — Skribbl's ink, Achtung's trail — appears in exactly one snapshot.
+  Start the bot *before* the thing you want to observe.
+- **Seats are held for 60 s after a disconnect.** Killing and restarting a bot
+  inside that window makes it a spectator, and the abandoned seat still counts
+  toward turn rotation and the minimum-players check.
+
+Drive the browser side through `window.mgStore` (dev-only) rather than synthetic
+clicks at coordinates: `mgStore.getState()` for assertions, and
+`[...document.querySelectorAll('button')].find(...)?.click()` for actions. For
+canvas input, dispatch `PointerEvent`s at the element and stub
+`el.setPointerCapture = () => {}`, which synthetic events cannot satisfy.
 
 ## Non-obvious gotchas (cost real debugging time to find — don't rediscover)
 
@@ -262,11 +373,53 @@ array (see the HMR gotcha below before "fixing" that pattern).
   (`scripts/smoke-ws.mjs`), which drives two real `ws` clients through
   create/join/ready. Faster, deterministic, and it exercises the actual wire
   protocol. Extend that script rather than reaching for tabs again.
+- **Safari has never supported Ogg Vorbis** — not "old Safari", any of it,
+  desktop and iOS. Two music tracks shipped as `.ogg` and the site was silent on
+  every iPhone from first paint, which read as a code bug through two rounds of
+  fixes. Everything in `public/music/` is mp3 for that reason; see the note in
+  `public/music/ATTRIBUTION.md` before adding a format.
+- **Safari will not play media served without HTTP byte ranges.** Its media
+  stack opens every resource with `Range: bytes=0-1` and refuses a plain `200`.
+  `packages/server/src/static.ts` answers `206` and advertises `Accept-Ranges`;
+  `static.test.ts` pins it, including that exact opening probe. Chrome and
+  Firefox take the whole file, which is why this is invisible locally.
+- **Anything driven by `requestAnimationFrame` is frozen in a hidden or
+  backgrounded tab**, including the Browser pane when it is not displayed. Never
+  put React state behind a rAF poll — a player who tabs away and back gets a
+  frozen UI. Canvas drawing is the only thing that may depend on it. This also
+  makes a hidden preview pane useless for testing anything rAF-driven: a blank
+  canvas there usually means "not compositing", not "broken".
+- **`import()` from the browser console can hand you a *different module
+  instance* than the running app.** After a Vite HMR update the app holds
+  `/src/x.ts?t=123` while a bare `import('/src/x.ts')` gets a fresh copy — so a
+  module-level singleton (`feed`, `music`, `socket`) inspected that way looks
+  empty while the app's own copy is fine. Reach the app's state through
+  `window.mgStore` (exposed in dev), or patch a global such as
+  `WebSocket.prototype.send`, which is immune to module identity.
 - Rooms and everything in them are in-memory; there is no persistence layer
   to reach for and none should be added casually.
 
-## Recent Architecture & UI Changes
-- **Face Asset Pipeline**: Replaced programmatic face drawing paths with SVG assets (`public/faces/*.svg`). Added new expressive faces ('surprised', 'tired', 'wink').
-- **Character Customizer UI**: Redesigned the character appearance picker on the Home Screen and Lobby Screen to be a sleek, inline Carousel Picker that visually flanks the Avatar using left/right SVG chevrons, replacing the bulky grid of buttons and text labels. Handled RTL (Right-to-Left) layout logic to ensure arrows point correctly in Hebrew.
-- **Card Aesthetics**: Removed `transform: rotate` and tilt mechanics from game cards, minicards, reviews, stickers, and animations for a strictly aligned, cleaner UI layout.
-- **Avatar Anchoring**: Shifted the face assets down in `Avatar.tsx` to ensure hats sit above the eyes without clipping.
+## UI conventions worth not relitigating
+
+- Faces are **assets** (`public/faces/*.svg`), all nine drawn on one grid: eyes
+  on y=42, mouths inside y=62..74, one pen weight (9 primary, 7 for detail).
+  `Avatar.tsx` scales them by 26/100 and anchors at `y=13`, so a stroke much
+  thinner than 9 reads as a decal pasted on the head rather than part of the
+  drawing, and a mouth below y≈74 hangs off the chin. Hats stay procedural in
+  *two* places — `Avatar.tsx` (front-facing) and `game/appearance.ts` (side-on
+  for the arena) — and have to be changed in both.
+- Cards, stickers and minicards are **not** tilted. `transform: rotate` was
+  removed everywhere deliberately.
+- Hard offset shadows, never soft — see the note at the top of `tokens.css`. The
+  single blur in the codebase is `.overlay--solid`'s backdrop scrim, which is a
+  scrim rather than a shadow.
+- **Inter ships no Hebrew subset**, so `--font-ui` silently falls back to
+  `system-ui` for Hebrew. Anything Hebrew and prominent — the Skribbl word
+  banner and chat log — uses `--font-display` (Rubik), which has it.
+- Layout is logical-property first (`inset-inline-start`, `text-align: start`).
+  The deliberate exceptions are commented where they live: the toggle knob's
+  `translateX`, the touch controls' physical left/right, and numeric readouts
+  that pin `dir="ltr"` in JSX. Content whose direction is its own — a room code,
+  a Skribbl word from the other language's list — gets an explicit `dir`.
+- The appearance picker is an inline carousel flanking the avatar with chevrons,
+  not a grid of labelled buttons.
