@@ -56,7 +56,6 @@ export function HomeScreen(): JSX.Element {
                 placeholder={t.namePlaceholder}
                 maxLength={14}
                 autoComplete="nickname"
-                autoFocus
               />
             </label>
             <AppearancePicker
@@ -95,6 +94,7 @@ export function HomeScreen(): JSX.Element {
                   autoCapitalize="characters"
                   autoCorrect="off"
                   spellCheck={false}
+                  enterKeyHint="go"
                   autoFocus
                 />
               </label>

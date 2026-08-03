@@ -55,6 +55,8 @@ export interface RoomPlayer {
   totalScore: number;
   /** Their mic is live. Display only — the audio is peer-to-peer. */
   voice: boolean;
+  /** Whether they are willing to receive peer audio. */
+  listening: boolean;
 }
 
 export class Room {
@@ -163,6 +165,7 @@ export class Room {
       score: 0,
       totalScore: 0,
       voice: false,
+      listening: true,
     };
 
     this.players.push(player);
@@ -295,8 +298,19 @@ export class Room {
   }
 
   setVoice(player: RoomPlayer, on: boolean): void {
-    if (player.voice === on) return;
+    const listening = on || player.listening;
+    if (player.voice === on && player.listening === listening) return;
     player.voice = on;
+    player.listening = listening;
+    this.broadcastRoom();
+  }
+
+  /** Opting out of hearing the room also closes the mic — talking to nobody is not a state. */
+  setListening(player: RoomPlayer, on: boolean): void {
+    const voice = on && player.voice;
+    if (player.listening === on && player.voice === voice) return;
+    player.listening = on;
+    player.voice = voice;
     this.broadcastRoom();
   }
 
@@ -662,6 +676,7 @@ export class Room {
           score: p.score,
           totalScore: p.totalScore,
           voice: p.voice,
+          listening: p.listening,
         }),
       ),
     };

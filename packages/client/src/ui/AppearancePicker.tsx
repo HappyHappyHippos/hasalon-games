@@ -67,21 +67,21 @@ export function AppearancePicker({ colorIndex, hat, face, takenColors, onChange 
   );
 
   return (
-    <div className="appearance" dir="ltr" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', marginRight: '-1rem', zIndex: 1 }}>
-        <Button variant="ghost" size="sm" onClick={handlePrevHat} style={{ padding: '0.1rem 0.5rem', minHeight: 'unset' }}><ChevronLeft /></Button>
-        <Button variant="ghost" size="sm" onClick={handlePrevFace} style={{ padding: '0.1rem 0.5rem', minHeight: 'unset' }}><ChevronLeft /></Button>
-        <Button variant="ghost" size="sm" onClick={handlePrevColor} style={{ padding: '0.1rem 0.5rem', minHeight: 'unset' }}><ChevronLeft /></Button>
+    <div className="appearance" dir="ltr">
+      <div className="appearance__arrows">
+        <Button className="appearance__arrow" variant="ghost" size="sm" onClick={handlePrevHat}><ChevronLeft /></Button>
+        <Button className="appearance__arrow" variant="ghost" size="sm" onClick={handlePrevFace}><ChevronLeft /></Button>
+        <Button className="appearance__arrow" variant="ghost" size="sm" onClick={handlePrevColor}><ChevronLeft /></Button>
       </div>
 
-      <div className="appearance__preview" style={{ flexShrink: 0, zIndex: 2 }}>
+      <div className="appearance__preview">
         <Avatar colorIndex={colorIndex} hat={hat} face={face} size={72} />
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.1rem', marginLeft: '-1rem', zIndex: 1 }}>
-        <Button variant="ghost" size="sm" onClick={handleNextHat} style={{ padding: '0.1rem 0.5rem', minHeight: 'unset' }}><ChevronRight /></Button>
-        <Button variant="ghost" size="sm" onClick={handleNextFace} style={{ padding: '0.1rem 0.5rem', minHeight: 'unset' }}><ChevronRight /></Button>
-        <Button variant="ghost" size="sm" onClick={handleNextColor} style={{ padding: '0.1rem 0.5rem', minHeight: 'unset' }}><ChevronRight /></Button>
+      <div className="appearance__arrows">
+        <Button className="appearance__arrow" variant="ghost" size="sm" onClick={handleNextHat}><ChevronRight /></Button>
+        <Button className="appearance__arrow" variant="ghost" size="sm" onClick={handleNextFace}><ChevronRight /></Button>
+        <Button className="appearance__arrow" variant="ghost" size="sm" onClick={handleNextColor}><ChevronRight /></Button>
       </div>
     </div>
   );

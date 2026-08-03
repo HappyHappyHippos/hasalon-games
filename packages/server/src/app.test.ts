@@ -268,10 +268,48 @@ describe('lobby', () => {
     const client = await connect();
     client.send({
       t: 'create',
-      v: PROTOCOL_VERSION + 99,
+      v: 13,
       identity: { name: 'Old tab', colorIndex: 0, hat: 0, face: 0 },
     });
     expect((await client.next('error')).code).toBe('BAD_VERSION');
+  });
+
+  it('broadcasts listen opt-outs and safely coerces invalid values to false', async () => {
+    const host = await connect();
+    host.send({
+      t: 'create',
+      v: PROTOCOL_VERSION,
+      identity: { name: 'Host', colorIndex: 0, hat: 0, face: 0 },
+    });
+    await host.next('welcome');
+
+    host.send({ t: 'listen', on: false });
+    const optedOut = await host.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'room' }> =>
+        m.t === 'room' && m.room.players[0]?.listening === false,
+    );
+    expect(optedOut.room.players[0]).toMatchObject({ voice: false, listening: false });
+
+    host.send({ t: 'voice', on: true });
+    await host.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'room' }> =>
+        m.t === 'room' && m.room.players[0]?.voice === true,
+    );
+
+    host.send({ t: 'listen', on: 'yes' } as unknown as ClientMessage);
+    const invalid = await host.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'room' }> =>
+        m.t === 'room' && m.room.players[0]?.listening === false,
+    );
+    expect(invalid.room.players[0]).toMatchObject({ voice: false, listening: false });
+
+    host.send({ t: 'listen' } as unknown as ClientMessage);
+    host.send({ t: 'listen', on: true });
+    const restored = await host.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'room' }> =>
+        m.t === 'room' && m.room.players[0]?.listening === true,
+    );
+    expect(restored.room.players[0]).toMatchObject({ voice: false, listening: true });
   });
 });
 

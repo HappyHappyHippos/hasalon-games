@@ -30,8 +30,14 @@ export interface PlayerView {
    * Only ever a display fact — the audio itself is peer-to-peer and never
    * touches the server, so this is what everyone else's UI reads to decide
    * whether to draw a mic on somebody, not permission for anything.
-   */
+  */
   voice: boolean;
+  /**
+   * Willing to receive other people's audio. True on join: a player with no
+   * microphone still hears the room. Only the explicit opt-out clears it, and
+   * `voice` implies it.
+   */
+  listening: boolean;
 }
 
 export interface RoomView {

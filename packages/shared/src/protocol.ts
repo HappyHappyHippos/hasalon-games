@@ -2,7 +2,7 @@ import type { GameConfig, GameId, GameSnapshot } from './gameModule';
 import type { RoomView } from './room';
 
 /** Bump when the message shapes change so stale tabs fail loudly, not weirdly. */
-export const PROTOCOL_VERSION = 13;
+export const PROTOCOL_VERSION = 14;
 
 export const WS_PATH = '/ws';
 
@@ -54,6 +54,8 @@ export type ClientMessage =
   | { t: 'rtc'; to: string; data: unknown }
   /** "My microphone is live" / "I muted myself", for everyone else's UI. */
   | { t: 'voice'; on: boolean }
+  /** "Don't send me anyone's audio" / "I'm back". Separate from the mic. */
+  | { t: 'listen'; on: boolean }
   | { t: 'ping'; ts: number };
 
 // ---------------------------------------------------------------------------

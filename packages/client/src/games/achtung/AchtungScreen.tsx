@@ -8,6 +8,7 @@ import { attachInput } from './input';
 import { Screen } from '../../ui/Screen';
 import { useShowTouchControls } from '../../ui/useTouchControls';
 import { useVoice } from '../../ui/useVoice';
+import { useT } from '../../strings';
 
 interface Props {
   room: RoomView;
@@ -108,6 +109,7 @@ export function AchtungScreen({ room, mySeat }: Props): JSX.Element {
 function AchtungHud({ room, mySeat }: Props): JSX.Element {
   const hud = useStore((s) => s.hud);
   const speaking = new Set(useVoice().speaking);
+  const t = useT();
 
   const seated = room.players
     .filter((p) => p.seat >= 0)
@@ -129,8 +131,15 @@ function AchtungHud({ room, mySeat }: Props): JSX.Element {
           </div>
           <span className="hudcard__effects">
             {(live?.effects ?? []).map((effect) => (
-              <span key={effect} title={effect}>
-                {EFFECT_ICONS[effect] ?? '•'}
+              <span
+                key={effect}
+                className="hudcard__effect"
+                title={t.achtungEffects[effect as keyof typeof t.achtungEffects] ?? effect}
+              >
+                <span aria-hidden="true">{EFFECT_ICONS[effect] ?? '•'}</span>
+                <span className="hudcard__effectlabel">
+                  {t.achtungEffects[effect as keyof typeof t.achtungEffects] ?? effect}
+                </span>
               </span>
             ))}
           </span>

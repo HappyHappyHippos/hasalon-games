@@ -274,6 +274,10 @@ class GameSocket {
     this.send({ t: 'voice', on });
   }
 
+  setListening(on: boolean): void {
+    this.send({ t: 'listen', on });
+  }
+
   // -------------------------------------------------------------------------
   // Incoming
   // -------------------------------------------------------------------------
@@ -435,6 +439,7 @@ export const socket = new GameSocket();
 // half of the other.
 voice.send = (to, data) => socket.sendRtc(to, data);
 voice.announce = (on) => socket.setVoice(on);
+voice.announceListening = (on) => socket.setListening(on);
 
 // ---------------------------------------------------------------------------
 // Shareable #/room/CODE links

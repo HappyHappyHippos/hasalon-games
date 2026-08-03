@@ -53,6 +53,60 @@ function gunMayhemSettings(room: Room): Extract<GameConfig, { game: 'gunmayhem' 
 }
 
 describe('Room membership', () => {
+  it('starts every player listening with their microphone off', () => {
+    const room = new Room('TEST');
+    const player = room.addPlayer(fakeClient(), identity('A', 0))!;
+
+    expect(player).toMatchObject({ voice: false, listening: true });
+    expect(room.view().players[0]).toMatchObject({ voice: false, listening: true });
+  });
+
+  it('broadcasts voice changes once and keeps voice implying listening', () => {
+    const room = new Room('TEST');
+    const client = fakeClient();
+    const player = room.addPlayer(client, identity('A', 0))!;
+
+    room.setVoice(player, true);
+    expect(client.sent.filter((m) => m.t === 'room')).toHaveLength(1);
+    expect(room.view().players[0]).toMatchObject({ voice: true, listening: true });
+
+    room.setVoice(player, true);
+    expect(client.sent.filter((m) => m.t === 'room')).toHaveLength(1);
+
+    room.setListening(player, false);
+    expect(room.view().players[0]).toMatchObject({ voice: false, listening: false });
+    expect(client.sent.filter((m) => m.t === 'room')).toHaveLength(2);
+
+    room.setListening(player, false);
+    expect(client.sent.filter((m) => m.t === 'room')).toHaveLength(2);
+
+    room.setVoice(player, true);
+    expect(room.view().players[0]).toMatchObject({ voice: true, listening: true });
+  });
+
+  it('relays RTC signalling between listeners and speakers in both directions', () => {
+    const room = new Room('TEST');
+    const listenerClient = fakeClient();
+    const speakerClient = fakeClient();
+    const listener = room.addPlayer(listenerClient, identity('Listener', 0))!;
+    const speaker = room.addPlayer(speakerClient, identity('Speaker', 1))!;
+    room.setVoice(speaker, true);
+
+    room.relayRtc(listener, speaker.id, { type: 'offer' });
+    expect(speakerClient.sent.at(-1)).toEqual({
+      t: 'rtc',
+      from: listener.id,
+      data: { type: 'offer' },
+    });
+
+    room.relayRtc(speaker, listener.id, { type: 'answer' });
+    expect(listenerClient.sent.at(-1)).toEqual({
+      t: 'rtc',
+      from: speaker.id,
+      data: { type: 'answer' },
+    });
+  });
+
   it('keeps the socket open when a player is removed', () => {
     // Removal is also how a client moves between rooms — closing the socket
     // would knock them offline mid-join.

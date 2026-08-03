@@ -102,6 +102,7 @@ export function Chat({ room, canGuess, reason }: Props): JSX.Element {
           autoComplete="off"
           autoCorrect="off"
           spellCheck={false}
+          enterKeyHint="send"
           aria-label={t.skribblGuessPlaceholder}
         />
       </form>

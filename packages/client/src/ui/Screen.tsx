@@ -85,7 +85,7 @@ export function Screen({
 
         {controls}
 
-        <p className="rotatehint">{t.rotateHint}</p>
+        {hasTouch && <p className="rotatehint">{t.rotateHint}</p>}
 
         {countdown > 0 && (
           <div className="overlay overlay--pass">

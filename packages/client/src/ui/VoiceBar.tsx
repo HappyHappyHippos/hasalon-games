@@ -57,14 +57,35 @@ export function VoiceBar({ compact = false }: Props): JSX.Element | null {
           className="btn btn--ghost btn--sm"
           onClick={() => {
             sfx.click();
-            voice.stop();
+            voice.stopMic();
           }}
         >
           {t.voiceLeave}
         </button>
       )}
 
-      {!compact && <VoiceNote error={state.error} failed={failed} connecting={connecting} />}
+      {!state.active && !compact && (
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          onClick={() => {
+            sfx.click();
+            voice.setDeaf(!state.deaf);
+          }}
+        >
+          {state.deaf ? t.voiceUndeafen : t.voiceDeafen}
+        </button>
+      )}
+
+      {!compact && (
+        <VoiceNote
+          error={state.error}
+          failed={failed}
+          connecting={connecting}
+          listening={state.listening}
+          active={state.active}
+        />
+      )}
     </div>
   );
 }
@@ -73,17 +94,37 @@ function VoiceNote({
   error,
   failed,
   connecting,
+  listening,
+  active,
 }: {
   error: ReturnType<typeof useVoice>['error'];
   failed: number;
   connecting: number;
+  listening: boolean;
+  active: boolean;
 }): JSX.Element | null {
   const t = useT();
 
-  if (error === 'denied') return <p className="muted small">{t.voiceDenied}</p>;
-  if (error === 'nodevice') return <p className="muted small">{t.voiceNoDevice}</p>;
-  if (error === 'unsupported') return <p className="muted small">{t.voiceUnsupported}</p>;
-  if (failed > 0) return <p className="muted small">{t.voiceFailed(failed)}</p>;
-  if (connecting > 0) return <p className="muted small">{t.voiceConnecting}</p>;
-  return null;
+  let note: string | null = null;
+  if (error === 'denied') note = t.voiceDenied;
+  else if (error === 'nodevice') note = t.voiceNoDevice;
+  else if (error === 'unsupported') note = t.voiceUnsupported;
+  else if (failed > 0) note = t.voiceFailed(failed);
+  else if (connecting > 0) note = t.voiceConnecting;
+  else if (listening && !active) note = t.voiceListening;
+
+  const iosNote = (listening || active) && isIOS() ? t.voiceIosNote : null;
+  if (!note && !iosNote) return null;
+  return (
+    <>
+      {note && <p className="muted small">{note}</p>}
+      {iosNote && <p className="muted small">{iosNote}</p>}
+    </>
+  );
+}
+
+function isIOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  if (/iPad|iPhone|iPod/.test(navigator.userAgent)) return true;
+  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
 }

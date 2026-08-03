@@ -122,6 +122,9 @@ const he = {
   padBomb: 'בוםבום',
 
   // Voice chat
+  voiceListening: 'אפשר לשמוע את החדר',
+  voiceDeafen: 'השתיקו את החדר',
+  voiceUndeafen: 'החזירו את השמע',
   voiceHeading: 'צ׳אט קולי',
   voiceJoin: 'הפעילו מיקרופון',
   voiceMute: 'השתיקו אותי',
@@ -222,6 +225,14 @@ const he = {
   // -------------------------------------------------------------------------
   // Settings panels
   // -------------------------------------------------------------------------
+  achtungEffects: {
+    speedUp: 'מהר',
+    speedDown: 'לאט',
+    thin: 'דק',
+    thick: 'עבה',
+    ghost: 'רוח',
+    invert: 'היפוך',
+  },
   setPowerups: 'שדרוגים',
   setWinByTwo: 'ניצחון בהפרש שתיים',
   setSpeed: 'מהירות',
@@ -394,6 +405,9 @@ const en: Dict = {
   padBomb: 'BOMB',
 
   voiceHeading: 'Voice chat',
+  voiceListening: 'You can hear the room',
+  voiceDeafen: 'Mute room audio',
+  voiceUndeafen: 'Turn hearing back on',
   voiceJoin: 'Turn on mic',
   voiceMute: 'Mute me',
   voiceUnmute: 'Unmute',
@@ -482,6 +496,14 @@ const en: Dict = {
     },
   },
 
+  achtungEffects: {
+    speedUp: 'Fast',
+    speedDown: 'Slow',
+    thin: 'Thin',
+    thick: 'Thick',
+    ghost: 'Ghost',
+    invert: 'Invert',
+  },
   setPowerups: 'Powerups',
   setWinByTwo: 'Win by two',
   setSpeed: 'Speed',

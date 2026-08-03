@@ -33,9 +33,11 @@ export function Paused({ room, spectating }: { room: RoomView; spectating: boole
         {spectating ? (
           <p className="muted center">{t.waitingForPlayer}</p>
         ) : (
-          <Button variant="primary" size="lg" full onClick={() => socket.setPaused(false)}>
-            {t.resume}
-          </Button>
+          <div className="overlay__actions">
+            <Button variant="primary" size="lg" full onClick={() => socket.setPaused(false)}>
+              {t.resume}
+            </Button>
+          </div>
         )}
       </div>
     </div>
@@ -117,16 +119,18 @@ export function MatchOver({
           ))}
         </ol>
 
-        {isHost ? (
-          <Button variant="primary" size="lg" full onClick={() => socket.rematch()}>
-            {t.backToLobby}
+        <div className="overlay__actions">
+          {isHost ? (
+            <Button variant="primary" size="lg" full onClick={() => socket.rematch()}>
+              {t.backToLobby}
+            </Button>
+          ) : (
+            <p className="muted center">{t.waitingForHost}</p>
+          )}
+          <Button variant="ghost" full onClick={() => socket.leave()}>
+            {t.leaveRoom}
           </Button>
-        ) : (
-          <p className="muted center">{t.waitingForHost}</p>
-        )}
-        <Button variant="ghost" full onClick={() => socket.leave()}>
-          {t.leaveRoom}
-        </Button>
+        </div>
       </div>
     </div>
   );

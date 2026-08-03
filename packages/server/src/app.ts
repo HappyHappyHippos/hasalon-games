@@ -311,6 +311,10 @@ export function createApp(options: AppOptions): App {
         room.setVoice(player, message.on === true);
         return;
 
+      case 'listen':
+        room.setListening(player, message.on === true);
+        return;
+
       case 'leave':
         room.removePlayer(player.id);
         client.roomCode = null;

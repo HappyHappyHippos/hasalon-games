@@ -86,6 +86,10 @@ export type VoiceError = 'denied' | 'nodevice' | 'unsupported' | null;
 export interface VoiceSnapshot {
   /** Our own microphone is open. Not the same as un-muted. */
   active: boolean;
+  /** In the mesh with no microphone — receiving only. Never true while `active`. */
+  listening: boolean;
+  /** Opted out of auto-listen entirely: no peers, no audio. */
+  deaf: boolean;
   muted: boolean;
   error: VoiceError;
   /** playerId -> how their connection is doing. */
@@ -102,6 +106,8 @@ interface Peer {
   status: PeerStatus;
   /** True if we are the offering side, which decides who re-offers on a restart. */
   weOffer: boolean;
+  /** Whether this connection was built with a local track. Baked into the SDP. */
+  weSend: boolean;
   /**
    * An offer of ours is out and unanswered.
    *
@@ -161,10 +167,13 @@ function audioContextCtor(): typeof AudioContext | null {
   return window.AudioContext ?? (window as WindowWithWebkitAudio).webkitAudioContext ?? null;
 }
 
-function supported(): boolean {
+function canReceive(): boolean {
+  return typeof window !== 'undefined' && typeof RTCPeerConnection !== 'undefined';
+}
+
+function canSpeak(): boolean {
   return (
-    typeof window !== 'undefined' &&
-    typeof RTCPeerConnection !== 'undefined' &&
+    canReceive() &&
     !!navigator.mediaDevices?.getUserMedia &&
     audioContextCtor() !== null
   );
@@ -180,6 +189,8 @@ class Voice {
   private listeners = new Set<Listener>();
   private snapshot: VoiceSnapshot = {
     active: false,
+    listening: false,
+    deaf: false,
     muted: false,
     error: null,
     peers: {},
@@ -189,12 +200,18 @@ class Voice {
   /** Set by `socket` so this module does not have to import it (and cycle). */
   send: ((to: string, data: unknown) => void) | null = null;
   announce: ((on: boolean) => void) | null = null;
+  announceListening: ((on: boolean) => void) | null = null;
 
   /** Our own id, needed to decide who offers to whom. */
   private selfId: string | null = null;
 
-  /** Fetched once per `start()` and reused for every peer in that session. */
+  /** The user has opted out of auto-listen. Mirrors `!listening` on the wire. */
+  private deaf = false;
+
+  /** Fetched once per room session and reused for every peer. */
   private iceServers: RTCIceServer[] = FALLBACK_ICE_SERVERS;
+  /** Deduped `/ice` fetch, shared by the listener and speaker paths. */
+  private iceReady: Promise<void> | null = null;
 
   /** Listeners that nudge a suspended `AudioContext` back awake. */
   private contextWatched = false;
@@ -238,6 +255,24 @@ class Voice {
   // Turning it on and off
   // -------------------------------------------------------------------------
 
+  /** Join the receive-only mesh without opening a device or an AudioContext. */
+  prepare(selfId: string): void {
+    if (!canReceive()) return;
+    this.selfId = selfId;
+    this.watchLiveness();
+    this.startLevels();
+    void this.ensureIce();
+  }
+
+  private ensureIce(): Promise<void> {
+    if (!this.iceReady) {
+      this.iceReady = loadIceServers().then((servers) => {
+        this.iceServers = servers;
+      });
+    }
+    return this.iceReady;
+  }
+
   /**
    * Open the microphone. Only ever called from a real click — permission
    * prompts that appear on page load get denied out of reflex, and the
@@ -245,7 +280,7 @@ class Voice {
    */
   async start(selfId: string): Promise<void> {
     if (this.stream) return;
-    if (!supported()) {
+    if (!canSpeak()) {
       this.emit({ error: 'unsupported' });
       return;
     }
@@ -282,7 +317,7 @@ class Voice {
 
     // After the permission prompt, not before: the prompt is the slow part and
     // there is nothing to connect to until it is answered.
-    this.iceServers = await loadIceServers();
+    await this.ensureIce();
 
     this.localAnalyser = this.analyserFor(this.stream);
     this.startLevels();
@@ -291,7 +326,8 @@ class Voice {
     const localTrack = this.stream.getAudioTracks()[0];
     if (localTrack) this.watchTrack(localTrack);
 
-    this.emit({ active: true, muted: false, error: null });
+    this.deaf = false;
+    this.emit({ active: true, listening: false, deaf: false, muted: false, error: null });
     this.announce?.(true);
   }
 
@@ -366,6 +402,7 @@ class Voice {
       if (track && (track.readyState === 'ended' || track.muted)) void this.recoverTrack();
 
       for (const [id, peer] of this.peers) {
+        if (peer.audio?.paused) void peer.audio.play().catch(() => undefined);
         const state = peer.pc.connectionState;
         const iceState = peer.pc.iceConnectionState;
         const healthy = state === 'connected' || iceState === 'connected' || iceState === 'completed';
@@ -411,26 +448,50 @@ class Voice {
     this.contextWatched = false;
   }
 
-  /** Close the microphone and every connection. */
-  stop(): void {
+  /**
+   * Close the microphone but stay in the mesh, still hearing everyone.
+   *
+   * The peers are left alone: the broadcast that follows makes both ends
+   * re-evaluate the pair, dropping the ones that no longer carry anything and
+   * rebuilding ours as receive-only.
+   */
+  stopMic(): void {
     this.announce?.(false);
-    for (const id of [...this.peers.keys()]) this.dropPeer(id);
-
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = null;
-
     this.localAnalyser = null;
     this.unwatchContext();
-    this.unwatchLiveness();
     void this.ctx?.close().catch(() => undefined);
     this.ctx = null;
+    this.emit({ active: false, muted: false });
+  }
+
+  /** Opt out of hearing the room as well. The only way to have no connections. */
+  setDeaf(deaf: boolean): void {
+    this.deaf = deaf;
+    this.announceListening?.(!deaf);
+    if (deaf) {
+      this.stopMic();
+      for (const id of [...this.peers.keys()]) this.dropPeer(id);
+    }
+    this.emit({ deaf });
+  }
+
+  /** Full teardown — leaving the room, or the socket going for good. */
+  stop(): void {
+    this.stopMic();
+    for (const id of [...this.peers.keys()]) this.dropPeer(id);
+    this.unwatchLiveness();
 
     if (this.levelTimer !== null) {
       window.clearInterval(this.levelTimer);
       this.levelTimer = null;
     }
 
-    this.emit({ active: false, muted: false, peers: {}, speaking: [] });
+    this.selfId = null;
+    this.iceReady = null;
+    this.iceServers = FALLBACK_ICE_SERVERS;
+    this.emit({ active: false, listening: false, muted: false, peers: {}, speaking: [] });
   }
 
   /** Drop all peers without closing the microphone. Used when socket reconnects. */
@@ -448,6 +509,7 @@ class Voice {
    */
   reannounce(): void {
     if (this.stream) this.announce?.(true);
+    if (this.deaf) this.announceListening?.(false);
   }
 
   /**
@@ -470,22 +532,30 @@ class Voice {
    * Reconcile the mesh against who is actually in the room.
    *
    * Called whenever the room view changes. Adds connections for new people,
-   * drops them for anyone who left, and does nothing at all when the microphone
-   * is closed.
+   * drops them for anyone who left, and rebuilds when our SDP direction changed.
    */
-  syncPeers(playerIds: string[]): void {
-    if (!this.stream || !this.selfId) return;
+  async syncPeers(playerIds: string[]): Promise<void> {
+    // No longer gated on the microphone: a listener has no stream and still
+    // belongs in the mesh. `selfId` is set by `prepare` as well as `start`.
+    if (!this.selfId) return;
     const wanted = new Set(playerIds.filter((id) => id !== this.selfId));
 
-    for (const id of [...this.peers.keys()]) {
-      if (!wanted.has(id)) this.dropPeer(id);
+    for (const [id, peer] of [...this.peers]) {
+      if (!wanted.has(id)) {
+        this.dropPeer(id);
+        continue;
+      }
+      // A connection's direction is baked into its SDP, and only the designated
+      // offerer may re-offer — so a pair whose roles changed cannot be adjusted,
+      // it has to be rebuilt. Both ends learn of the change from the same
+      // broadcast, so exactly one of them offers again.
+      if (peer.weSend !== (this.stream !== null)) this.recreatePeer(id);
     }
 
+    if (wanted.size === 0) return;
+    await this.ensureIce();
     for (const id of wanted) {
       if (this.peers.has(id)) continue;
-      // Glare avoidance without perfect negotiation: the lower id offers. Both
-      // sides know both ids, so there is no race to resolve and no chance of
-      // two simultaneous offers colliding.
       this.createPeer(id, this.selfId < id);
     }
   }
@@ -498,6 +568,7 @@ class Voice {
       loudAt: 0,
       status: 'connecting',
       weOffer,
+      weSend: this.stream !== null,
       offerPending: false,
       pending: [],
       restarted: false,
@@ -508,6 +579,10 @@ class Voice {
 
     if (this.stream) {
       for (const track of this.stream.getTracks()) pc.addTrack(track, this.stream);
+    } else {
+      // Listening without a microphone. A connection with no senders offers
+      // zero m-lines, so the answerer would have nowhere to attach its track.
+      pc.addTransceiver('audio', { direction: 'recvonly' });
     }
 
     pc.onicecandidate = (event) => {
@@ -621,7 +696,7 @@ class Voice {
 
   /** A payload relayed from another player. Shape is ours; treat it as untrusted. */
   async onSignal(from: string, data: unknown): Promise<void> {
-    if (!this.stream || !this.selfId) return;
+    if (!this.selfId || this.deaf) return;
     const message = data as { kind?: string; sdp?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit };
     if (!message || typeof message.kind !== 'string') return;
 
@@ -844,7 +919,7 @@ class Voice {
   private publishPeers(): void {
     const peers: Record<string, PeerStatus> = {};
     for (const [id, peer] of this.peers) peers[id] = peer.status;
-    this.emit({ peers });
+    this.emit({ peers, listening: !this.stream && this.peers.size > 0 });
   }
 }
 

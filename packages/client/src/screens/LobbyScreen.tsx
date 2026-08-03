@@ -37,6 +37,15 @@ export function LobbyScreen(): JSX.Element {
 
   const copyLink = async (): Promise<void> => {
     const link = `${location.origin}${location.pathname}#/room/${room.code}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: document.title, text: t.copyInvite, url: link });
+        return;
+      } catch (error) {
+        // Cancelling the native sheet is a complete action, not a clipboard failure.
+        if ((error as DOMException).name === 'AbortError') return;
+      }
+    }
     try {
       await navigator.clipboard.writeText(link);
       setCopied(true);
@@ -117,8 +126,8 @@ export function LobbyScreen(): JSX.Element {
                     </span>
                   </div>
                   {showTotals && (
-                    <span className="person__total" dir="ltr" title={t.totalScoreTitle}>
-                      {Math.round(player.totalScore)}
+                    <span className="person__total" title={t.totalScoreTitle}>
+                      {t.totalScoreLabel(Math.round(player.totalScore))}
                     </span>
                   )}
                   <span
