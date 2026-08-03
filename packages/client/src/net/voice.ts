@@ -50,6 +50,11 @@ export interface VoicePeerDiagnostic {
   connectionState: RTCPeerConnectionState;
   iceState: RTCIceConnectionState;
   signalingState: RTCSignalingState;
+  direction: RTCRtpTransceiverDirection;
+  currentDirection: RTCRtpTransceiverDirection | null;
+  localSdpDirection: string | null;
+  remoteSdpDirection: string | null;
+  senderTrack: MediaStreamTrackState | 'missing';
   candidateType: string | null;
   inboundBytes: number;
   outboundBytes: number;
@@ -117,6 +122,8 @@ interface Peer {
   restartAttempts: number;
   recoveryTimer: number | null;
   connectTimer: number | null;
+  /** A local track exists but the last SDP answer did not permit sending yet. */
+  sendNegotiationPending: boolean;
   loudAt: number;
   statsInFlight: boolean;
 }
@@ -355,7 +362,10 @@ export class Voice {
 
     await Promise.all(
       [...this.peers.values()].map((peer) =>
-        peer.transceiver.sender.replaceTrack(track).catch(() => this.beginRecovery(peer, true)),
+        peer.transceiver.sender
+          .replaceTrack(track)
+          .then(() => this.ensurePeerCanSend(peer))
+          .catch(() => this.beginRecovery(peer, true)),
       ),
     );
 
@@ -389,7 +399,10 @@ export class Voice {
       this.localAnalyser = this.analyserFor(replacement);
       await Promise.all(
         [...this.peers.values()].map((peer) =>
-          peer.transceiver.sender.replaceTrack(track).catch(() => this.beginRecovery(peer, true)),
+          peer.transceiver.sender
+            .replaceTrack(track)
+            .then(() => this.ensurePeerCanSend(peer))
+            .catch(() => this.beginRecovery(peer, true)),
         ),
       );
       old.getTracks().forEach((item) => item.stop());
@@ -406,6 +419,7 @@ export class Voice {
   stopMic(announce = true): void {
     if (announce && this.stream) this.announce?.(false);
     for (const peer of this.peers.values()) {
+      peer.sendNegotiationPending = false;
       void peer.transceiver.sender.replaceTrack(null).catch(() => undefined);
     }
     this.stream?.getTracks().forEach((track) => track.stop());
@@ -501,11 +515,15 @@ export class Voice {
     }
   }
 
-  private createPeer(id: string): Peer {
+  private createPeer(id: string, startInitialOffer = true): Peer {
     const pc = new RTCPeerConnection({ iceServers: this.iceServers });
     const track = this.stream?.getAudioTracks()[0] ?? null;
-    const init: RTCRtpTransceiverInit = { direction: 'sendrecv' };
-    if (this.stream) init.streams = [this.stream];
+    // Keep an outbound stream association even before there is a track. This
+    // gives a later replaceTrack the same stable msid without opening a device.
+    const init: RTCRtpTransceiverInit = {
+      direction: 'sendrecv',
+      streams: [this.stream ?? new MediaStream()],
+    };
     const transceiver = pc.addTransceiver(track ?? 'audio', init);
     const remote = new MediaStream();
     const audio = document.createElement('audio');
@@ -532,24 +550,13 @@ export class Voice {
       restartAttempts: 0,
       recoveryTimer: null,
       connectTimer: null,
+      sendNegotiationPending: track !== null,
       loudAt: 0,
       statsInFlight: false,
     };
     peer.pendingCandidates.push(...(this.orphanCandidates.get(id) ?? []));
     this.orphanCandidates.delete(id);
     this.peers.set(id, peer);
-
-    pc.onnegotiationneeded = () => {
-      this.queuePeer(peer, async () => {
-        peer.makingOffer = true;
-        try {
-          await pc.setLocalDescription();
-          this.send?.(id, { description: pc.localDescription?.toJSON() });
-        } finally {
-          peer.makingOffer = false;
-        }
-      });
-    };
 
     pc.onicecandidate = ({ candidate }) => {
       this.send?.(id, { candidate: candidate?.toJSON() ?? null });
@@ -575,7 +582,43 @@ export class Voice {
       if (!isHealthy(peer)) this.beginRecovery(peer, true);
     }, CONNECT_TIMEOUT_MS);
     this.publishPeers();
+    // Room membership is byte-identical at both endpoints, so the id ordering
+    // gives initial setup exactly one offerer. Perfect negotiation below still
+    // handles the genuinely concurrent case: both sides restarting ICE.
+    if (startInitialOffer && this.selfId && this.selfId < id) void this.negotiate(peer);
     return peer;
+  }
+
+  private negotiate(peer: Peer): Promise<void> {
+    return this.queuePeer(peer, async () => {
+      peer.makingOffer = true;
+      try {
+        await peer.pc.setLocalDescription();
+        this.send?.(peer.id, { description: peer.pc.localDescription?.toJSON() });
+      } finally {
+        peer.makingOffer = false;
+      }
+    });
+  }
+
+  private ensurePeerCanSend(peer: Peer): void {
+    if (this.peers.get(peer.id) !== peer || !peer.transceiver.sender.track) {
+      peer.sendNegotiationPending = false;
+      return;
+    }
+    const direction = peer.transceiver.currentDirection;
+    if (direction === 'sendrecv' || direction === 'sendonly') {
+      peer.sendNegotiationPending = false;
+      return;
+    }
+    peer.sendNegotiationPending = true;
+    if (peer.pc.signalingState !== 'stable') return;
+    // Before the first remote description, null means initial setup is still in
+    // flight. Afterwards it means Chrome did not associate our pre-created
+    // sender transceiver with the remote m-line; offer it as a second m-line.
+    if (direction === null && !peer.pc.remoteDescription) return;
+    peer.sendNegotiationPending = false;
+    void this.negotiate(peer);
   }
 
   private queuePeer(peer: Peer, operation: () => Promise<void>): Promise<void> {
@@ -616,7 +659,7 @@ export class Voice {
       // will retain or drop it moments later; accepting now closes the
       // broadcast/offer race without letting local state decide peer shape.
       this.wantedPeers.add(from);
-      peer = this.peers.get(from) ?? this.createPeer(from);
+      peer = this.peers.get(from) ?? this.createPeer(from, false);
     }
 
     return this.queuePeer(peer, () => this.applySignal(peer!, signal));
@@ -643,6 +686,7 @@ export class Voice {
         await pc.setLocalDescription();
         this.send?.(peer.id, { description: pc.localDescription?.toJSON() });
       }
+      if (peer.sendNegotiationPending) this.ensurePeerCanSend(peer);
       return;
     }
 
@@ -715,6 +759,7 @@ export class Voice {
         try {
           peer.pc.setConfiguration({ iceServers: this.iceServers });
           peer.pc.restartIce();
+          void this.negotiate(peer);
         } catch {
           // The bounded follow-up below turns this into a visible failure.
         }
@@ -749,7 +794,6 @@ export class Voice {
     this.orphanCandidates.delete(id);
     this.clearRecovery(peer);
     if (peer.connectTimer !== null) window.clearTimeout(peer.connectTimer);
-    peer.pc.onnegotiationneeded = null;
     peer.pc.onicecandidate = null;
     peer.pc.ontrack = null;
     peer.pc.onconnectionstatechange = null;
@@ -965,6 +1009,13 @@ export class Voice {
           connectionState: peer.pc.connectionState,
           iceState: peer.pc.iceConnectionState,
           signalingState: peer.pc.signalingState,
+          direction: peer.transceiver.direction,
+          currentDirection: peer.transceiver.currentDirection,
+          localSdpDirection:
+            peer.pc.localDescription?.sdp.match(/a=(sendrecv|sendonly|recvonly|inactive)/)?.[1] ?? null,
+          remoteSdpDirection:
+            peer.pc.remoteDescription?.sdp.match(/a=(sendrecv|sendonly|recvonly|inactive)/)?.[1] ?? null,
+          senderTrack: peer.transceiver.sender.track?.readyState ?? 'missing',
           candidateType,
           inboundBytes,
           outboundBytes,

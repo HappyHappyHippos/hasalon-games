@@ -73,6 +73,7 @@ class FakePeerConnection {
   localDescription: RTCSessionDescription | null = null;
   remoteDescription: RTCSessionDescription | null = null;
   sender: FakeSender | null = null;
+  transceiver: RTCRtpTransceiver | null = null;
   closed = false;
   restarts = 0;
   candidates: Array<RTCIceCandidateInit | null> = [];
@@ -92,7 +93,7 @@ class FakePeerConnection {
   addTransceiver(trackOrKind: FakeTrack | string, init?: RTCRtpTransceiverInit): RTCRtpTransceiver {
     const track = typeof trackOrKind === 'string' ? null : trackOrKind;
     this.sender = new FakeSender(track);
-    return {
+    this.transceiver = {
       sender: this.sender,
       receiver: { track: new FakeTrack() },
       direction: init?.direction ?? 'sendrecv',
@@ -101,6 +102,7 @@ class FakePeerConnection {
       setCodecPreferences: () => undefined,
       stop: () => undefined,
     } as unknown as RTCRtpTransceiver;
+    return this.transceiver;
   }
 
   async setLocalDescription(description?: RTCSessionDescriptionInit): Promise<void> {
@@ -230,6 +232,27 @@ describe('Voice lifecycle', () => {
     voice.stop();
   });
 
+  it('offers the sender m-line when the initial answer was receive-only', async () => {
+    const voice = new Voice();
+    const signals: unknown[] = [];
+    voice.prepare('b');
+    voice.send = (_to, data) => signals.push(data);
+    await voice.syncPeers(['a']);
+    await voice.onSignal('a', { description: { type: 'offer', sdp: 'v=0' } });
+    const pc = FakePeerConnection.instances[0]!;
+    Object.assign(pc.transceiver!, { currentDirection: 'recvonly' });
+    signals.length = 0;
+    getUserMedia.mockResolvedValueOnce(new FakeStream([new FakeTrack()]) as unknown as MediaStream);
+
+    await voice.start('b');
+    await settle();
+
+    expect(signals).toContainEqual({
+      description: expect.objectContaining({ type: 'offer' }),
+    });
+    voice.stop();
+  });
+
   it('keeps receiving when microphone permission is denied', async () => {
     const voice = new Voice();
     voice.prepare('b');
@@ -255,27 +278,53 @@ describe('Voice lifecycle', () => {
   });
 });
 
-/** Both peers may negotiate at once; perfect negotiation must converge instead of stalling. */
+/** Initial setup is deterministic; later recovery glare must still converge. */
 describe('Voice negotiation', () => {
-  it('resolves simultaneous offers with deterministic polite and impolite roles', async () => {
+  it('uses the shared id ordering to produce exactly one initial offer', async () => {
     const alice = new Voice();
     const bob = new Voice();
     alice.prepare('a');
     bob.prepare('b');
+    alice.send = (_to, data) => void bob.onSignal('a', data);
+    bob.send = (_to, data) => void alice.onSignal('b', data);
     await Promise.all([alice.syncPeers(['b']), bob.syncPeers(['a'])]);
     const alicePc = FakePeerConnection.instances[0]!;
     const bobPc = FakePeerConnection.instances[1]!;
-    alice.send = (_to, data) => void bob.onSignal('a', data);
-    bob.send = (_to, data) => void alice.onSignal('b', data);
-
-    alicePc.onnegotiationneeded?.(new Event('negotiationneeded'));
-    bobPc.onnegotiationneeded?.(new Event('negotiationneeded'));
     await settle();
 
     expect(alicePc.signalingState).toBe('stable');
     expect(bobPc.signalingState).toBe('stable');
     expect(alicePc.remoteDescription?.type).toBe('answer');
     expect(bobPc.remoteDescription?.type).toBe('offer');
+    alice.stop();
+    bob.stop();
+  });
+
+  it('resolves simultaneous recovery offers with polite and impolite roles', async () => {
+    const alice = new Voice();
+    const bob = new Voice();
+    alice.prepare('a');
+    bob.prepare('b');
+    await Promise.all([
+      alice.onSignal('b', { description: { type: 'offer', sdp: 'initial-b' } }),
+      bob.onSignal('a', { description: { type: 'offer', sdp: 'initial-a' } }),
+    ]);
+    const alicePc = FakePeerConnection.instances[0]!;
+    const bobPc = FakePeerConnection.instances[1]!;
+    await Promise.all([alicePc.setLocalDescription(), bobPc.setLocalDescription()]);
+    const aliceOffer = alicePc.localDescription!.toJSON();
+    const bobOffer = bobPc.localDescription!.toJSON();
+    alice.send = (_to, data) => void bob.onSignal('a', data);
+    bob.send = (_to, data) => void alice.onSignal('b', data);
+
+    await Promise.all([
+      alice.onSignal('b', { description: bobOffer }),
+      bob.onSignal('a', { description: aliceOffer }),
+    ]);
+    await settle();
+
+    expect(alicePc.signalingState).toBe('stable');
+    expect(bobPc.signalingState).toBe('stable');
     alice.stop();
     bob.stop();
   });
