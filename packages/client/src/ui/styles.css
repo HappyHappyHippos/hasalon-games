@@ -1079,7 +1079,7 @@ strong,
   position: fixed;
   z-index: 15;
   top: calc(6px + env(safe-area-inset-top));
-  inset-inline-end: calc(58px + env(safe-area-inset-right));
+  inset-inline-end: calc(64px + env(safe-area-inset-right));
   width: 42px;
   height: 42px;
   border: 2px solid var(--ink);
@@ -1110,7 +1110,7 @@ strong,
   /* Top corner. Never the bottom: that is where the shooting thumb lives, and
      both weapon buttons are there. */
   top: calc(6px + env(safe-area-inset-top));
-  inset-inline-end: calc(104px + env(safe-area-inset-right));
+  inset-inline-end: calc(110px + env(safe-area-inset-right));
   display: flex;
   flex-direction: row-reverse;
   align-items: flex-start;
@@ -1749,9 +1749,6 @@ strong,
   top: calc(6px + env(safe-area-inset-top));
   bottom: auto;
   inset-inline-end: calc(8px + env(safe-area-inset-right));
-  width: 36px;
-  height: 36px;
-  font-size: 16px;
   opacity: 0.5;
 }
 .app--playing .options:hover {
@@ -1759,16 +1756,19 @@ strong,
 }
 
 @media (max-width: 760px), (max-height: 560px) {
-  /* Tracks the gear, which is 36px here. These do not shrink with it — pause
-     and maximize are the first things reached for on a small screen, so they
-     keep a full 44px target. */
+  /* Keep a full 44px target on small screens for all three buttons. */
+  .app--playing .options {
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
+  }
   .pausebtn {
-    inset-inline-end: calc(50px + env(safe-area-inset-right));
+    inset-inline-end: calc(58px + env(safe-area-inset-right));
     width: 44px;
     height: 44px;
   }
   .fullscreenbtn__wrap {
-    inset-inline-end: calc(96px + env(safe-area-inset-right));
+    inset-inline-end: calc(104px + env(safe-area-inset-right));
   }
   .fullscreenbtn {
     width: 44px;
