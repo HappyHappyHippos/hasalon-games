@@ -111,8 +111,12 @@ export const COUNTDOWN_TICKS = seconds(2);
 export const ROUND_OVER_TICKS = seconds(1.5);
 
 export const MIN_PLAYERS = 2;
-/** Four, like the original. More than this and levels stop being readable. */
-export const MAX_PLAYERS = 4;
+/**
+ * Six. Every level now carries six spawn points; each still has to be
+ * playtested for readability and tick cost with a full lobby before pushing
+ * this any higher — see the note on `MAX_PLAYERS` in CLAUDE.md.
+ */
+export const MAX_PLAYERS = 6;
 
 // ---------------------------------------------------------------------------
 // Bombs
@@ -126,9 +130,9 @@ export const BOMB_BOUNCE = 0.34;
 export const BOMB_FRICTION = 0.86;
 export const BOMB_FUSE_TICKS = seconds(1.4);
 export const BOMB_COOLDOWN_TICKS = seconds(0.6);
-export const BOMB_RADIUS = 115;
-export const BOMB_DAMAGE = 15;
-export const BOMB_KB_MUL = 1.9;
+export const BOMB_RADIUS = 130;
+export const BOMB_DAMAGE = 24;
+export const BOMB_KB_MUL = 2.6;
 export const BOMB_SIZE = 12;
 
 // ---------------------------------------------------------------------------

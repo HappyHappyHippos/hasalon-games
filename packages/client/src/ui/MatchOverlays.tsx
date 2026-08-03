@@ -1,8 +1,9 @@
-import type { JSX } from 'react';
+import { useMemo, type CSSProperties, type JSX } from 'react';
 import { colorFor, type RoomView } from '@mg/shared';
 import { useT } from '../strings';
 import { socket } from '../net/socket';
 import { Button } from './Button';
+import { Avatar } from './Avatar';
 
 /**
  * The two overlays every game ends up needing, wherever it puts its canvas.
@@ -58,13 +59,46 @@ export function MatchOver({
     .sort((a, b) => b.score - a.score || a.seat - b.seat);
   const winner = room.players.find((p) => p.seat === winnerSeat);
 
+  // Picked once per match end (this component only exists while `matchOver`
+  // is the phase, so a fresh mount is a fresh match), not re-rolled on every
+  // re-render while the overlay sits on screen.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const quip = useMemo(() => t.winnerQuips[Math.floor(Math.random() * t.winnerQuips.length)], []);
+
   return (
     <div className="overlay overlay--solid">
-      <div className="sticker overlay__card">
+      <div className={`sticker overlay__card${winner ? ' matchover__card--win' : ''}`}>
+        {winner && (
+          <div className="confetti" aria-hidden="true">
+            {CONFETTI_COLORS.map((color, i) => (
+              <span
+                key={i}
+                className="confetti__piece"
+                style={
+                  {
+                    '--c': color,
+                    '--x': `${(i * 37) % 100}%`,
+                    '--d': `${1.6 + (i % 5) * 0.35}s`,
+                    '--delay': `${(i % 7) * 0.12}s`,
+                  } as CSSProperties
+                }
+              />
+            ))}
+          </div>
+        )}
+
         <p className="eyebrow">{t.matchOver}</p>
+
+        {winner && (
+          <div className="matchover__winner">
+            <Avatar colorIndex={winner.colorIndex} hat={winner.hat} face={winner.face} size={96} />
+          </div>
+        )}
+
         <h2 className="overlay__title" style={winner ? { color: colorFor(winner.colorIndex) } : undefined}>
           {winner ? t.winner(winner.name) : t.nobodyWins}
         </h2>
+        {winner && <p className="matchover__quip">{quip}</p>}
 
         <ol className="standings">
           {standings.map((player, index) => (
@@ -73,6 +107,9 @@ export function MatchOver({
               <span className="dot" style={{ background: colorFor(player.colorIndex) }} />
               <span className="standings__name">{player.name}</span>
               <span className="standings__score">{player.score}</span>
+              <span className="standings__total" dir="ltr" title={t.totalScoreTitle}>
+                {t.totalScoreLabel(Math.round(player.totalScore))}
+              </span>
             </li>
           ))}
         </ol>
@@ -91,3 +128,13 @@ export function MatchOver({
     </div>
   );
 }
+
+/** Reuses the room's own palette rather than inventing party colours from nothing. */
+const CONFETTI_COLORS = [
+  'var(--red)',
+  'var(--yellow)',
+  'var(--green)',
+  'var(--teal)',
+  'var(--violet)',
+  'var(--orange)',
+];

@@ -8,7 +8,9 @@ import { HomeScreen } from './screens/HomeScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { renderGameScreen } from './games/registry';
 import { Intro } from './ui/Intro';
+import { InstallPrompt } from './ui/InstallPrompt';
 import { OptionsMenu } from './ui/OptionsMenu';
+import { PauseButton } from './ui/PauseButton';
 import { Toast } from './ui/Toast';
 import { useVoiceMesh } from './ui/useVoice';
 
@@ -75,6 +77,8 @@ export function App(): JSX.Element {
     <div className={`app${inMatch ? ' app--playing' : ''}`}>
       <Toast />
       <OptionsMenu />
+      <PauseButton />
+      <InstallPrompt />
 
       {!room ? <HomeScreen /> : room.phase === 'lobby' ? <LobbyScreen /> : renderGameScreen(room, mySeat)}
 

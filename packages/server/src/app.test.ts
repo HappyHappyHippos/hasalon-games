@@ -327,8 +327,8 @@ describe('match', () => {
   }, 30_000);
 
   it('seats only as many players as the game supports', async () => {
-    // Gun Mayhem is four players; a fuller room means the rest spectate.
-    const clients = await makeLobby(6);
+    // Gun Mayhem is six players; a fuller room means the rest spectate.
+    const clients = await makeLobby(8);
     const [host] = clients;
 
     host!.send({ t: 'game', gameId: 'gunmayhem' });
@@ -337,9 +337,9 @@ describe('match', () => {
 
     const seated = started.room.players.filter((p) => p.seat >= 0);
     const spectating = started.room.players.filter((p) => p.seat < 0);
-    expect(seated).toHaveLength(4);
+    expect(seated).toHaveLength(6);
     expect(spectating).toHaveLength(2);
-    expect(seated.map((p) => p.seat).sort()).toEqual([0, 1, 2, 3]);
+    expect(seated.map((p) => p.seat).sort()).toEqual([0, 1, 2, 3, 4, 5]);
   });
 
   it('runs Gun Mayhem and streams its snapshots', async () => {

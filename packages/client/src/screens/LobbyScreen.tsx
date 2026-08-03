@@ -31,6 +31,9 @@ export function LobbyScreen(): JSX.Element {
   const takenColors = new Set(
     room.players.filter((p) => p.id !== playerId).map((p) => p.colorIndex),
   );
+  // Hidden until somebody's actually played something — an all-zero column
+  // before the room's first match is noise, not standings.
+  const showTotals = room.players.some((p) => p.totalScore > 0);
 
   const copyLink = async (): Promise<void> => {
     const link = `${location.origin}${location.pathname}#/room/${room.code}`;
@@ -113,6 +116,11 @@ export function LobbyScreen(): JSX.Element {
                           : t.metaNotReady}
                     </span>
                   </div>
+                  {showTotals && (
+                    <span className="person__total" dir="ltr" title={t.totalScoreTitle}>
+                      {Math.round(player.totalScore)}
+                    </span>
+                  )}
                   <span
                     className={`person__tick${player.ready ? ' person__tick--on' : ''}`}
                     style={{ background: player.ready ? colorFor(player.colorIndex) : undefined }}

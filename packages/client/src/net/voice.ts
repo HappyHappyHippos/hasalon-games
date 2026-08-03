@@ -200,6 +200,20 @@ class Voice {
   private contextWatched = false;
   private wakeContext: (() => void) | null = null;
 
+  /**
+   * Listener that checks the mic and every peer when the tab comes back to
+   * the foreground.
+   *
+   * Android can suspend mic capture on a backgrounded tab with no error and no
+   * state change anywhere WebRTC exposes — `RTCPeerConnection.connectionState`
+   * stays `'connected'`, so nothing here notices on its own. This is the
+   * catch-all: on return to visibility, re-check the local track and every
+   * peer's actual connection state rather than trusting either.
+   */
+  private wakeLiveness: (() => void) | null = null;
+  /** True once a re-acquire is in flight, so a second visibility event can't stack another. */
+  private recovering = false;
+
   // -------------------------------------------------------------------------
   // Subscription — a store-shaped surface for `useSyncExternalStore`
   // -------------------------------------------------------------------------
@@ -273,9 +287,99 @@ class Voice {
     this.localAnalyser = this.analyserFor(this.stream);
     this.startLevels();
     this.watchContext();
+    this.watchLiveness();
+    const localTrack = this.stream.getAudioTracks()[0];
+    if (localTrack) this.watchTrack(localTrack);
 
     this.emit({ active: true, muted: false, error: null });
     this.announce?.(true);
+  }
+
+  /**
+   * Notice a local mic track that has actually stopped and re-acquire it.
+   *
+   * `ended` is unambiguous — the track is gone and nothing will bring it back
+   * on its own. `mute`/`unmute` fire when the underlying source stops or
+   * resumes *without* the track ending (a common OS-level response to
+   * backgrounding), so they're left to the visibility check instead of
+   * reacting here — reacquiring on every transient mute would tear down and
+   * rebuild the mic far more often than the actual failures warrant.
+   */
+  private watchTrack(track: MediaStreamTrack): void {
+    track.addEventListener('ended', () => void this.recoverTrack(), { once: true });
+  }
+
+  /**
+   * Re-open the microphone and hand the new track to every existing peer via
+   * `replaceTrack`, rather than tearing the connections down. A peer's audio
+   * transceiver survives a track swap with no renegotiation needed.
+   */
+  private async recoverTrack(): Promise<void> {
+    if (!this.stream || !this.selfId || this.recovering) return;
+    this.recovering = true;
+    try {
+      let newStream: MediaStream;
+      try {
+        newStream = await navigator.mediaDevices.getUserMedia({
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          video: false,
+        });
+      } catch {
+        // Best-effort. If the mic won't reopen there is nothing else to try;
+        // the peer status readouts already show every connection as it is.
+        return;
+      }
+      const newTrack = newStream.getAudioTracks()[0];
+      if (!newTrack) return;
+      newTrack.enabled = !this.snapshot.muted;
+      this.watchTrack(newTrack);
+
+      const oldStream = this.stream;
+      this.stream = newStream;
+      this.localAnalyser = this.analyserFor(newStream);
+
+      for (const peer of this.peers.values()) {
+        const sender = peer.pc.getSenders().find((s) => s.track?.kind === 'audio');
+        if (sender) void sender.replaceTrack(newTrack).catch(() => undefined);
+      }
+
+      oldStream.getTracks().forEach((t) => t.stop());
+    } finally {
+      this.recovering = false;
+    }
+  }
+
+  /** Same role decision `syncPeers` uses, so a recreate can't disagree with a fresh connection. */
+  private recreatePeer(id: string): void {
+    if (!this.selfId) return;
+    const weOffer = this.selfId < id;
+    this.dropPeer(id);
+    this.createPeer(id, weOffer);
+  }
+
+  private watchLiveness(): void {
+    if (this.wakeLiveness) return;
+    const check = (): void => {
+      if (document.visibilityState !== 'visible') return;
+
+      const track = this.stream?.getAudioTracks()[0];
+      if (track && (track.readyState === 'ended' || track.muted)) void this.recoverTrack();
+
+      for (const [id, peer] of this.peers) {
+        const state = peer.pc.connectionState;
+        const iceState = peer.pc.iceConnectionState;
+        const healthy = state === 'connected' || iceState === 'connected' || iceState === 'completed';
+        if (!healthy) this.recreatePeer(id);
+      }
+    };
+    this.wakeLiveness = check;
+    document.addEventListener('visibilitychange', check);
+  }
+
+  private unwatchLiveness(): void {
+    if (!this.wakeLiveness) return;
+    document.removeEventListener('visibilitychange', this.wakeLiveness);
+    this.wakeLiveness = null;
   }
 
   /**
@@ -317,6 +421,7 @@ class Voice {
 
     this.localAnalyser = null;
     this.unwatchContext();
+    this.unwatchLiveness();
     void this.ctx?.close().catch(() => undefined);
     this.ctx = null;
 
@@ -481,9 +586,8 @@ class Voice {
     peer.pc.onicecandidate = null;
     peer.pc.ontrack = null;
     peer.pc.onconnectionstatechange = null;
-    // Added alongside `onconnectionstatechange` but never cleared here, so
-    // `checkState` could still fire on a closed connection for a peer that no
-    // longer exists.
+    // Cleared alongside `onconnectionstatechange` — without this, `checkState`
+    // could still fire on a closed connection for a peer that no longer exists.
     peer.pc.oniceconnectionstatechange = null;
     peer.pc.close();
     if (peer.audio) {

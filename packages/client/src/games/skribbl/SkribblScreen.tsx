@@ -6,7 +6,7 @@ import { useT } from '../../strings';
 import { sfx } from '../../audio';
 import { InkSurface } from './InkSurface';
 import { attachDrawInput, type DrawInput } from './input';
-import { drainInk } from './inkBus';
+import { drainInk, resetInk } from './inkBus';
 import { Chat } from './Chat';
 import { Scoreboard } from './Scoreboard';
 import { Toolbar } from './Toolbar';
@@ -37,6 +37,17 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const inkRef = useRef<InkSurface | null>(null);
   const inputRef = useRef<DrawInput | null>(null);
+  /**
+   * Only the drawer ever sends ink, and the drawer's own strokes are already
+   * painted locally the instant they're drawn (see `input.ts`). The server
+   * echoes those same ops back to everyone, drawer included — applying that
+   * echo a second time on the drawer's own surface reconnects wherever the pen
+   * happens to be *now* to a stale point from the stroke that already finished,
+   * which is the spurious line. So the drawer's pump skips the echo entirely;
+   * everyone else applies it, same as always. A ref because `pump` below is
+   * captured once in a mount effect and never re-created.
+   */
+  const isDrawerRef = useRef(false);
 
   const secret = useStore((s) => s.secret);
   const playerId = useStore((s) => s.playerId);
@@ -71,7 +82,7 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
     let raf = 0;
     const pump = (): void => {
       const ops = drainInk();
-      if (ops.length > 0) ink.apply(ops);
+      if (ops.length > 0 && !isDrawerRef.current) ink.apply(ops);
       raf = requestAnimationFrame(pump);
     };
     raf = requestAnimationFrame(pump);
@@ -89,6 +100,10 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
   const drawerSeat = view?.drawerSeat ?? -1;
   const isDrawer = mySeat >= 0 && mySeat === drawerSeat;
 
+  useEffect(() => {
+    isDrawerRef.current = isDrawer;
+  }, [isDrawer]);
+
   // Only the drawer may draw, and only while the clock is running. The server
   // enforces the same thing; this is so the cursor and the tools agree with it.
   useEffect(() => {
@@ -99,9 +114,12 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
     input.tool.size = size;
   }, [isDrawer, phase, color, size]);
 
-  // A fresh sheet whenever the drawer changes hands.
+  // A fresh sheet whenever the drawer changes hands — and drop any ink still
+  // queued from the round that just ended, so it can't land on the wrong
+  // canvas (or get skipped/doubled) once the drawer/isDrawer flip underneath it.
   useEffect(() => {
     inkRef.current?.clear();
+    resetInk();
   }, [drawerSeat]);
 
   const me = useStore((s) => s.hud.players.find((p) => p.seat === mySeat));

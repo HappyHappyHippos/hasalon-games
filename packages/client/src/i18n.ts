@@ -89,6 +89,19 @@ const he = {
   matchOver: 'המשחק נגמר',
   winner: (name: string) => `${name} ניצח`,
   nobodyWins: 'אף אחד לא ניצח',
+  totalScoreTitle: 'ניקוד מצטבר בחדר הזה, על פני כל המשחקים',
+  totalScoreLabel: (n: number) => `סה״כ ${n}`,
+  /** One picked at random per match end. Silly on purpose — this is a living room. */
+  winnerQuips: [
+    'המדעים עדיין לא מסבירים איך.',
+    'תרימו לו כיסא, הוא מלך עכשיו.',
+    'זה היה ברור מההתחלה. לכולם חוץ מכם.',
+    'תיהנו מ־15 השניות של התהילה.',
+    'עכשיו אפשר להתרברב בקבוצת הוואטסאפ.',
+    'האגו שלו עכשיו גדול מהמסך.',
+    'זה בטח בגלל הכיסא.',
+    'המומחים בהלם. אתם - פחות.',
+  ],
   backToLobby: 'חזרה ללובי',
   waitingForHost: 'מחכים למארח…',
   leaveRoom: 'צאו מהחדר',
@@ -100,6 +113,12 @@ const he = {
   exitFullscreen: 'צאו ממסך מלא',
   /** iPhone only: Safari cannot hide its own bars, so this is the way out. */
   fullscreenInstallHint: 'ב־iPhone: שתפו ← «הוסף למסך הבית», ופתחו משם למסך מלא.',
+
+  // First-visit iPhone install prompt.
+  installTitle: 'הוסיפו את הסלון למסך הבית',
+  installBody:
+    'כדי לשחק במסך מלא בלי סרגלי ספארי — הקישו על כפתור השיתוף ⎋ בסרגל, ואז «הוסף למסך הבית».',
+  installDismiss: 'הבנתי',
 
   // Touch controls. Short on purpose — they are printed inside the buttons.
   padFire: 'ירי',
@@ -344,6 +363,19 @@ const en: Dict = {
   matchOver: 'Match over',
   winner: (name: string) => `${name} wins`,
   nobodyWins: 'Nobody wins',
+  totalScoreTitle: 'Total points in this room, across every game',
+  totalScoreLabel: (n: number) => `total ${n}`,
+  /** One picked at random per match end. Silly on purpose — this is a living room. */
+  winnerQuips: [
+    'Science cannot yet explain how.',
+    'Someone get this person a throne.',
+    'Called it. Nobody else did.',
+    'Enjoy your 15 seconds of fame.',
+    'Bragging rights secured for the group chat.',
+    'Their ego is now bigger than the screen.',
+    "It's probably the chair.",
+    'Experts are stunned. You are, checks notes, less so.',
+  ],
   backToLobby: 'Back to the lobby',
   waitingForHost: 'Waiting for the host…',
   leaveRoom: 'Leave room',
@@ -354,6 +386,12 @@ const en: Dict = {
   enterFullscreen: 'Fullscreen',
   exitFullscreen: 'Exit fullscreen',
   fullscreenInstallHint: 'On iPhone: Share → "Add to Home Screen", then open it from there.',
+
+  // First-visit iPhone install prompt.
+  installTitle: 'Add הסלון to your Home Screen',
+  installBody:
+    'To play fullscreen with no Safari bars in the way: tap the Share button ⎋ in the toolbar, then "Add to Home Screen".',
+  installDismiss: 'Got it',
 
   padFire: 'FIRE',
   padBomb: 'BOMB',

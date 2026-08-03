@@ -12,3 +12,4 @@ export * from './protocol';
 export * from './room';
 export * from './gameModule';
 export * from './registry';
+export * from './scoring';

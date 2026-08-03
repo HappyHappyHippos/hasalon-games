@@ -18,6 +18,13 @@ export interface PlayerView {
   seat: number;
   score: number;
   /**
+   * Placement points earned across every match played in this room so far,
+   * regardless of which game — see `scoring.ts`. Unlike `score`, which is
+   * scoped to the match currently in progress and reset to `0` every time one
+   * starts, this only ever grows for as long as the room exists.
+   */
+  totalScore: number;
+  /**
    * Their microphone is on and they are in the voice mesh.
    *
    * Only ever a display fact — the audio itself is peer-to-peer and never

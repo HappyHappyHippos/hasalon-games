@@ -8,6 +8,7 @@ import {
   encode,
   isFaceIndex,
   isHatIndex,
+  placementPoints,
   sanitizeName,
   type GameConfig,
   type GameId,
@@ -50,6 +51,8 @@ export interface RoomPlayer {
   /** Seat in the running match, or -1 if not playing this match. */
   seat: number;
   score: number;
+  /** Never reset between matches or game switches — see `PlayerView.totalScore`. */
+  totalScore: number;
   /** Their mic is live. Display only — the audio is peer-to-peer. */
   voice: boolean;
 }
@@ -158,6 +161,7 @@ export class Room {
       disconnectedAt: null,
       seat: -1,
       score: 0,
+      totalScore: 0,
       voice: false,
     };
 
@@ -603,6 +607,14 @@ export class Room {
       for (const p of this.players) {
         if (p.id in scores) p.score = scores[p.id]!;
       }
+
+      // Placement, not raw score, is what's comparable across a game switch —
+      // only players who were actually seated for this match are ranked.
+      const finishers = this.players.filter((p) => p.seat >= 0).map((p) => ({ id: p.id, score: p.score }));
+      const points = placementPoints(finishers);
+      for (const p of this.players) {
+        if (p.id in points) p.totalScore += points[p.id]!;
+      }
     }
 
     this.phase = 'matchOver';
@@ -648,6 +660,7 @@ export class Room {
           isHost: p.id === this.hostId,
           seat: p.seat,
           score: p.score,
+          totalScore: p.totalScore,
           voice: p.voice,
         }),
       ),

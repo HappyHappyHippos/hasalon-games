@@ -196,14 +196,14 @@ describe('Room match gating', () => {
     const room = new Room('TEST');
     room.setGame('gunmayhem');
 
-    const players = Array.from({ length: 6 }, (_, i) =>
+    const players = Array.from({ length: 8 }, (_, i) =>
       room.addPlayer(fakeClient(), identity(`P${i}`, i))!,
     );
     for (const p of players) room.setReady(p, true);
 
-    expect(room.seatCandidates()).toHaveLength(4);
+    expect(room.seatCandidates()).toHaveLength(6);
     expect(room.start()).toBe(true);
-    expect(players.filter((p) => p.seat >= 0)).toHaveLength(4);
+    expect(players.filter((p) => p.seat >= 0)).toHaveLength(6);
     expect(players.filter((p) => p.seat < 0)).toHaveLength(2);
     room.dispose();
   });
@@ -413,6 +413,104 @@ describe('Room restart', () => {
     room.detach(ghostClient);
     expect(room.restart()).toBe(true);
     expect(ghost.seat).toBe(-1);
+
+    room.dispose();
+  });
+});
+
+describe('Room total score', () => {
+  /** Calls the private `endMatch` directly — same access pattern as `instance` above. */
+  function endMatch(room: Room, winnerSeat: number | null): void {
+    (room as unknown as { endMatch(winnerSeat: number | null): void }).endMatch(winnerSeat);
+  }
+
+  /**
+   * `endMatch` overwrites `p.score` from the live `GameInstance.scores()`
+   * before ranking, so a placement test has to control *that*, not poke
+   * `p.score` directly and have it clobbered right back.
+   */
+  function setInstanceScores(room: Room, scores: Record<string, number>): void {
+    const instance = (room as unknown as { instance: GameInstance }).instance;
+    instance.scores = () => scores;
+  }
+
+  it('awards placement points by finishing order and keeps them across a restart', () => {
+    const room = new Room('TEST');
+    room.setGame('achtung');
+    const a = room.addPlayer(fakeClient(), identity('A', 0))!;
+    const b = room.addPlayer(fakeClient(), identity('B', 1))!;
+    const c = room.addPlayer(fakeClient(), identity('C', 2))!;
+    room.setReady(a, true);
+    room.setReady(b, true);
+    room.setReady(c, true);
+    expect(room.start()).toBe(true);
+
+    setInstanceScores(room, { [a.id]: 3, [b.id]: 2, [c.id]: 1 });
+    endMatch(room, a.seat);
+
+    expect(a.totalScore).toBe(25);
+    expect(b.totalScore).toBe(18);
+    expect(c.totalScore).toBe(15);
+
+    // A new match clears the per-match score but never the running total —
+    // that's the entire point of keeping it a separate field.
+    expect(room.restart()).toBe(true);
+    expect(a.score).toBe(0);
+    expect(a.totalScore).toBe(25);
+
+    setInstanceScores(room, { [a.id]: 1, [b.id]: 3, [c.id]: 2 });
+    endMatch(room, b.seat);
+
+    expect(a.totalScore).toBe(25 + 15);
+    expect(b.totalScore).toBe(18 + 25);
+    expect(c.totalScore).toBe(15 + 18);
+
+    room.dispose();
+  });
+
+  it('splits placement points evenly between tied finishers', () => {
+    const room = new Room('TEST');
+    room.setGame('achtung');
+    const a = room.addPlayer(fakeClient(), identity('A', 0))!;
+    const b = room.addPlayer(fakeClient(), identity('B', 1))!;
+    room.setReady(a, true);
+    room.setReady(b, true);
+    expect(room.start()).toBe(true);
+
+    setInstanceScores(room, { [a.id]: 5, [b.id]: 5 });
+    endMatch(room, null);
+
+    // Tied for 1st/2nd: (25 + 18) / 2 each.
+    expect(a.totalScore).toBe(21.5);
+    expect(b.totalScore).toBe(21.5);
+
+    room.dispose();
+  });
+
+  it('never scores a switched-out game and unseated spectators', () => {
+    // Someone who joined mid-match and never got a seat should not be ranked
+    // at all — they have no finishing score to compare.
+    const room = new Room('TEST');
+    room.setGame('gunmayhem');
+    const a = room.addPlayer(fakeClient(), identity('A', 0))!;
+    const b = room.addPlayer(fakeClient(), identity('B', 1))!;
+    room.setReady(a, true);
+    room.setReady(b, true);
+    expect(room.start()).toBe(true);
+
+    const spectator = room.addPlayer(fakeClient(), identity('C', 2))!;
+    expect(spectator.seat).toBe(-1);
+
+    setInstanceScores(room, { [a.id]: 2, [b.id]: 1 });
+    endMatch(room, a.seat);
+
+    expect(a.totalScore).toBe(25);
+    expect(b.totalScore).toBe(18);
+    expect(spectator.totalScore).toBe(0);
+
+    // Switching games in the lobby must not touch it either.
+    room.setGame('skribbl');
+    expect(a.totalScore).toBe(25);
 
     room.dispose();
   });

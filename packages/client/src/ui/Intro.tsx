@@ -29,6 +29,20 @@ const FADE_OUT_MS = 380;
 /** Reduced motion gets the beat, not the choreography. */
 const REDUCED_MS = 400;
 
+/**
+ * How long to ignore the skip-on-any-input listeners after mount.
+ *
+ * A match starting is itself the result of a tap — the host hitting Start, or
+ * a player finishing their Ready tap — and on a touch device a finger that's
+ * still on the glass, or an impatient extra tap while waiting for the network
+ * round trip, reads as a brand new `pointerdown` the instant this mounts.
+ * Without a grace window the splash a mouse user always sees was, on a phone,
+ * dismissed before the first frame ever painted. A mouse click essentially
+ * never lands inside this window, so desktop's "any input skips it" feel is
+ * unchanged.
+ */
+const SKIP_ARM_MS = 250;
+
 function prefersReducedMotion(): boolean {
   return (
     typeof window !== 'undefined' &&
@@ -60,15 +74,22 @@ export function Intro({ onDone }: Props): JSX.Element {
 
     const timer = window.setTimeout(finish, reduced ? REDUCED_MS : INTRO_MS);
 
-    // Any input at all skips it. Nobody should have to hunt for a close button
-    // on something that is about to close itself.
-    window.addEventListener('pointerdown', finish);
-    window.addEventListener('keydown', finish);
+    // Any input at all skips it — but not armed immediately. See `SKIP_ARM_MS`.
+    let armed = false;
+    const armTimer = window.setTimeout(() => {
+      armed = true;
+    }, SKIP_ARM_MS);
+    const onInput = (): void => {
+      if (armed) finish();
+    };
+    window.addEventListener('pointerdown', onInput);
+    window.addEventListener('keydown', onInput);
 
     return () => {
       window.clearTimeout(timer);
-      window.removeEventListener('pointerdown', finish);
-      window.removeEventListener('keydown', finish);
+      window.clearTimeout(armTimer);
+      window.removeEventListener('pointerdown', onInput);
+      window.removeEventListener('keydown', onInput);
     };
   }, [onDone, reduced]);
 

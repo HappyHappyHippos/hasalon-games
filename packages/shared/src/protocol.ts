@@ -2,7 +2,7 @@ import type { GameConfig, GameId, GameSnapshot } from './gameModule';
 import type { RoomView } from './room';
 
 /** Bump when the message shapes change so stale tabs fail loudly, not weirdly. */
-export const PROTOCOL_VERSION = 12;
+export const PROTOCOL_VERSION = 13;
 
 export const WS_PATH = '/ws';
 

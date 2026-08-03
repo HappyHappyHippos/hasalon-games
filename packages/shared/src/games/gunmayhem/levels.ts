@@ -26,6 +26,10 @@ const SALON: Level = {
     { x: 920, y: 480 },
     { x: 280, y: 250 },
     { x: 1000, y: 250 },
+    // Added for the 5th/6th seat: floor centre and the top shelf, the two
+    // open spots that were previously nobody's.
+    { x: 640, y: 480 },
+    { x: 640, y: 150 },
   ],
   palette: {
     sky: '#2d1f3d',
@@ -52,6 +56,9 @@ const ROOFTOPS: Level = {
     { x: 860, y: 500 },
     { x: 195, y: 360 },
     { x: 1085, y: 360 },
+    // Floor centre and the high middle ledge.
+    { x: 640, y: 500 },
+    { x: 640, y: 190 },
   ],
   palette: {
     sky: '#14213d',
@@ -81,6 +88,9 @@ const TOWERS: Level = {
     { x: 1020, y: 440 },
     { x: 640, y: 520 },
     { x: 640, y: 220 },
+    // The two mid-height ledges that had no spawn of their own.
+    { x: 350, y: 290 },
+    { x: 930, y: 290 },
   ],
   palette: {
     sky: '#1a1526',

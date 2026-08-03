@@ -673,6 +673,17 @@ strong,
   color: var(--ink-soft);
 }
 
+/* Cross-game running total, in the same row as the ready tick. */
+.person__total {
+  flex: none;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 13px;
+  color: var(--ink-soft);
+  min-width: 1.5em;
+  text-align: end;
+}
+
 .person__tick {
   width: 26px;
   height: 26px;
@@ -1061,19 +1072,45 @@ strong,
   box-shadow: 0 0 0 3px var(--green);
 }
 
+/* The always-visible pause button — the fast path, next to maximize, so
+   pausing doesn't mean hunting through the options panel. Same top corner as
+   the options gear, one slot inboard of it. Only rendered mid-match. */
+.pausebtn {
+  position: fixed;
+  z-index: 15;
+  top: calc(6px + env(safe-area-inset-top));
+  inset-inline-end: calc(58px + env(safe-area-inset-right));
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: rgba(253, 246, 232, 0.9);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  touch-action: manipulation;
+}
+.pausebtn:active {
+  transform: translateY(1px);
+}
+
 /* Only rendered on a touch device — a desktop browser already has F11.
  *
  * Fixed, and deliberately not inside `.rail`: on a phone the rail is an overlay
  * with `pointer-events: none` so it cannot swallow taps meant for the arena,
  * which also made this button unpressable on exactly the devices it exists for.
- * It sits one slot inboard of the options gear, which owns the same corner. */
+ * It sits one slot inboard of the pause button, which sits inboard of the
+ * options gear — all three share this corner. */
 .fullscreenbtn__wrap {
   position: fixed;
   z-index: 15;
-  /* Top corner, one slot inboard of the options gear. Never the bottom: that is
-     where the shooting thumb lives, and both weapon buttons are there. */
+  /* Top corner. Never the bottom: that is where the shooting thumb lives, and
+     both weapon buttons are there. */
   top: calc(6px + env(safe-area-inset-top));
-  inset-inline-end: calc(58px + env(safe-area-inset-right));
+  inset-inline-end: calc(104px + env(safe-area-inset-right));
   display: flex;
   flex-direction: row-reverse;
   align-items: flex-start;
@@ -1293,6 +1330,26 @@ strong,
   line-height: 1.1;
 }
 
+/* First-visit iPhone "add to home screen" overlay. Sits above everything else
+   the app root renders — it has to be seen before anything else happens. */
+.installprompt {
+  z-index: 70;
+}
+.installprompt__card {
+  text-align: center;
+  align-items: center;
+  padding: 28px 22px;
+}
+.installprompt__icon {
+  margin: 0;
+  font-size: 40px;
+  line-height: 1;
+}
+.installprompt__body {
+  margin: 0;
+  color: var(--ink-soft);
+}
+
 .countdown {
   font-family: var(--font-display);
   font-size: clamp(72px, 17vw, 160px);
@@ -1313,6 +1370,64 @@ strong,
   font-family: var(--font-display);
   font-weight: 800;
   font-size: 20px;
+}
+
+/* --- winner celebration --------------------------------------------------- */
+
+.matchover__card--win {
+  position: relative;
+  overflow: hidden;
+}
+
+.matchover__winner {
+  display: flex;
+  justify-content: center;
+  animation: winner-pop 500ms cubic-bezier(0.2, 1.6, 0.4, 1) both;
+}
+@keyframes winner-pop {
+  0% { transform: scale(0.4) rotate(-8deg); opacity: 0; }
+  60% { transform: scale(1.08) rotate(3deg); }
+  100% { transform: none; opacity: 1; }
+}
+
+.matchover__quip {
+  margin: -4px 0 0;
+  text-align: center;
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+
+/* A fixed handful of pieces raining from the top of the card, each a plain
+   rectangle rotating as it falls — no libraries, no blur, just keyframes. */
+.confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.confetti__piece {
+  position: absolute;
+  top: -24px;
+  left: var(--x);
+  width: 8px;
+  height: 14px;
+  background: var(--c);
+  border: 1.5px solid var(--ink);
+  animation: confetti-fall var(--d) linear var(--delay) infinite;
+}
+@keyframes confetti-fall {
+  0% { transform: translateY(-10%) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(420px) rotate(340deg); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .confetti,
+  .matchover__winner {
+    animation: none;
+  }
+  .confetti__piece {
+    animation: none;
+    display: none;
+  }
 }
 
 .standings {
@@ -1357,6 +1472,12 @@ strong,
 .standings__score {
   font-family: var(--font-display);
   font-weight: 800;
+}
+
+.standings__total {
+  font-size: 11px;
+  color: var(--ink-soft);
+  font-weight: 600;
 }
 
 /* Sitting out is the one state people mistake for the game being broken, so it
@@ -1620,32 +1741,34 @@ strong,
   transform: translate(var(--lift-sm), var(--lift-sm));
   box-shadow: none;
 }
-/* Out of the way during a match, but never quite invisible. */
+/* Out of the way during a match, but never quite invisible. Bottom-right is
+   where the shooting thumb lives and the gear used to sit on top of the
+   biggest button on the pad — mid-match it always moves to the top corner,
+   the same row as the maximize and pause buttons, on every screen size. */
 .app--playing .options {
+  top: calc(6px + env(safe-area-inset-top));
+  bottom: auto;
+  inset-inline-end: calc(8px + env(safe-area-inset-right));
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
   opacity: 0.5;
 }
 .app--playing .options:hover {
   opacity: 1;
 }
 
-/* Bottom-right is where the shooting thumb lives, and the gear was sitting
-   exactly on top of the biggest button on the pad — the 92px one. Mid-match on
-   a phone it moves to the top corner, where nothing else is. */
 @media (max-width: 760px), (max-height: 560px) {
-  .app--playing .options {
-    top: calc(6px + env(safe-area-inset-top));
-    bottom: auto;
-    inset-inline-end: calc(8px + env(safe-area-inset-right));
-    width: 36px;
-    height: 36px;
-    font-size: 16px;
-  }
-
-  /* Tracks the gear, which shrinks to 36px here. This one does not shrink with
-     it — the gear is rarely wanted mid-match and this is the first thing you
-     reach for on a small screen, so it keeps a full 44px target. */
-  .fullscreenbtn__wrap {
+  /* Tracks the gear, which is 36px here. These do not shrink with it — pause
+     and maximize are the first things reached for on a small screen, so they
+     keep a full 44px target. */
+  .pausebtn {
     inset-inline-end: calc(50px + env(safe-area-inset-right));
+    width: 44px;
+    height: 44px;
+  }
+  .fullscreenbtn__wrap {
+    inset-inline-end: calc(96px + env(safe-area-inset-right));
   }
   .fullscreenbtn {
     width: 44px;
@@ -1992,14 +2115,9 @@ strong,
     font-size: 10px;
   }
 
-  /* Opposite corner from the scores, out of the way of both thumbs. */
+  /* No room for it on a phone — it was overlapping the round counter. */
   .netbadge {
-    position: absolute;
-    top: 0;
-    inset-inline-end: 0;
-    margin: 0;
-    background: rgba(253, 246, 232, 0.82);
-    pointer-events: auto;
+    display: none;
   }
 }
 
@@ -2093,6 +2211,15 @@ strong,
   border: var(--outline);
   border-radius: var(--radius);
   box-shadow: var(--shadow-sm);
+  /*
+   * iOS Safari doesn't shrink the dynamic viewport when the keyboard opens for
+   * the guess input below — it scrolls the document instead, which without
+   * this would carry the word banner (and the letter count guessers need)
+   * off the top of the screen along with it.
+   */
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 
 .skribbl__round {
