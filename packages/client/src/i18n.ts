@@ -50,10 +50,10 @@ const he = {
   suffixYou: ' (זה אתם)',
   metaHost: 'מארח · ',
   metaAway: 'לא מחובר',
-  metaReady: 'מוכן',
+  metaReady: 'סופר מוכן',
   metaNotReady: 'לא מוכן',
-  ready: 'אני מוכן',
-  notReady: 'רגע, אני לא מוכן',
+  ready: 'אני מוכן ומזומן',
+  notReady: 'חכה אני לא מוכן!',
   startGame: (game: string) => `התחילו ${game}`,
   needReady: (min: number) => `צריך ${min} שחקנים מוכנים`,
   leave: 'יציאה',
@@ -81,19 +81,19 @@ const he = {
   watchingHost: 'אין לכם מקום במשחק הזה — «התחלת משחק מחדש» בתפריט תכניס אתכם.',
   watchingGuest:
     'אין לכם מקום במשחק הזה. המארח יכול להכניס אתכם עם «התחלת משחק מחדש», או שתיכנסו בבא.',
-  paused: 'מושהה',
+  paused: 'תגידו מו - מושהה',
   pausedBy: (name: string) => `${name} עצר את המשחק`,
-  pausedByNobody: 'המשחק עצור',
-  resume: 'המשיכו',
+  pausedByNobody: 'עצרנו לרגע תמשחק',
+  resume: 'להמשיך!',
   waitingForPlayer: 'מחכים שמישהו ימשיך…',
-  matchOver: 'המשחק נגמר',
+  matchOver: 'איזה באסה נגמר המשחק',
   winner: (name: string) => `${name} ניצח`,
   nobodyWins: 'אף אחד לא ניצח',
   totalScoreTitle: 'ניקוד מצטבר בחדר הזה, על פני כל המשחקים',
   totalScoreLabel: (n: number) => `סה״כ ${n}`,
   /** One picked at random per match end. Silly on purpose — this is a living room. */
   winnerQuips: (name: string) => [
-    `כל הכבוד ל${name}! בטח מתאמנים בבית...`,
+    `כל הכבוד ל${name}! בטח מתאמן בבית...`,
     `${name} נגד ליל מוג' מוג' חמינאי מי ינצח?`,
     `המשחק מכור, השופט משוחד, ו${name} לא סופר פה אף אחד`,
     'לא שותים בזמן שמשחקים',
@@ -109,17 +109,17 @@ const he = {
   enterFullscreen: 'מסך מלא',
   exitFullscreen: 'צאו ממסך מלא',
   /** iPhone only: Safari cannot hide its own bars, so this is the way out. */
-  fullscreenInstallHint: 'ב־iPhone: שתפו ← «הוסף למסך הבית», ופתחו משם למסך מלא.',
+  fullscreenInstallHint: 'כדי שתוכלו להגדיל את המסך. ב־iPhone: שתפו ← «הוסף למסך הבית», ופתחו משם למסך מלא.',
 
   // First-visit iPhone install prompt.
-  installTitle: 'הוסיפו את הסלון למסך הבית',
+  installTitle: 'תוסיפו את הסלון למסך הבית, זה בשבילכם',
   installBody:
     'כדי לשחק במסך מלא בלי סרגלי ספארי — הקישו על כפתור השיתוף ⎋ בסרגל, ואז «הוסף למסך הבית».',
-  installDismiss: 'הבנתי',
+  installDismiss: 'הבנתי די להפריע לי',
 
   // Touch controls. Short on purpose — they are printed inside the buttons.
   padFire: 'ירי',
-  padBomb: 'פצצה',
+  padBomb: 'בוםבום',
 
   // Voice chat
   voiceHeading: 'צ׳אט קולי',
@@ -164,7 +164,7 @@ const he = {
   langHebrew: 'עברית',
   langEnglish: 'English',
   sectionMatch: 'המשחק',
-  pauseForEveryone: 'השהו לכולם',
+  pauseForEveryone: 'עצרו כולם!',
   onlyPlayersPause: 'רק מי שמשחק יכול להשהות.',
   restartMatch: 'התחלת משחק מחדש',
   endMatch: 'סיימו את המשחק',
@@ -183,7 +183,7 @@ const he = {
   // Game names stay as they are — they are proper nouns in both languages.
   games: {
     achtung: {
-      tagline: 'ציירו קו. אל תיגעו בכלום.',
+      tagline: 'להחזיר את החוש האומנותי מכיתה ג',
       controls: 'חצים ימינה ושמאלה, או A ו-D',
       rules: [
         'העקומה שלכם מתקדמת לבד, בלי הפסקה. אתם רק פונים ימינה ושמאלה.',
@@ -194,7 +194,7 @@ const he = {
       ],
     },
     gunmayhem: {
-      tagline: 'תפילו את החברים מהבמה.',
+      tagline: 'מלא יריות ומלא צחוקים',
       controls: 'חצים או WASD לתזוזה · למעלה לקפיצה · למטה לצניחה · J ירי · K פצצה',
       rules: [
         'תפילו את כולם מהבמה. נפילה עולה לכם חיים.',
@@ -207,7 +207,7 @@ const he = {
       ],
     },
     skribbl: {
-      tagline: 'אחד מצייר. כל השאר מנחשים.',
+      tagline: 'תקשקשו על המסך בזמן שמקשקשים עם החברים',
       controls: 'ציירו עם העכבר או האצבע · הקלידו ניחוש בצ׳אט',
       rules: [
         'בכל סיבוב אחד מצייר וכל השאר מנחשים.',
