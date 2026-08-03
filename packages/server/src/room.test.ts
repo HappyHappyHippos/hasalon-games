@@ -448,22 +448,22 @@ describe('Room total score', () => {
     setInstanceScores(room, { [a.id]: 3, [b.id]: 2, [c.id]: 1 });
     endMatch(room, a.seat);
 
-    expect(a.totalScore).toBe(25);
-    expect(b.totalScore).toBe(18);
-    expect(c.totalScore).toBe(15);
+    expect(a.totalScore).toBe(3);
+    expect(b.totalScore).toBe(2);
+    expect(c.totalScore).toBe(1);
 
     // A new match clears the per-match score but never the running total —
     // that's the entire point of keeping it a separate field.
     expect(room.restart()).toBe(true);
     expect(a.score).toBe(0);
-    expect(a.totalScore).toBe(25);
+    expect(a.totalScore).toBe(3);
 
     setInstanceScores(room, { [a.id]: 1, [b.id]: 3, [c.id]: 2 });
     endMatch(room, b.seat);
 
-    expect(a.totalScore).toBe(25 + 15);
-    expect(b.totalScore).toBe(18 + 25);
-    expect(c.totalScore).toBe(15 + 18);
+    expect(a.totalScore).toBe(3 + 1);
+    expect(b.totalScore).toBe(2 + 3);
+    expect(c.totalScore).toBe(1 + 2);
 
     room.dispose();
   });
@@ -480,9 +480,9 @@ describe('Room total score', () => {
     setInstanceScores(room, { [a.id]: 5, [b.id]: 5 });
     endMatch(room, null);
 
-    // Tied for 1st/2nd: (25 + 18) / 2 each.
-    expect(a.totalScore).toBe(21.5);
-    expect(b.totalScore).toBe(21.5);
+    // Tied for 1st/2nd: (2 + 1) / 2 each.
+    expect(a.totalScore).toBe(1.5);
+    expect(b.totalScore).toBe(1.5);
 
     room.dispose();
   });
@@ -504,13 +504,13 @@ describe('Room total score', () => {
     setInstanceScores(room, { [a.id]: 2, [b.id]: 1 });
     endMatch(room, a.seat);
 
-    expect(a.totalScore).toBe(25);
-    expect(b.totalScore).toBe(18);
+    expect(a.totalScore).toBe(2);
+    expect(b.totalScore).toBe(1);
     expect(spectator.totalScore).toBe(0);
 
     // Switching games in the lobby must not touch it either.
     room.setGame('skribbl');
-    expect(a.totalScore).toBe(25);
+    expect(a.totalScore).toBe(2);
 
     room.dispose();
   });

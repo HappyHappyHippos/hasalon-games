@@ -98,7 +98,7 @@ export function MatchOver({
           </div>
         )}
 
-        <h2 className="overlay__title" style={winner ? { color: colorFor(winner.colorIndex) } : undefined}>
+        <h2 className="overlay__title center" style={winner ? { color: colorFor(winner.colorIndex) } : undefined}>
           {winner ? t.winner(winner.name) : t.nobodyWins}
         </h2>
         {winner && <p className="matchover__quip">{quip}</p>}
