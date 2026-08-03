@@ -1,6 +1,9 @@
 import type { ComponentType, JSX } from 'react';
 import { GAMES, type GameConfig, type GameId, type GameMeta, type RoomView } from '@mg/shared';
 import { AchtungBoxArt } from './achtung/BoxArt';
+import { SkribblBoxArt } from './skribbl/BoxArt';
+import { SkribblScreen } from './skribbl/SkribblScreen';
+import { SkribblSettings } from './skribbl/Settings';
 import { AchtungScreen } from './achtung/AchtungScreen';
 import { AchtungSettings } from './achtung/Settings';
 import { GunMayhemBoxArt } from './gunmayhem/BoxArt';
@@ -46,10 +49,17 @@ export const CLIENT_GAMES: Record<GameId, ClientGame> = {
     Settings: AchtungSettings,
     accent: 'var(--teal)',
   },
+  skribbl: {
+    meta: GAMES.skribbl.meta,
+    BoxArt: SkribblBoxArt,
+    Screen: SkribblScreen,
+    Settings: SkribblSettings,
+    accent: 'var(--violet)',
+  },
 };
 
 /** Display order in the lobby. */
-export const CLIENT_GAME_IDS: GameId[] = ['gunmayhem', 'achtung'];
+export const CLIENT_GAME_IDS: GameId[] = ['gunmayhem', 'achtung', 'skribbl'];
 
 export function renderGameScreen(room: RoomView, mySeat: number): JSX.Element {
   const game = CLIENT_GAMES[room.gameId];

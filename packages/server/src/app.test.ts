@@ -386,6 +386,92 @@ describe('match', () => {
     expect(acked.snap.players.some((p) => p.ack === 9 && p.vx > 0)).toBe(true);
   });
 
+  it('runs Skribbl and keeps the word off every guessing socket', async () => {
+    const clients = await makeLobby(2);
+    const [host, guest] = clients;
+
+    host!.send({ t: 'game', gameId: 'skribbl' });
+    host!.send({ t: 'start' });
+    await host!.next('matchStarted');
+
+    // The drawer is told their choices privately; nobody else is told anything.
+    const drawerPrivate = await host!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'private' }> =>
+        m.t === 'private' && (m.data as { choices?: string[] } | null)?.choices?.length === 3,
+    );
+    const choices = (drawerPrivate.data as { choices: string[] }).choices;
+
+    host!.send({ t: 'input', i: { k: 'pick', w: choices[0] } });
+
+    const drawing = await host!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+        m.t === 'snapshot' && m.snap.game === 'skribbl' && m.snap.phase === 'drawing',
+    );
+    if (drawing.snap.game !== 'skribbl') throw new Error('wrong game');
+    expect(drawing.snap.drawerSeat).toBe(0);
+    // Blanks, not the word.
+    expect(drawing.snap.masked).toMatch(/_/);
+
+    // Let some ink and a few hints flow, then read back *everything* the
+    // guesser's socket has ever received. This is the property the whole design
+    // exists for: a snapshot is encoded once and sent to the room, so a word
+    // that reached this buffer would be readable by every player in devtools.
+    host!.send({ t: 'input', i: { k: 'begin', c: 0, s: 1, x: 10, y: 10 } });
+    host!.send({ t: 'input', i: { k: 'to', p: [20, 20, 30, 30] } });
+    await new Promise((resolve) => setTimeout(resolve, 600));
+
+    const seenByGuest = JSON.stringify(guest!.received);
+    expect(seenByGuest).not.toContain(choices[0]);
+    for (const choice of choices) expect(seenByGuest).not.toContain(choice);
+    // ...and the guesser was never sent a private payload at all.
+    expect(guest!.received.some((m) => m.t === 'private' && m.data !== null)).toBe(false);
+
+    // The ink did travel, though — that is the half that must be shared.
+    const inked = guest!.received.some(
+      (m) => m.t === 'snapshot' && m.snap.game === 'skribbl' && m.snap.ink.length > 0,
+    );
+    expect(inked).toBe(true);
+  });
+
+  it('scores a correct Skribbl guess and refuses to score it twice', async () => {
+    const clients = await makeLobby(2);
+    const [host, guest] = clients;
+
+    host!.send({ t: 'game', gameId: 'skribbl' });
+    host!.send({ t: 'start' });
+    await host!.next('matchStarted');
+
+    const drawerPrivate = await host!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'private' }> =>
+        m.t === 'private' && (m.data as { choices?: string[] } | null)?.choices?.length === 3,
+    );
+    const word = (drawerPrivate.data as { choices: string[] }).choices[0]!;
+    host!.send({ t: 'input', i: { k: 'pick', w: word } });
+    await host!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+        m.t === 'snapshot' && m.snap.game === 'skribbl' && m.snap.phase === 'drawing',
+    );
+
+    guest!.send({ t: 'input', i: { k: 'guess', g: word } });
+
+    const scored = await guest!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+        m.t === 'snapshot' && m.snap.game === 'skribbl' && m.snap.players.some((p) => p.g === 1),
+    );
+    if (scored.snap.game !== 'skribbl') throw new Error('wrong game');
+    const guesser = scored.snap.players.find((p) => p.s === 1)!;
+    expect(guesser.p).toBeGreaterThan(0);
+
+    // With the only guesser correct the round ends at once, so the word is now
+    // public — which is exactly when it is safe for it to be.
+    const revealed = await guest!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+        m.t === 'snapshot' && m.snap.game === 'skribbl' && m.snap.phase === 'reveal',
+    );
+    if (revealed.snap.game !== 'skribbl') throw new Error('wrong game');
+    expect(revealed.snap.masked).toBe(word);
+  });
+
   it('returns everyone to the lobby on a rematch with scores cleared', async () => {
     const clients = await makeLobby(2);
     const [host, guest] = clients;

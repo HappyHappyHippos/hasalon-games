@@ -30,6 +30,15 @@ const MAX_MESSAGES_PER_SECOND = 200;
  */
 const MAX_RTC_BYTES = 16_384;
 /**
+ * Ceiling on one game input.
+ *
+ * Generous by the standards of what actually travels: Gun Mayhem sends a
+ * bitmask and a sequence number, and Skribbl's drawer sends a handful of
+ * coordinate pairs per frame. It exists because there was no bound at all, and
+ * "the game module validates it" is only true of the shape, never the length.
+ */
+const MAX_INPUT_BYTES = 4_096;
+/**
  * A socket that has silently died is detected somewhere between one and two of
  * these. At 30 s that was up to a minute of a room broadcasting 30 snapshots a
  * second into a hole, and up to a minute before the seat freed up.
@@ -257,10 +266,25 @@ export function createApp(options: AppOptions): App {
         return;
       }
 
-      case 'input':
-        // The payload is game-specific; the game module validates it.
+      case 'input': {
+        // The payload is game-specific and the module validates its *shape* —
+        // but nothing upstream bounds its size. `ws` defaults to a 100 MB frame
+        // and there is no per-message cap, so before Skribbl this was a bitmask
+        // and a sequence number by convention alone. A stroke buffer is not,
+        // and 200 messages a second of anything large is a denial of service.
+        let size = 0;
+        try {
+          size = JSON.stringify(message.i ?? null).length;
+        } catch {
+          return;
+        }
+        if (size > MAX_INPUT_BYTES) {
+          client.sendError('BAD_MESSAGE', 'Input payload too large.');
+          return;
+        }
         room.input(player, message.i);
         return;
+      }
 
       case 'rtc': {
         // Signalling only, and opaque. The cap is the one thing worth checking:

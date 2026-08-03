@@ -45,6 +45,11 @@ const TRACKS: Record<MusicTrack, string> = {
   lobby: '/music/lobby.mp3',
   gunmayhem: '/music/gunmayhem.mp3',
   achtung: '/music/achtung.mp3',
+  // Deliberately the same file as the lobby. The swing bed is exactly right
+  // under a drawing game — unhurried, and it does not fight a room full of
+  // people talking. `play` notices the url is unchanged and lets it keep
+  // running rather than restarting the same track from the top.
+  skribbl: '/music/lobby.mp3',
 };
 
 /** Long enough to feel deliberate, short enough not to overlap two melodies. */
@@ -137,6 +142,13 @@ class Music {
     this.wanted = track;
 
     if (this.current === track) return;
+    // Two track ids can name the same file — Skribbl and the lobby share one.
+    // Swapping between them should not restart the music.
+    if (this.current && TRACKS[this.current] === TRACKS[track]) {
+      this.current = track;
+      this.wanted = track;
+      return;
+    }
     // `current` is only claimed once we are actually going to try. It used to be
     // set above this guard, so a muted or broken track still became "current"
     // and the bed then stayed silent until some *other* track was requested.

@@ -71,6 +71,13 @@ export class Room {
   private instance: GameInstance | null = null;
   /** The last snapshot actually sent, replayed to anyone joining mid-match. */
   private lastSnapshot: GameSnapshot | null = null;
+  /**
+   * The last `private` payload each player was sent, encoded.
+   *
+   * Only so we can tell whether it changed — see `sendPrivate`. Keyed by player
+   * id and cleared whenever their socket comes or goes.
+   */
+  private lastPrivate = new Map<string, string>();
   /** When that snapshot was authored. Replayed with it, so it stays honest about its age. */
   private lastSnapshotAt = 0;
   private timer: NodeJS.Timeout | null = null;
@@ -91,6 +98,7 @@ export class Room {
     this.settingsByGame = {
       achtung: GAMES.achtung.defaultConfig(2),
       gunmayhem: GAMES.gunmayhem.defaultConfig(2),
+      skribbl: GAMES.skribbl.defaultConfig(2),
     };
   }
 
@@ -175,6 +183,7 @@ export class Room {
     // The socket that reconnected is a fresh controller — most importantly its
     // input sequence counter has restarted — so the sim must forget the old one.
     this.instance?.resetInput(player.id);
+    this.forgetPrivate(player.id);
 
     client.roomCode = this.code;
     client.playerId = player.id;
@@ -189,6 +198,7 @@ export class Room {
     // Let go of their buttons rather than yanking them out of a live round —
     // otherwise someone who drops mid-sprint keeps running for the full grace.
     this.instance?.resetInput(player.id);
+    this.forgetPrivate(player.id);
     this.resumeIfPausedBy(player.id);
     this.reassignHostIfNeeded();
     this.updateEmptiness();
@@ -543,6 +553,45 @@ export class Room {
     const encoded = encode({ t: 'snapshot', snap: this.lastSnapshot, st: this.lastSnapshotAt });
     const droppable = this.module.meta.droppableSnapshots;
     for (const p of this.players) p.client?.sendSnapshot(encoded, droppable);
+
+    for (const p of this.players) this.sendPrivate(p);
+  }
+
+  /**
+   * Push this player's private view, if it changed since the last time.
+   *
+   * The whole point of the broadcast above is that it is built and encoded
+   * once; a secret cannot live there, because every socket in the room gets the
+   * same bytes. So games with hidden information (Skribbl's word) answer
+   * `privateFor` instead, and the result goes to exactly one person.
+   *
+   * Diffed against the last value sent rather than pushed every snapshot. The
+   * things that live here change once a round, not thirty times a second, so in
+   * the steady state this loop does one `privateFor` call per player and sends
+   * nothing at all. Most games do not implement it and every call returns null.
+   */
+  private sendPrivate(player: RoomPlayer): void {
+    if (!player.client || !this.instance?.privateFor) return;
+
+    const data = this.instance.privateFor(player.id);
+    // `undefined` would drop the key entirely and make the message unreadable,
+    // so an absent private view is explicitly null on the wire.
+    const encoded = encode({ t: 'private', data: data ?? null });
+    if (this.lastPrivate.get(player.id) === encoded) return;
+
+    this.lastPrivate.set(player.id, encoded);
+    player.client.sendRaw(encoded);
+  }
+
+  /**
+   * Forget what we last sent this player, so the next broadcast re-sends it.
+   *
+   * Called whenever a socket goes away or comes back: a drawer whose phone
+   * locked has to get their word again, and the diff above would otherwise
+   * decide nothing had changed and stay quiet for the rest of the round.
+   */
+  private forgetPrivate(playerId: string): void {
+    this.lastPrivate.delete(playerId);
   }
 
   private endMatch(winnerSeat: number | null): void {
@@ -637,5 +686,11 @@ export class Room {
     } else {
       player.client?.send({ t: 'snapshot', snap: this.instance.snapshot(), st: serverNow() });
     }
+
+    // And whatever only they may see. `forgetPrivate` ran when their socket
+    // came back, so this is guaranteed to actually send rather than diff away —
+    // a drawer reconnecting must not spend the rest of the round without their
+    // word.
+    this.sendPrivate(player);
   }
 }

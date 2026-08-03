@@ -2,7 +2,7 @@ import type { GameConfig, GameId, GameSnapshot } from './gameModule';
 import type { RoomView } from './room';
 
 /** Bump when the message shapes change so stale tabs fail loudly, not weirdly. */
-export const PROTOCOL_VERSION = 11;
+export const PROTOCOL_VERSION = 12;
 
 export const WS_PATH = '/ws';
 
@@ -99,6 +99,15 @@ export type ServerMessage =
    */
   | { t: 'matchStarted'; room: RoomView; resumed?: true }
   | { t: 'matchEnded'; room: RoomView; winnerSeat: number | null }
+  /**
+   * Game state for this socket alone — the half of the world a snapshot cannot
+   * carry, because a snapshot is encoded once and sent to everybody.
+   *
+   * Skribbl's drawer learns their word this way. Sent only when the value
+   * changes and on catch-up, never on a cadence: the alternative is putting a
+   * secret in a frame that every other player receives and can read.
+   */
+  | { t: 'private'; data: unknown }
   | { t: 'error'; code: ErrorCode; message: string }
   /** A relayed `rtc` payload, stamped with who actually sent it. */
   | { t: 'rtc'; from: string; data: unknown }

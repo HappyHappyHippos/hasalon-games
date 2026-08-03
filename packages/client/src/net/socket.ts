@@ -10,11 +10,22 @@ import {
   type ServerMessage,
 } from '@mg/shared';
 import { feed } from './feed';
+// Game-specific, and the only such import here. See `inkBus` for why this
+// cannot ride the throttled HUD mirror like everything else does.
+import { receiveSkribbl, resetInk } from '../games/skribbl/inkBus';
 import { clock } from './clock';
 import { voice } from './voice';
 import { delayed, readNetSim } from './netsim';
 import { sfx } from '../audio';
-import { loadSession, saveSession, useStore, type Hud, type HudPlayer } from '../store';
+import {
+  loadSession,
+  saveSession,
+  useStore,
+  type Hud,
+  type HudPlayer,
+  type Secret,
+  type SkribblHud,
+} from '../store';
 
 /**
  * Ping fast at first, then back off.
@@ -228,6 +239,7 @@ class GameSocket {
     this.send({ t: 'leave' });
     saveSession(null);
     feed.reset();
+    resetInk();
     // The mesh is per-room; leaving one without tearing it down leaves a live
     // microphone open to people you are no longer in a room with.
     voice.stop();
@@ -238,6 +250,19 @@ class GameSocket {
   /** Game-specific input payload, sent unbuffered. */
   sendInput(payload: unknown): void {
     this.raw({ t: 'input', i: payload });
+  }
+
+  /**
+   * Game input that must not be dropped.
+   *
+   * `sendInput` goes through `raw`, which discards silently when the socket is
+   * not open — correct for a movement bitmask, where the next sample supersedes
+   * it 16 ms later. A typed guess or a chosen word has no next sample: losing
+   * one is losing the thing the player did, so these queue until the socket
+   * opens instead.
+   */
+  sendInputReliable(payload: unknown): void {
+    this.send({ t: 'input', i: payload });
   }
 
   /** WebRTC signalling for one peer. Unbuffered — a stale offer is worse than none. */
@@ -270,6 +295,7 @@ class GameSocket {
 
       case 'matchStarted':
         feed.reset();
+        resetInk();
         this.lastCountdown = 0;
         // `resumed` is the catch-up copy sent to a socket that reconnected into
         // a running match, and reconnects happen on a half-second backoff. Only
@@ -281,6 +307,10 @@ class GameSocket {
 
       case 'snapshot':
         feed.push(message.snap, message.st);
+        // Before the HUD mirror, and outside its throttle. Skribbl's ink and
+        // chat are drained server-side — each appears in exactly one snapshot —
+        // so anything the 120 ms throttle skips is lost for good.
+        if (message.snap.game === 'skribbl') receiveSkribbl(message.snap);
         this.mirrorHud(message.snap);
         return;
 
@@ -295,6 +325,12 @@ class GameSocket {
 
       case 'rtc':
         void voice.onSignal(message.from, message.data);
+        return;
+
+      case 'private':
+        // Game state for this socket alone — Skribbl's word, for the drawer.
+        // Null clears it, which is what arrives the moment they stop drawing.
+        store.setSecret((message.data as Secret | null) ?? null);
         return;
 
       case 'error': {
@@ -341,26 +377,53 @@ class GameSocket {
       this.lastCountdown = countdown;
     }
 
-    const players: HudPlayer[] =
-      snap.game === 'achtung'
-        ? snap.players.map((p) => ({
-            seat: p.s,
-            score: p.p,
-            alive: p.l === 1,
-            effects: p.fx,
-          }))
-        : snap.players.map((p) => ({
-            seat: p.s,
-            score: p.p,
-            alive: p.k > 0,
-            stocks: p.k,
-            damage: p.d,
-            weapon: p.w,
-            ammo: p.am,
-            bombs: p.bo,
-          }));
+    // A switch rather than a ternary, and deliberately so: with two games the
+    // `else` branch was Gun Mayhem by assumption, and adding a third would have
+    // silently read its snapshot as Gun Mayhem's — undefined fields everywhere
+    // and no compile error. Exhaustive narrowing makes the next game a build
+    // failure instead of a mystery.
+    let players: HudPlayer[];
+    let skribbl: SkribblHud | undefined;
+    switch (snap.game) {
+      case 'achtung':
+        players = snap.players.map((p) => ({
+          seat: p.s,
+          score: p.p,
+          alive: p.l === 1,
+          effects: p.fx,
+        }));
+        break;
+      case 'gunmayhem':
+        players = snap.players.map((p) => ({
+          seat: p.s,
+          score: p.p,
+          alive: p.k > 0,
+          stocks: p.k,
+          damage: p.d,
+          weapon: p.w,
+          ammo: p.am,
+          bombs: p.bo,
+        }));
+        break;
+      case 'skribbl':
+        players = snap.players.map((p) => ({
+          seat: p.s,
+          score: p.p,
+          alive: true,
+          guessed: p.g === 1,
+          roundScore: p.rp,
+        }));
+        skribbl = {
+          masked: snap.masked,
+          drawerSeat: snap.drawerSeat,
+          lang: snap.lang,
+          phaseTicks: snap.phaseTicks,
+          rounds: snap.rounds,
+        };
+        break;
+    }
 
-    const hud: Hud = { phase: snap.phase, round: snap.round, countdown, players };
+    const hud: Hud = { phase: snap.phase, round: snap.round, countdown, players, skribbl };
     useStore.getState().setHud(hud);
   }
 }

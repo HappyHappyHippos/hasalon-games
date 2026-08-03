@@ -1,16 +1,17 @@
 import type { AchtungConfig, AchtungSnapshot } from './games/achtung/types';
 import type { GunMayhemConfig, GunMayhemSnapshot } from './games/gunmayhem/types';
+import type { SkribblConfig, SkribblSnapshot } from './games/skribbl/types';
 
 /** Every game the site knows about. */
-export type GameId = 'achtung' | 'gunmayhem';
+export type GameId = 'achtung' | 'gunmayhem' | 'skribbl';
 
 /**
  * Configs and snapshots are unions tagged with `game`, so both the server and
  * the client narrow them with a single check instead of threading generics
  * through the room, the protocol and the store.
  */
-export type GameConfig = AchtungConfig | GunMayhemConfig;
-export type GameSnapshot = AchtungSnapshot | GunMayhemSnapshot;
+export type GameConfig = AchtungConfig | GunMayhemConfig | SkribblConfig;
+export type GameSnapshot = AchtungSnapshot | GunMayhemSnapshot | SkribblSnapshot;
 
 export interface GameSeat {
   id: string;
@@ -66,6 +67,21 @@ export interface GameInstance {
   stepTick(): void;
   /** Builds the wire snapshot and drains any events accumulated since the last call. */
   snapshot(): GameSnapshot;
+  /**
+   * State this one player may see and the others may not.
+   *
+   * The snapshot is built **once** and the same encoded string is pushed to
+   * every socket in the room (`Room.broadcastSnapshot`), which is what makes it
+   * cheap — and what makes it useless for a secret. Anything a game wants to
+   * tell one player and not the rest goes here instead: Skribbl's drawer needs
+   * the word, and every guesser must be unable to read it out of a frame.
+   *
+   * Optional, and null for anything without hidden information. Unlike
+   * `snapshot()` this must **not** drain: `Room` calls it once per player per
+   * broadcast and only sends when the value changed, so it has to be safe to
+   * call repeatedly and cheap to answer with null.
+   */
+  privateFor?(playerId: string): unknown | null;
   status(): GameStatus;
   /** Scores by player id, for the lobby view once the match ends. */
   scores(): Record<string, number>;

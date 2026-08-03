@@ -190,6 +190,17 @@ const he = {
         'מי שנגמרו לו החיים יוצא. האחרון ששורד מנצח בסיבוב.',
       ],
     },
+    skribbl: {
+      tagline: 'אחד מצייר. כל השאר מנחשים.',
+      controls: 'ציירו עם העכבר או האצבע · הקלידו ניחוש בצ׳אט',
+      rules: [
+        'בכל סיבוב אחד מצייר וכל השאר מנחשים.',
+        'המצייר בוחר מילה אחת מתוך שלוש.',
+        'הקלידו ניחושים בצ׳אט — ככל שתנחשו מהר יותר, כך תקבלו יותר נקודות.',
+        'אותיות מתגלות ככל שהזמן אוזל.',
+        'המצייר מקבל נקודות על כל מי שניחש.',
+      ],
+    },
   } satisfies Record<GameId, { tagline: string; controls: string; rules: string[] }>,
 
   // -------------------------------------------------------------------------
@@ -213,6 +224,42 @@ const he = {
   // -------------------------------------------------------------------------
   // Identity
   // -------------------------------------------------------------------------
+
+  // -------------------------------------------------------------------------
+  // Skribbl
+  // -------------------------------------------------------------------------
+  skribblRound: (n: number, of: number) => `סיבוב ${n}/${of}`,
+  skribblYourTurn: 'תורכם לצייר — בחרו מילה',
+  skribblChoosing: (name: string) => `${name} בוחר מילה…`,
+  skribblGetReady: 'מתחילים…',
+  skribblYouAreDrawing: 'אתם מציירים — בלי לרמוז!',
+  skribblAlreadyGot: 'ניחשתם נכון! 🎉',
+  skribblWaitToGuess: 'מחכים לציור…',
+  skribblGuessPlaceholder: 'מה זה? כתבו כאן…',
+  skribblGuessNow: 'נחשו בצ׳אט!',
+  skribblGotIt: (name: string) => `${name} ניחש נכון!`,
+  skribblClose: 'קרוב מאוד!',
+  skribblWordWas: (word: string) => `המילה הייתה: ${word}`,
+  skribblWordWasShort: 'המילה הייתה',
+  skribblPickPrompt: 'בחרו מה לצייר',
+  skribblAutoPick: (n: number) => `בעוד ${n} שניות נבחר עבורכם`,
+  skribblEasy: 'קל',
+  skribblMedium: 'בינוני',
+  skribblHard: 'קשה',
+  skribblDrawingTag: 'מצייר',
+  skribblColour: 'צבע',
+  skribblBrush: 'עובי',
+  skribblEraser: 'מחק',
+  skribblUndo: 'בטלו',
+  skribblClear: 'נקו הכל',
+  // Settings
+  skribblWordLanguage: 'שפת המילים',
+  skribblDrawTime: 'זמן ציור',
+  skribblSeconds: (n: number) => `${n} שנ׳`,
+  skribblRounds: 'סיבובים',
+  skribblHints: 'רמזים',
+  skribblHintsHelp: 'אותיות מתגלות אחת אחרי השנייה ככל שהזמן אוזל.',
+
   colorNames: ['אדום', 'ירוק', 'כחול', 'צהוב', 'כתום', 'סגול', 'תכלת', 'ורוד'],
   colorTaken: (name: string) => `${name} — תפוס`,
   hatNames: ['בלי כובע', 'קסקט', 'כתר', 'מגבעת', 'קרניים', 'סרט', 'הילה', 'גרבון'],
@@ -387,6 +434,17 @@ const en: Dict = {
         'Lose all your stocks and you are out. Last one standing wins the round.',
       ],
     },
+    skribbl: {
+      tagline: 'One draws. Everyone else guesses.',
+      controls: 'Draw with the mouse or a finger · type your guess in the chat',
+      rules: [
+        'Each round one player draws and everyone else guesses.',
+        'The drawer picks one of three words.',
+        'Type guesses in the chat — the faster you get it, the more it is worth.',
+        'Letters appear as the clock runs down.',
+        'The drawer scores for every person who gets it.',
+      ],
+    },
   },
 
   setPowerups: 'Powerups',
@@ -403,6 +461,42 @@ const en: Dict = {
   setBombs: 'Bombs',
   setLivesEach: 'Lives each',
   setRoundsToWin: 'Rounds to win',
+
+
+  // -------------------------------------------------------------------------
+  // Skribbl
+  // -------------------------------------------------------------------------
+  skribblRound: (n: number, of: number) => `Round ${n}/${of}`,
+  skribblYourTurn: 'Your turn — pick a word',
+  skribblChoosing: (name: string) => `${name} is choosing a word…`,
+  skribblGetReady: 'Starting…',
+  skribblYouAreDrawing: "You're drawing — no hints!",
+  skribblAlreadyGot: 'You got it! 🎉',
+  skribblWaitToGuess: 'Waiting for the drawing…',
+  skribblGuessPlaceholder: 'What is it? Type here…',
+  skribblGuessNow: 'Guess in the chat!',
+  skribblGotIt: (name: string) => `${name} guessed it!`,
+  skribblClose: 'So close!',
+  skribblWordWas: (word: string) => `The word was: ${word}`,
+  skribblWordWasShort: 'The word was',
+  skribblPickPrompt: 'Pick something to draw',
+  skribblAutoPick: (n: number) => `Choosing for you in ${n}s`,
+  skribblEasy: 'Easy',
+  skribblMedium: 'Medium',
+  skribblHard: 'Hard',
+  skribblDrawingTag: 'drawing',
+  skribblColour: 'Colour',
+  skribblBrush: 'Brush',
+  skribblEraser: 'Eraser',
+  skribblUndo: 'Undo',
+  skribblClear: 'Clear',
+  // Settings
+  skribblWordLanguage: 'Word language',
+  skribblDrawTime: 'Drawing time',
+  skribblSeconds: (n: number) => `${n}s`,
+  skribblRounds: 'Rounds',
+  skribblHints: 'Hints',
+  skribblHintsHelp: 'Letters appear one by one as the clock runs down.',
 
   colorNames: ['Red', 'Green', 'Blue', 'Yellow', 'Orange', 'Purple', 'Cyan', 'Pink'],
   colorTaken: (name: string) => `${name} — taken`,

@@ -1,9 +1,8 @@
 import { useEffect, useState, type JSX, type ReactNode, type RefObject } from 'react';
-import { colorFor, type RoomView } from '@mg/shared';
+import type { RoomView } from '@mg/shared';
 import { useStore } from '../store';
 import { useT } from '../strings';
-import { socket } from '../net/socket';
-import { Button } from './Button';
+import { MatchOver, Paused } from './MatchOverlays';
 import { VoiceBar } from './VoiceBar';
 import { useHasTouch } from './useTouchControls';
 import {
@@ -185,84 +184,6 @@ function NetBadge(): JSX.Element | null {
       <span className="netbadge__dot" />
       <span>{net.rtt}ms</span>
       {net.jitter >= 8 && <span className="netbadge__jitter">±{net.jitter}</span>}
-    </div>
-  );
-}
-
-/**
- * Anyone seated can pause, and anyone seated can lift it — a pause you have to
- * find the original presser to undo is a hostage situation, not a feature.
- */
-function Paused({ room, spectating }: { room: RoomView; spectating: boolean }): JSX.Element {
-  const pauser = room.players.find((p) => p.id === room.pausedBy);
-  const t = useT();
-
-  return (
-    <div className="overlay overlay--solid">
-      <div className="sticker overlay__card paused__card">
-        <p className="eyebrow">{t.paused}</p>
-        <h2 className="overlay__title">
-          {pauser ? t.pausedBy(pauser.name) : t.pausedByNobody}
-        </h2>
-        {spectating ? (
-          <p className="muted center">{t.waitingForPlayer}</p>
-        ) : (
-          <Button variant="primary" size="lg" full onClick={() => socket.setPaused(false)}>
-            {t.resume}
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
-
-function MatchOver({
-  room,
-  mySeat,
-  winnerSeat,
-  isHost,
-}: {
-  room: RoomView;
-  mySeat: number;
-  winnerSeat: number | null;
-  isHost: boolean;
-}): JSX.Element {
-  const t = useT();
-  const standings = room.players
-    .filter((p) => p.seat >= 0)
-    .sort((a, b) => b.score - a.score || a.seat - b.seat);
-  const winner = room.players.find((p) => p.seat === winnerSeat);
-
-  return (
-    <div className="overlay overlay--solid">
-      <div className="sticker overlay__card">
-        <p className="eyebrow">{t.matchOver}</p>
-        <h2 className="overlay__title" style={winner ? { color: colorFor(winner.colorIndex) } : undefined}>
-          {winner ? t.winner(winner.name) : t.nobodyWins}
-        </h2>
-
-        <ol className="standings">
-          {standings.map((player, index) => (
-            <li key={player.id} className={player.seat === mySeat ? 'standings--me' : undefined}>
-              <span className="standings__rank">{index + 1}</span>
-              <span className="dot" style={{ background: colorFor(player.colorIndex) }} />
-              <span className="standings__name">{player.name}</span>
-              <span className="standings__score">{player.score}</span>
-            </li>
-          ))}
-        </ol>
-
-        {isHost ? (
-          <Button variant="primary" size="lg" full onClick={() => socket.rematch()}>
-            {t.backToLobby}
-          </Button>
-        ) : (
-          <p className="muted center">{t.waitingForHost}</p>
-        )}
-        <Button variant="ghost" full onClick={() => socket.leave()}>
-          {t.leaveRoom}
-        </Button>
-      </div>
     </div>
   );
 }

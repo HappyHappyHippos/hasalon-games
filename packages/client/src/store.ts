@@ -27,6 +27,31 @@ export interface HudPlayer {
   weapon?: string;
   ammo?: number;
   bombs?: number;
+  /** Skribbl: got the word this round. */
+  guessed?: boolean;
+  /** Skribbl: points earned this round, for the reveal screen. */
+  roundScore?: number;
+}
+
+/**
+ * Skribbl's slice of the HUD.
+ *
+ * Here rather than read off `SnapshotFeed` in the component, because the feed is
+ * polled from a `requestAnimationFrame` loop and rAF is suspended outright in a
+ * backgrounded tab. The canvas can afford that — there is nobody looking at it —
+ * but the word, the clock and the phase cannot: coming back to a tab would show
+ * a frozen header until the next frame. The socket keeps mirroring this whether
+ * or not anything is being painted.
+ */
+export interface SkribblHud {
+  /** Blanks and revealed letters. Never the whole word, except during reveal. */
+  masked: string;
+  drawerSeat: number;
+  /** The word list's language, which need not match the interface's. */
+  lang: 'he' | 'en';
+  /** Ticks left in the current phase. */
+  phaseTicks: number;
+  rounds: number;
 }
 
 export interface Hud {
@@ -35,6 +60,29 @@ export interface Hud {
   /** Seconds left on the countdown, or 0. */
   countdown: number;
   players: HudPlayer[];
+  skribbl?: SkribblHud;
+}
+
+/**
+ * One line of Skribbl's chat.
+ *
+ * A separate slice rather than part of `Hud`, because the two are different
+ * shapes of thing: `Hud` is a *mirror* of the newest snapshot, replaced whole
+ * every 120 ms, while chat is append-only history. Putting it in the mirror
+ * would mean re-sending the entire log in every snapshot and losing any line
+ * that landed between two mirrors.
+ */
+export interface ChatLine {
+  id: number;
+  kind: 'guess' | 'correct' | 'close' | 'system';
+  seat: number;
+  text: string;
+}
+
+/** The private half of the world, for whoever is drawing. */
+export interface Secret {
+  word: string;
+  choices: string[];
 }
 
 /**
@@ -92,6 +140,16 @@ export interface AppState {
    * on that message is the one signal that means "from the top".
    */
   matchNonce: number;
+  /** Skribbl's chat log. Append-only; see `ChatLine`. */
+  chat: ChatLine[];
+  /**
+   * Whatever the server has told this client alone.
+   *
+   * Skribbl's word, when we are the one drawing. Arrives on the `private`
+   * message rather than in a snapshot, because a snapshot is encoded once and
+   * sent to the whole room — see `Room.sendPrivate`.
+   */
+  secret: Secret | null;
 
   setStatus(status: ConnectionStatus): void;
   setRoom(room: RoomView | null): void;
@@ -100,6 +158,15 @@ export interface AppState {
   setPendingCode(code: string): void;
   setBusy(busy: boolean): void;
   setHud(hud: Hud): void;
+  /**
+   * Append chat lines, ignoring any already seen.
+   *
+   * The dedupe is load-bearing, not defensive: `mirrorHud` runs on every
+   * snapshot including the catch-up replay a reconnecting player is sent, so
+   * without it the whole visible history appends a second time.
+   */
+  pushChat(lines: ChatLine[]): void;
+  setSecret(secret: Secret | null): void;
   setNet(net: NetStats): void;
   setMuted(muted: boolean): void;
   setMusicMuted(muted: boolean): void;
@@ -216,6 +283,8 @@ export const useStore = create<AppState>((set) => ({
   pendingCode: '',
   busy: false,
   hud: emptyHud,
+  chat: [],
+  secret: null,
   net: { rtt: 0, jitter: 0, delay: 0 },
   matchWinnerSeat: null,
   muted: false,
@@ -243,6 +312,18 @@ export const useStore = create<AppState>((set) => ({
   setPendingCode: (pendingCode) => set({ pendingCode }),
   setBusy: (busy) => set({ busy }),
   setHud: (hud) => set({ hud }),
+  setSecret: (secret) => set({ secret }),
+
+  pushChat: (lines) =>
+    set((state) => {
+      if (lines.length === 0) return {};
+      const seen = new Set(state.chat.map((line) => line.id));
+      const fresh = lines.filter((line) => !seen.has(line.id));
+      if (fresh.length === 0) return {};
+      // Bounded: the panel scrolls, and an evening of guessing would otherwise
+      // grow this without limit.
+      return { chat: [...state.chat, ...fresh].slice(-200) };
+    }),
   setNet: (net) => set({ net }),
   setMuted: (muted) => set({ muted }),
   setMusicMuted: (musicMuted) => set({ musicMuted }),
@@ -266,7 +347,8 @@ export const useStore = create<AppState>((set) => ({
     set({ lang });
   },
 
-  onMatchStarted: (room) => set((state) => ({ room, matchNonce: state.matchNonce + 1 })),
+  onMatchStarted: (room) =>
+    set((state) => ({ room, chat: [], secret: null, matchNonce: state.matchNonce + 1 })),
 
   onWelcome: (room, playerId) =>
     set({ room, playerId, error: null, busy: false, matchWinnerSeat: null }),
@@ -278,6 +360,8 @@ export const useStore = create<AppState>((set) => ({
       room: null,
       playerId: null,
       hud: emptyHud,
+      chat: [],
+      secret: null,
       matchWinnerSeat: null,
       busy: false,
     }),
