@@ -6,11 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 הסלון (hasalon, "the living room") — a room-based multiplayer game site. Create
 a room, share the code/link, everyone joins, the host picks a game from a
-live game picker, then plays. No accounts, rooms live in memory only. Three
+live game picker, then plays. No accounts, rooms live in memory only. Four
 games ship today: **Gun Mayhem** (4-player platform fighter, the priority —
 this is the flagship game and should get the most care), **Achtung die Kurve**
-(up to 8-player curve/Snake game) and **Skribbl** (up to 8-player draw and
-guess, Hebrew or English).
+(up to 8-player curve/Snake game), **Skribbl** (up to 8-player draw and
+guess, Hebrew or English), and **Meme Machine** (2-8-player simultaneous
+caption writing, reveal, and voting).
 
 npm workspaces monorepo. Git repo with `origin` at
 `github.com/HappyHappyHippos/hasalon-games` (public), deployed on Railway at
@@ -124,7 +125,8 @@ packages/client/   React UI, canvas renderers, prediction                (@mg/cl
 browser, `tsx` runs it under the dev server, esbuild bundles it into the
 server's single-file production output. `@mg/shared` root export is
 room/protocol/registry only; each game's internals are behind their own
-subpath (`@mg/shared/achtung`, `@mg/shared/gunmayhem`, `@mg/shared/skribbl`)
+subpath (`@mg/shared/achtung`, `@mg/shared/gunmayhem`, `@mg/shared/skribbl`,
+`@mg/shared/memes`)
 because the games export same-named symbols (`createState`, `stepTick`,
 `defaultConfig`, ...) — importing from the root never gives you game internals.
 A new game needs its subpath added to `packages/shared/package.json`.
@@ -175,7 +177,7 @@ and has to be cheap to answer with `null`, which is what it returns for every
 game that has no secrets.
 
 `GameConfig` and `GameSnapshot` are unions discriminated by a `game` field
-(`'achtung' | 'gunmayhem' | 'skribbl'`). Narrow with `settings.game === 'achtung'` before
+(`'achtung' | 'gunmayhem' | 'skribbl' | 'memes'`). Narrow with `settings.game === 'achtung'` before
 reading game-specific fields — see `Room.settings` getter and
 `store.ts:selectSettings` for the pattern. Room settings are kept **per game**
 (`Room.settingsByGame`), so switching games in the lobby and back doesn't
