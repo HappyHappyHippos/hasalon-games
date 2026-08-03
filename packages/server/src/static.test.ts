@@ -32,6 +32,7 @@ beforeAll(async () => {
   root = join(box, 'public');
   await mkdir(root);
   await writeFile(join(root, 'tune.mp3'), BODY);
+  await writeFile(join(root, 'meme.mp4'), BODY);
   await writeFile(join(root, 'index.html'), '<!doctype html><title>x</title>');
 
   server = createServer((req, res) => {
@@ -60,6 +61,12 @@ describe('serveStatic', () => {
     expect(res.headers.get('accept-ranges')).toBe('bytes');
     expect(res.headers.get('content-type')).toBe('audio/mpeg');
     expect(Buffer.from(await res.arrayBuffer())).toEqual(BODY);
+  });
+
+  it('serves animated meme loops with the video MIME type Safari expects', async () => {
+    const res = await get('/meme.mp4');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('video/mp4');
   });
 
   it("answers Safari's opening probe with a 206", async () => {

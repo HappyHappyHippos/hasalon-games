@@ -126,24 +126,26 @@ describe('Meme Machine secrecy', () => {
     const state = makeState(3);
     intoWriting(state);
     const player = state.players[0]!;
+    const template = templateById(player.templateId)!;
+    const movedX = Math.min(0.123456, (1 - template.boxes[0]!.w) / 2);
     applyInput(state, player.id, {
       k: 'draft',
       a: 'move me',
-      p: [{ x: 0.123456, y: 0.234567 }],
+      p: [{ x: movedX, y: 0.234567 }],
     });
-    expect(JSON.stringify(makeSnapshot(state))).not.toContain('0.123456');
-    expect(privateFor(state, player.id)?.positions[0]).toMatchObject({ x: 0.123456, y: 0.234567 });
+    expect(JSON.stringify(makeSnapshot(state))).not.toContain(String(movedX));
+    expect(privateFor(state, player.id)?.positions[0]).toMatchObject({ x: movedX, y: 0.234567 });
 
     for (const candidate of state.players) {
       applyInput(state, candidate.id, {
         k: 'submit',
         a: `caption-${candidate.id}`,
-        p: candidate === player ? [{ x: 0.123456, y: 0.234567 }] : undefined,
+        p: candidate === player ? [{ x: movedX, y: 0.234567 }] : undefined,
       });
     }
     const entry = state.entries.find((candidate) => candidate.authorId === player.id)!;
     state.entryIndex = state.entries.indexOf(entry);
-    expect(makeSnapshot(state).stage?.positions[0]).toMatchObject({ x: 0.123456, y: 0.234567 });
+    expect(makeSnapshot(state).stage?.positions[0]).toMatchObject({ x: movedX, y: 0.234567 });
   });
 
   it('clamps hostile box coordinates inside the template image', () => {

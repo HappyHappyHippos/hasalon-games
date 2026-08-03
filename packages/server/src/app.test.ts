@@ -548,6 +548,18 @@ describe('match', () => {
     });
   }, 15_000);
 
+  it('starts Meme Machine with two players', async () => {
+    const [host, guest] = await makeLobby(2);
+    host!.send({ t: 'game', gameId: 'memes' });
+    host!.send({ t: 'start' });
+    const [hostStarted, guestStarted] = await Promise.all([
+      host!.next('matchStarted'),
+      guest!.next('matchStarted'),
+    ]);
+    expect(hostStarted.room.players.filter((player) => player.seat >= 0)).toHaveLength(2);
+    expect(guestStarted.room.gameId).toBe('memes');
+  });
+
   it('scores Meme Machine from real votes and refuses every author ballot', async () => {
     const clients = await makeLobby(3);
     const [host] = clients;

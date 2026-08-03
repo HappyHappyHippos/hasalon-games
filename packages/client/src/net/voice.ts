@@ -455,8 +455,11 @@ class Voice {
    * re-evaluate the pair, dropping the ones that no longer carry anything and
    * rebuilding ours as receive-only.
    */
-  stopMic(): void {
-    this.announce?.(false);
+  stopMic(announce = true): void {
+    // Starting the app with no room also performs a defensive full teardown.
+    // Announcing an already-closed microphone there queued `voice:false`, which
+    // the server correctly rejected as NOT_IN_ROOM and showed as a red toast.
+    if (announce && this.stream) this.announce?.(false);
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = null;
     this.localAnalyser = null;
@@ -479,7 +482,9 @@ class Voice {
 
   /** Full teardown — leaving the room, or the socket going for good. */
   stop(): void {
-    this.stopMic();
+    // Leaving removes the player record, so a flag announcement is redundant;
+    // if it follows the leave frame it is also necessarily NOT_IN_ROOM.
+    this.stopMic(false);
     for (const id of [...this.peers.keys()]) this.dropPeer(id);
     this.unwatchLiveness();
 

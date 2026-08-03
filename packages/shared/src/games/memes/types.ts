@@ -146,6 +146,8 @@ export interface MemeTemplate {
   slots: 1 | 2;
   boxes: MemeTextBox[];
   aspect: number;
+  /** Local runtime asset type. Animated templates are compact, muted MP4 loops. */
+  format: 'jpg' | 'mp4';
   nudge?: { he: string; en: string };
   tier: 'classic' | 'reaction' | 'wildcard';
 }

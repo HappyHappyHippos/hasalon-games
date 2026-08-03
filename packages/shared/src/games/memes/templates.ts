@@ -1,5 +1,6 @@
 import { shuffle, type RngState } from './rng';
 import { MEME_ASSETS } from './templateAssets';
+import { GIF_MEME_ASSETS } from './gifTemplateAssets';
 import { MEME_LAYOUTS } from './templateLayouts';
 import type { MemeTemplate, MemeTextBox } from './types';
 
@@ -31,12 +32,13 @@ const BOX_OVERRIDES: Readonly<Record<string, MemeTextBox[]>> = {
 };
 
 /** Current Imgflip Top 30 Days list, snapshotted locally for offline matches. */
-export const MEME_TEMPLATES: MemeTemplate[] = MEME_ASSETS.map((asset) => ({
+export const MEME_TEMPLATES: MemeTemplate[] = [...MEME_ASSETS, ...GIF_MEME_ASSETS].map((asset) => ({
   id: asset.id,
   name: asset.name,
   slots: asset.slots,
   boxes: [...(MEME_LAYOUTS[asset.id] ?? BOX_OVERRIDES[asset.id] ?? (asset.slots === 1 ? BOTTOM : TOP_BOTTOM))],
   aspect: asset.aspect,
+  format: asset.format ?? 'jpg',
   nudge: asset.slots === 2
     ? { he: 'ציפיות מול מציאות…', en: 'Expectation versus reality…' }
     : { he: 'הרגע הזה כש…', en: 'That moment when…' },

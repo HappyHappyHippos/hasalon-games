@@ -329,6 +329,9 @@ const he = {
   memesTop: 'המם המנצח',
   memesSpectating: 'אתם צופים בסיבוב הזה',
   memesTenSeconds: 'נשארו עשר שניות',
+  memesDownload: 'הורדת המם',
+  memesDownloading: 'מכינים תמונה…',
+  memesDownloadFailed: 'לא הצלחנו להוריד את המם',
 
   colorNames: ['אדום', 'ירוק', 'כחול', 'צהוב', 'כתום', 'סגול', 'תכלת', 'ורוד'],
   colorTaken: (name: string) => `${name} — תפוס`,
@@ -640,6 +643,9 @@ const en: Dict = {
   memesTop: 'Top meme',
   memesSpectating: 'You are watching this round',
   memesTenSeconds: 'Ten seconds left',
+  memesDownload: 'Download meme',
+  memesDownloading: 'Preparing image…',
+  memesDownloadFailed: 'Could not download this meme',
 
   colorNames: ['Red', 'Green', 'Blue', 'Yellow', 'Orange', 'Purple', 'Cyan', 'Pink'],
   colorTaken: (name: string) => `${name} — taken`,

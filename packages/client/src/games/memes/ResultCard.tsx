@@ -3,10 +3,14 @@ import type { RoomView } from '@mg/shared';
 import type { MemesStageEntry } from '@mg/shared/memes';
 import { useT } from '../../strings';
 import { Avatar } from '../../ui/Avatar';
+import { Button } from '../../ui/Button';
+import { downloadMeme } from './download';
 
 export function ResultCard({ room, stage }: { room: RoomView; stage: MemesStageEntry }): JSX.Element {
   const t = useT();
   const [shownAward, setShownAward] = useState(0);
+  const [downloading, setDownloading] = useState(false);
+  const [downloadFailed, setDownloadFailed] = useState(false);
   useEffect(() => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       setShownAward(stage.award);
@@ -34,6 +38,22 @@ export function ResultCard({ room, stage }: { room: RoomView; stage: MemesStageE
         {tally.map((count, index) => <div key={index} className="memes__tally-row"><span>{emojis[index]} {labels[index]}</span><i style={{ '--bar': `${(count / max) * 100}%` } as React.CSSProperties} /><b>{count}</b></div>)}
       </div>
       <output className="memes__award">{t.memesAward(shownAward)}</output>
+      <div className="memes__download">
+        <Button
+          size="sm"
+          disabled={downloading}
+          onClick={() => {
+            setDownloading(true);
+            setDownloadFailed(false);
+            void downloadMeme(stage)
+              .catch(() => setDownloadFailed(true))
+              .finally(() => setDownloading(false));
+          }}
+        >
+          {downloading ? t.memesDownloading : t.memesDownload}
+        </Button>
+        {downloadFailed && <span role="status">{t.memesDownloadFailed}</span>}
+      </div>
     </section>
   );
 }

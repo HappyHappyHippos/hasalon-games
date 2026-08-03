@@ -23,7 +23,7 @@ export function useVoiceMesh(): void {
   const room = useStore((s) => s.room);
   const playerId = useStore((s) => s.playerId);
   const status = useStore((s) => s.status);
-  const { active, deaf } = useVoice();
+  useVoice();
 
   // Membership is *who can hear whom*, not who is in the room.
   //
@@ -46,8 +46,10 @@ export function useVoiceMesh(): void {
     if (!playerId || status !== 'open') return;
     // `prepare` opens no device and creates no AudioContext.
     voice.prepare(playerId);
-    voice.reannounce();
-  }, [active, deaf, playerId, status]);
+    // The socket re-announces only after welcome/catch-up proves that this new
+    // connection belongs to the room. Announcing merely on WebSocket open can
+    // race resume and produces a false NOT_IN_ROOM toast.
+  }, [playerId, status]);
 
   // Deliberately separate from the local-state effect above: only the room
   // echo changes peer membership or SDP direction.

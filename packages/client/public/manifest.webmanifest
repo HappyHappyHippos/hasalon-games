@@ -5,9 +5,12 @@
   "lang": "he",
   "dir": "rtl",
   "start_url": "/",
+  "id": "/",
   "scope": "/",
+  "handle_links": "preferred",
+  "launch_handler": { "client_mode": "navigate-existing" },
   "display": "standalone",
-  "orientation": "landscape",
+  "orientation": "any",
   "background_color": "#fdf6e8",
   "theme_color": "#fdf6e8",
   "icons": [

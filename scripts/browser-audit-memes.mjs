@@ -15,6 +15,11 @@ const vite = spawn(process.execPath, [join(root, 'node_modules', 'vite', 'bin', 
   stdio: 'ignore',
   windowsHide: true,
 });
+const server = spawn(process.execPath, [join(root, 'packages', 'server', 'dist', 'server.js'), '--port', '3000'], {
+  cwd: root,
+  stdio: 'ignore',
+  windowsHide: true,
+});
 const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const edge = spawn(edgePath, [
   '--headless=new',
@@ -36,6 +41,7 @@ async function waitFor(url) {
 let cdp;
 try {
   await waitFor('http://127.0.0.1:4173');
+  await waitFor('http://127.0.0.1:3000/healthz');
   const targets = await (await waitFor('http://127.0.0.1:9333/json/list')).json();
   const target = targets.find((item) => item.type === 'page');
   if (!target) throw new Error('No browser target');
@@ -73,11 +79,21 @@ try {
 
   await call('Page.enable');
   await call('Runtime.enable');
+  await call('Emulation.setUserAgentOverride', {
+    userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.5 Mobile/15E148 Safari/604.1',
+    platform: 'iPhone',
+  });
+  await call('Page.addScriptToEvaluateOnNewDocument', {
+    source: `Object.defineProperty(navigator, 'standalone', { configurable: true, get: () => true });`,
+  });
   await call('Page.reload', { ignoreCache: true });
   await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
   await call('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 });
-  await sleep(1800);
-  await evaluate(`localStorage.setItem('mg.lang','en')`);
+  for (let attempt = 0; attempt < 80; attempt += 1) {
+    if (await evaluate(`typeof window.mgStore !== 'undefined'`)) break;
+    await sleep(100);
+  }
+  await evaluate(`localStorage.setItem('mg.lang','en'); window.mgStore.setState({ lang: 'en' })`);
 
   const room = {
     code: 'MEME', gameId: 'memes', phase: 'playing', hostId: 'p0', paused: false,
@@ -93,8 +109,25 @@ try {
   const writingHud = { phase: 'writing', round: 1, countdown: 0, players, memes: { phaseTicks: 2700, phaseTotal: 3600, phaseSeq: 2, rounds: 3, entryIndex: -1, entryCount: 0, stage: null } };
   const homeInputFont = await evaluate(`(() => { const input = document.querySelector('input'); input?.focus(); return input ? parseFloat(getComputedStyle(input).fontSize) : 0; })()`);
   await evaluate(`window.mgStore.setState(${JSON.stringify({ room: { ...room, phase: 'lobby' }, playerId: 'p0' })})`);
+  await sleep(600);
+  const lobby = await screenshot('lobby-art-portrait');
+  const lobbyAudit = await evaluate(`({
+    activeTag: document.activeElement?.tagName,
+    scale: visualViewport?.scale ?? 1,
+    homeInputFont: ${homeInputFont},
+    overflow: document.documentElement.scrollWidth > innerWidth,
+    error: window.mgStore.getState().error,
+    orientation: JSON.parse(document.querySelector('link[rel=manifest]') ? ${JSON.stringify(await (await fetch('http://127.0.0.1:4173/manifest.webmanifest')).text())} : '{}').orientation,
+  })`);
+  await evaluate(`document.querySelector('.picker')?.scrollIntoView({ block: 'start' })`);
   await sleep(100);
-  const lobbyAudit = await evaluate(`({ activeTag: document.activeElement?.tagName, scale: visualViewport?.scale ?? 1, homeInputFont: ${homeInputFont} })`);
+  const boxArt = await screenshot('lobby-box-art-portrait');
+  await evaluate(`document.querySelectorAll('.gamecard')[2]?.scrollIntoView({ block: 'start' })`);
+  await sleep(100);
+  const skribblArt = await screenshot('skribbl-box-art-portrait');
+  await evaluate(`document.querySelectorAll('.gamecard')[3]?.scrollIntoView({ block: 'start' })`);
+  await sleep(100);
+  const memesArt = await screenshot('memes-box-art-portrait');
   await evaluate(`window.mgStore.setState(${JSON.stringify({ room, playerId: 'p0', hud: writingHud, memesPrivate: privateView, matchWinnerSeat: null })})`);
   await sleep(800);
   const writing = await screenshot('writing-portrait');
@@ -118,6 +151,10 @@ try {
     caption.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
     return new Promise((resolve) => requestAnimationFrame(() => resolve({ before, after: parseFloat(caption.style.left) })));
   })()`);
+  const animatedPrivate = { ...privateView, templateId: 'gif-222516354-disappearing-kid-gif', positions: [{ x: 0.04, y: 0.03 }, { x: 0.04, y: 0.73 }] };
+  await evaluate(`window.mgStore.setState(${JSON.stringify({ memesPrivate: animatedPrivate })})`);
+  await sleep(900);
+  const animatedAudit = await evaluate(`(() => { const card = document.querySelector('.meme-card'); const video = card?.querySelector('video'); return { present: !!video, paused: video?.paused, readyState: video?.readyState, objectFit: video ? getComputedStyle(video).objectFit : '', cardClass: card?.className, fallback: card?.querySelector('.meme-card__fallback')?.textContent, mediaRequests: performance.getEntriesByType('resource').map((entry) => entry.name).filter((name) => name.includes('gif-222516354')) }; })()`);
 
   const stage = { templateId: 'distracted-boyfriend', texts: ['Me opening one message', 'The game night group chat'], positions: [{ x: 0.0975, y: 0.6275 }, { x: 0.755, y: 0.50125 }], authorSeat: -1, ballots: 1, eligible: 2, tally: null, award: 0, top: 0, reactions: [2, 0, 0] };
   const votingHud = { phase: 'voting', round: 1, countdown: 0, players, memes: { phaseTicks: 600, phaseTotal: 720, phaseSeq: 4, rounds: 3, entryIndex: 0, entryCount: 3, stage } };
@@ -131,9 +168,33 @@ try {
   await evaluate(`window.mgStore.setState(${JSON.stringify({ hud: resultHud })})`);
   await sleep(700);
   const result = await screenshot('result-portrait');
+  await evaluate(`(() => {
+    window.__memeDownload = null;
+    URL.createObjectURL = (blob) => { window.__memeDownload = { type: blob.type, size: blob.size }; return 'blob:http://127.0.0.1/fake'; };
+    URL.revokeObjectURL = () => undefined;
+    HTMLAnchorElement.prototype.click = function () { window.__memeDownload = { ...window.__memeDownload, name: this.download }; };
+    document.querySelector('.memes__download button')?.click();
+  })()`);
+  await sleep(1000);
+  const downloadAudit = await evaluate(`window.__memeDownload`);
+
+  await evaluate(`window.mgStore.setState(${JSON.stringify({ room: { ...room, phase: 'matchOver' }, hud: { ...resultHud, phase: 'matchOver' }, matchWinnerSeat: 2 })})`);
+  await sleep(200);
+  const matchOver = await screenshot('match-over-portrait');
+  const matchOverAudit = await evaluate(`({ headerPresent: !!document.querySelector('.memes__top'), phasePresent: !!document.querySelector('.memes__phase'), overlayZ: Number(getComputedStyle(document.querySelector('.matchover')).zIndex) })`);
+
+  const skribblRoom = { ...room, gameId: 'skribbl', phase: 'playing', settings: { game: 'skribbl', language: 'en', drawSeconds: 80, rounds: 3, hints: true } };
+  const skribblHud = { phase: 'drawing', round: 1, countdown: 0, players: players.map((player) => ({ ...player, guessed: false })), skribbl: { masked: '_ _ _ _ _', drawerSeat: 1, lang: 'en', phaseTicks: 2400, rounds: 3 } };
+  await evaluate(`window.mgStore.setState(${JSON.stringify({ room: skribblRoom, hud: skribblHud, secret: null, matchWinnerSeat: null })})`);
+  await sleep(300);
+  await evaluate(`document.querySelector('.skribbl__guess')?.focus()`);
+  await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 500, deviceScaleFactor: 2, mobile: true });
+  await sleep(200);
+  const skribbl = await screenshot('skribbl-keyboard-portrait');
+  const skribblAudit = await evaluate(`(() => { const rect = document.querySelector('.skribbl__top').getBoundingClientRect(); return { focused: document.activeElement?.classList.contains('skribbl__guess'), top: rect.top, bottom: rect.bottom, fixed: getComputedStyle(document.querySelector('.skribbl__top')).position, visible: rect.top >= 0 && rect.bottom <= innerHeight }; })()`);
 
   await call('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 2, mobile: true });
-  await evaluate(`window.mgStore.setState(${JSON.stringify({ hud: writingHud, memesPrivate: privateView })})`);
+  await evaluate(`window.mgStore.setState(${JSON.stringify({ room, hud: writingHud, memesPrivate: privateView })})`);
   await sleep(500);
   const landscape = await screenshot('writing-landscape');
   const landscapeAudit = await evaluate(`({ overflowX: document.documentElement.scrollWidth > innerWidth, overflowY: document.documentElement.scrollHeight > innerHeight })`);
@@ -149,13 +210,16 @@ try {
       insideViewport: panel.left >= 0 && panel.top >= 0 && panel.right + 12 <= innerWidth && panel.bottom + 12 <= innerHeight,
       segmentInset: { left: selected.left - outer.left, top: selected.top - outer.top, right: outer.right - selected.right, bottom: outer.bottom - selected.bottom },
       shadow: getComputedStyle(document.querySelector('.options__panel')).boxShadow,
+      reloadInHead: document.querySelectorAll('.options__head-actions .btn').length === 2,
+      reloadInFoot: !!document.querySelector('.options__foot .btn:not(.btn--primary):not(.btn--ghost)'),
     };
   })()`);
 
-  console.log(JSON.stringify({ output, screenshots: { writing, voting, result, landscape, options }, lobbyAudit, writingAudit, dragAudit, votingAudit, landscapeAudit, optionsAudit, browserErrors }, null, 2));
+  console.log(JSON.stringify({ output, screenshots: { lobby, boxArt, skribblArt, memesArt, writing, voting, result, matchOver, skribbl, landscape, options }, lobbyAudit, writingAudit, dragAudit, animatedAudit, votingAudit, downloadAudit, matchOverAudit, skribblAudit, landscapeAudit, optionsAudit, browserErrors }, null, 2));
 } finally {
   cdp?.close();
   edge.kill();
   vite.kill();
+  server.kill();
   await rm(profile, { recursive: true, force: true }).catch(() => undefined);
 }

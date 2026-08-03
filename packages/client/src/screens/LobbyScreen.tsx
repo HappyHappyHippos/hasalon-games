@@ -10,6 +10,7 @@ import { GamePicker } from '../ui/GamePicker';
 import { VoiceBar } from '../ui/VoiceBar';
 import { useVoice } from '../ui/useVoice';
 import { CLIENT_GAMES } from '../games/registry';
+import { resetIOSLobbyViewport } from '../ui/mobileViewport';
 
 export function LobbyScreen(): JSX.Element {
   const room = useStore((s) => s.room)!;
@@ -25,6 +26,7 @@ export function LobbyScreen(): JSX.Element {
     // iOS preserves that input-focus zoom across the route change, leaving the
     // entire lobby enlarged even though it contains no focused field.
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    return resetIOSLobbyViewport();
   }, []);
 
   const me = room.players.find((p) => p.id === playerId);

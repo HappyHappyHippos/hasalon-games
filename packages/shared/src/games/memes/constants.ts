@@ -2,7 +2,7 @@ import { TICK_RATE, seconds } from '../../engine';
 
 /** Every pacing, validation, and scoring number for Meme Machine. */
 
-export const MIN_PLAYERS = 3;
+export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 8;
 
 export const INTRO_TICKS = seconds(2.5);

@@ -64,6 +64,8 @@ class GameSocket {
   private sendDelayed: ((encoded: string) => void) | null = null;
   private closedByUs = false;
   private lastCountdown = 0;
+  /** Voice flags may only be re-announced after this socket is accepted into a room. */
+  private membershipConfirmed = false;
 
   connect(): void {
     if (
@@ -74,6 +76,7 @@ class GameSocket {
     }
 
     this.closedByUs = false;
+    this.membershipConfirmed = false;
     useStore.getState().setStatus('connecting');
 
     const ws = new WebSocket(socketUrl());
@@ -128,6 +131,7 @@ class GameSocket {
     ws.onclose = () => {
       this.stopPinging();
       this.ws = null;
+      this.membershipConfirmed = false;
       useStore.getState().setStatus('closed');
       if (!this.closedByUs) this.scheduleReconnect();
     };
@@ -284,6 +288,13 @@ class GameSocket {
   // Incoming
   // -------------------------------------------------------------------------
 
+  private confirmMembership(playerId: string | null): void {
+    if (this.membershipConfirmed || !playerId) return;
+    this.membershipConfirmed = true;
+    voice.prepare(playerId);
+    voice.reannounce();
+  }
+
   private handle(message: ServerMessage): void {
     const store = useStore.getState();
 
@@ -292,11 +303,13 @@ class GameSocket {
         saveSession({ code: message.room.code, playerId: message.playerId, token: message.token });
         store.onWelcome(message.room, message.playerId);
         setHashCode(message.room.code);
+        this.confirmMembership(message.playerId);
         return;
       }
 
       case 'room':
         store.setRoom(message.room);
+        this.confirmMembership(store.playerId);
         return;
 
       case 'matchStarted':
@@ -309,6 +322,7 @@ class GameSocket {
         if (message.resumed) store.setRoom(message.room);
         else store.onMatchStarted(message.room);
         store.setHud({ phase: 'countdown', round: 0, countdown: 0, players: [] });
+        this.confirmMembership(store.playerId);
         return;
 
       case 'snapshot':

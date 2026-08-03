@@ -71,7 +71,7 @@ export function MatchOver({
   }, []);
 
   return (
-    <div className="overlay overlay--solid">
+    <div className="overlay overlay--solid matchover">
       <div className={`sticker overlay__card${winner ? ' matchover__card--win' : ''}`}>
         {winner && (
           <div className="confetti" aria-hidden="true">

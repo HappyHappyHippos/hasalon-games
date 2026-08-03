@@ -188,7 +188,20 @@ export function MemeCard({
       className={`meme-card meme-card--${size}${broken ? ' meme-card--broken' : ''}`}
       style={{ aspectRatio: String(aspect), '--meme-aspect': aspect } as CSSProperties}
     >
-      {!broken && templateId && (
+      {!broken && templateId && template?.format === 'mp4' && (
+        <video
+          src={memeUrl(templateId)}
+          aria-label={alt}
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+          onError={() => setBroken(true)}
+          draggable={false}
+        />
+      )}
+      {!broken && templateId && template?.format !== 'mp4' && (
         <img src={memeUrl(templateId)} alt={alt} onError={() => setBroken(true)} draggable={false} />
       )}
       {broken && <span className="meme-card__fallback">{templateId}</span>}

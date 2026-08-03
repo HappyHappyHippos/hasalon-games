@@ -4,8 +4,9 @@ import { isKnownTemplate, MEME_TEMPLATES, pickTemplates } from './templates';
 
 /** The manifest is data the sim trusts, so malformed geometry must fail in CI. */
 describe('Meme Machine template manifest', () => {
-  it('contains the current 120-template library without duplicate ids', () => {
-    expect(MEME_TEMPLATES.length).toBeGreaterThanOrEqual(120);
+  it('contains 120 stills and 80 animated templates without duplicate ids', () => {
+    expect(MEME_TEMPLATES.length).toBeGreaterThanOrEqual(200);
+    expect(MEME_TEMPLATES.filter((template) => template.format === 'mp4')).toHaveLength(80);
     expect(new Set(MEME_TEMPLATES.map((template) => template.id)).size).toBe(
       MEME_TEMPLATES.length,
     );

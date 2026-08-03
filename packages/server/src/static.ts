@@ -20,6 +20,7 @@ const MIME_TYPES: Record<string, string> = {
   '.woff2': 'font/woff2',
   '.mp3': 'audio/mpeg',
   '.ogg': 'audio/ogg',
+  '.mp4': 'video/mp4',
   '.webmanifest': 'application/manifest+json',
 };
 

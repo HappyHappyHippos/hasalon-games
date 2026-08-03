@@ -12,6 +12,7 @@ import { useVoice } from './useVoice';
 import { isStandalone } from './useFullscreen';
 import type { TouchControlsMode } from '../store';
 import { LANGS, type Dict, type Lang } from '../i18n';
+import { isIOSDevice } from './mobileViewport';
 
 const TOUCH_MODES: Array<{ mode: TouchControlsMode; label: (t: Dict) => string }> = [
   { mode: 'auto', label: (t) => t.touchAuto },
@@ -109,9 +110,16 @@ export function OptionsMenu(): JSX.Element {
       >
         <div className="options__head">
           <h2 className="overlay__title">{t.options}</h2>
-          <Button variant="ghost" size="sm" onClick={close} aria-label={t.close}>
-            ✕
-          </Button>
+          <div className="options__head-actions">
+            {isIOSDevice() && isStandalone() && (
+              <Button size="sm" onClick={() => window.location.reload()}>
+                {t.reloadApp}
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" onClick={close} aria-label={t.close}>
+              ✕
+            </Button>
+          </div>
         </div>
 
         <section className="options__section">
@@ -285,11 +293,6 @@ export function OptionsMenu(): JSX.Element {
         )}
 
         <div className="options__foot">
-          {isIOS() && isStandalone() && (
-            <Button full onClick={() => window.location.reload()}>
-              {t.reloadApp}
-            </Button>
-          )}
           <Button variant="primary" size="lg" full onClick={close}>
             {t.backToGame}
           </Button>
@@ -356,7 +359,5 @@ function VoicePeers(): JSX.Element | null {
  * iPad has touch points. Wrong answers here cost a line of advice, nothing more.
  */
 function isIOS(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  if (/iPad|iPhone|iPod/.test(navigator.userAgent)) return true;
-  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  return isIOSDevice();
 }

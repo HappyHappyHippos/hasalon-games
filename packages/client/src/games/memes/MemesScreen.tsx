@@ -91,11 +91,11 @@ export function MemesScreen({ room, mySeat }: Props): JSX.Element {
 
   return (
     <main className="memes">
-      <header className="memes__top">
+      {room.phase !== 'matchOver' && <header className="memes__top">
         <strong>{t.memesRound(round || 1, view?.rounds ?? 1)}</strong>
         <Countdown ticks={view?.phaseTicks ?? 0} total={view?.phaseTotal ?? 0} low={seconds <= 10 && (phase === 'writing' || phase === 'voting')} />
-      </header>
-      <div key={view?.phaseSeq ?? 0} className="memes__phase">{body}</div>
+      </header>}
+      {room.phase !== 'matchOver' && <div key={view?.phaseSeq ?? 0} className="memes__phase">{body}</div>}
       <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
       {warning && <p className="sr-only" role="status" aria-live="polite">{warning}</p>}
       {room.paused && room.phase === 'playing' && <Paused room={room} spectating={mySeat < 0} />}
