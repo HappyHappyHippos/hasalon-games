@@ -291,6 +291,20 @@ try {
       20_000,
     );
   }
+  await waitForValue(
+    alice,
+    `window.mgVoiceDiagnostics().then((value) =>
+      value.peers[0]?.signalingState === 'stable' && value.peers[0]?.inboundBytes > 0
+    )`,
+    'audio after undeaf',
+    20_000,
+  );
+  await waitForValue(
+    bob,
+    `window.mgVoiceDiagnostics().then((value) => value.peers[0]?.signalingState === 'stable')`,
+    'speaker stable after undeaf',
+    20_000,
+  );
 
   const final = await Promise.all(browsers.map(diagnostics));
   if (final.some((item) => item.peers.some((peer) => peer.signalingState !== 'stable'))) {
