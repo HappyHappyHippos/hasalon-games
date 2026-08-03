@@ -1,5 +1,6 @@
 import { shuffle, type RngState } from './rng';
 import { MEME_ASSETS } from './templateAssets';
+import { MEME_LAYOUTS } from './templateLayouts';
 import type { MemeTemplate, MemeTextBox } from './types';
 
 const TOP_BOTTOM: MemeTextBox[] = [
@@ -18,7 +19,7 @@ const LEFT_RIGHT: MemeTextBox[] = [
   { x: 0.52, y: 0.05, w: 0.45, h: 0.3, style: 'impact', align: 'center' },
 ];
 
-/** Imgflip templates are not uniformly top/bottom; preserve their recognizable layout. */
+/** Hand-tuned fallbacks for templates absent from Imgflip's saved generator geometry. */
 const BOX_OVERRIDES: Readonly<Record<string, MemeTextBox[]>> = {
   'drake-hotline-bling': RIGHT_PANELS,
   'tuxedo-winnie-the-pooh': RIGHT_PANELS,
@@ -34,7 +35,7 @@ export const MEME_TEMPLATES: MemeTemplate[] = MEME_ASSETS.map((asset) => ({
   id: asset.id,
   name: asset.name,
   slots: asset.slots,
-  boxes: BOX_OVERRIDES[asset.id] ?? (asset.slots === 1 ? BOTTOM : TOP_BOTTOM),
+  boxes: [...(MEME_LAYOUTS[asset.id] ?? BOX_OVERRIDES[asset.id] ?? (asset.slots === 1 ? BOTTOM : TOP_BOTTOM))],
   aspect: asset.aspect,
   nudge: asset.slots === 2
     ? { he: 'ציפיות מול מציאות…', en: 'Expectation versus reality…' }

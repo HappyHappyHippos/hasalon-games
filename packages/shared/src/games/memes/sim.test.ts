@@ -22,6 +22,7 @@ import {
   stepTick,
   winnerSeat,
 } from './sim';
+import { templateById } from './templates';
 import type { MemesConfig, MemesState, MemesVote } from './types';
 
 function seats(count = 3): GameSeat[] {
@@ -119,6 +120,46 @@ describe('Meme Machine secrecy', () => {
       }
     }
     expect(privateFor(state, 'spectator')).toBeNull();
+  });
+
+  it('keeps moved boxes private until their caption reaches the stage', () => {
+    const state = makeState(3);
+    intoWriting(state);
+    const player = state.players[0]!;
+    applyInput(state, player.id, {
+      k: 'draft',
+      a: 'move me',
+      p: [{ x: 0.123456, y: 0.234567 }],
+    });
+    expect(JSON.stringify(makeSnapshot(state))).not.toContain('0.123456');
+    expect(privateFor(state, player.id)?.positions[0]).toMatchObject({ x: 0.123456, y: 0.234567 });
+
+    for (const candidate of state.players) {
+      applyInput(state, candidate.id, {
+        k: 'submit',
+        a: `caption-${candidate.id}`,
+        p: candidate === player ? [{ x: 0.123456, y: 0.234567 }] : undefined,
+      });
+    }
+    const entry = state.entries.find((candidate) => candidate.authorId === player.id)!;
+    state.entryIndex = state.entries.indexOf(entry);
+    expect(makeSnapshot(state).stage?.positions[0]).toMatchObject({ x: 0.123456, y: 0.234567 });
+  });
+
+  it('clamps hostile box coordinates inside the template image', () => {
+    const state = makeState();
+    intoWriting(state);
+    const player = state.players[0]!;
+    const template = templateById(player.templateId)!;
+    applyInput(state, player.id, {
+      k: 'draft',
+      a: 'bounded',
+      p: [{ x: -20, y: 20 }, { x: Number.NaN, y: Number.POSITIVE_INFINITY }],
+    });
+    const positions = privateFor(state, player.id)!.positions;
+    expect(positions[0]?.x).toBe(0);
+    expect(positions[0]?.y).toBe(1 - template.boxes[0]!.h);
+    expect(positions.every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
   });
 });
 

@@ -35,6 +35,8 @@ import type {
   MemesStageEntry,
   MemesState,
   MemesVote,
+  MemeBoxPosition,
+  MemeTextBox,
 } from './types';
 
 export function defaultConfig(): MemesConfig {
@@ -85,6 +87,7 @@ export function createState(seats: GameSeat[], config: MemesConfig, seed: number
         roundScore: 0,
         templateId: '',
         draft: [],
+        draftPositions: [],
         submitted: false,
         draftBudget: MAX_DRAFTS_PER_SECOND,
         connected: true,
@@ -121,6 +124,7 @@ function dealRound(state: MemesState): void {
     player.roundScore = 0;
     player.templateId = template?.id ?? '';
     player.draft = Array.from({ length: template?.slots ?? 1 }, () => '');
+    player.draftPositions = (template?.boxes ?? []).map(({ x, y }) => ({ x, y }));
     player.submitted = false;
     player.draftBudget = MAX_DRAFTS_PER_SECOND;
     if (template) state.usedTemplates.add(template.id);
@@ -131,15 +135,47 @@ function playerSlots(player: MemesPlayer): number {
   return templateById(player.templateId)?.slots ?? 1;
 }
 
-function storeDraft(player: MemesPlayer, a: unknown, b: unknown): string[] {
+function clampPosition(value: unknown, fallback: number, max: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(max, Math.max(0, value))
+    : fallback;
+}
+
+function normalizePositions(
+  raw: unknown,
+  boxes: readonly MemeTextBox[],
+  current: readonly MemeBoxPosition[],
+): MemeBoxPosition[] {
+  const positions = Array.isArray(raw) ? raw : [];
+  return boxes.map((box, index) => {
+    const candidate = positions[index];
+    const value = typeof candidate === 'object' && candidate !== null
+      ? candidate as Record<string, unknown>
+      : null;
+    const fallback = current[index] ?? box;
+    return {
+      x: clampPosition(value?.x, fallback.x, 1 - box.w),
+      y: clampPosition(value?.y, fallback.y, 1 - box.h),
+    };
+  });
+}
+
+function storeDraft(player: MemesPlayer, a: unknown, b: unknown, positions?: unknown): string[] {
   const draft = normalizeCaption([a, b], playerSlots(player));
   player.draft = draft;
+  const template = templateById(player.templateId);
+  player.draftPositions = normalizePositions(positions, template?.boxes ?? [], player.draftPositions);
   return draft;
 }
 
-function submitPlayer(state: MemesState, player: MemesPlayer, raw: readonly unknown[]): boolean {
+function submitPlayer(
+  state: MemesState,
+  player: MemesPlayer,
+  raw: readonly unknown[],
+  positions?: unknown,
+): boolean {
   if (player.submitted || !player.templateId) return false;
-  const texts = storeDraft(player, raw[0], raw[1]);
+  const texts = storeDraft(player, raw[0], raw[1], positions);
   if (!isUsableCaption(texts, playerSlots(player))) return false;
 
   player.submitted = true;
@@ -148,6 +184,7 @@ function submitPlayer(state: MemesState, player: MemesPlayer, raw: readonly unkn
     authorSeat: player.seat,
     templateId: player.templateId,
     texts,
+    positions: player.draftPositions.map((position) => ({ ...position })),
     ballots: new Map(),
     award: 0,
     top: false,
@@ -163,7 +200,7 @@ function connectedWritersDone(state: MemesState): boolean {
 
 function finishWriting(state: MemesState): void {
   for (const player of state.players) {
-    if (!player.submitted) submitPlayer(state, player, player.draft);
+    if (!player.submitted) submitPlayer(state, player, player.draft, player.draftPositions);
     if (!player.submitted && player.templateId) state.usedTemplates.delete(player.templateId);
   }
   state.entries = shuffle(state.rng, state.entries);
@@ -297,13 +334,13 @@ export function applyInput(state: MemesState, playerId: string, raw: unknown): v
   if (raw.k === 'draft') {
     if (state.phase !== 'writing' || player.submitted || player.draftBudget <= 0) return;
     player.draftBudget -= 1;
-    storeDraft(player, raw.a, raw.b);
+    storeDraft(player, raw.a, raw.b, raw.p);
     return;
   }
 
   if (raw.k === 'submit') {
     if (state.phase !== 'writing' || player.submitted) return;
-    submitPlayer(state, player, [raw.a, raw.b]);
+    submitPlayer(state, player, [raw.a, raw.b], raw.p);
     if (connectedWritersDone(state)) finishWriting(state);
     return;
   }
@@ -388,6 +425,7 @@ function stageEntry(state: MemesState): MemesStageEntry | null {
   return {
     templateId: entry.templateId,
     texts: [...entry.texts],
+    positions: entry.positions.map((position) => ({ ...position })),
     authorSeat: result ? entry.authorSeat : -1,
     ballots: votes.length,
     eligible: eligibleVoterIds(state, entry).length,
@@ -435,6 +473,7 @@ export function privateFor(state: MemesState, playerId: string): MemesPrivate | 
     slots: template?.slots ?? 1,
     nudge,
     draft: [...player.draft],
+    positions: player.draftPositions.map((position) => ({ ...position })),
     submitted: player.submitted,
     myVote: entry?.ballots.get(playerId) ?? null,
     isAuthor: entry?.authorId === playerId,

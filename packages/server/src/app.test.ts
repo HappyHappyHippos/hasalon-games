@@ -268,7 +268,7 @@ describe('lobby', () => {
     const client = await connect();
     client.send({
       t: 'create',
-      v: 14,
+      v: 15,
       identity: { name: 'Old tab', colorIndex: 0, hat: 0, face: 0 },
     });
     expect((await client.next('error')).code).toBe('BAD_VERSION');

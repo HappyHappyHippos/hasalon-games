@@ -22,6 +22,7 @@ describe('Meme Machine template manifest', () => {
         expect(box.h, template.id).toBeGreaterThan(0);
         expect(box.x + box.w, template.id).toBeLessThanOrEqual(1);
         expect(box.y + box.h, template.id).toBeLessThanOrEqual(1);
+        expect(['center', 'left', 'right'], template.id).toContain(box.align);
       }
     }
   });

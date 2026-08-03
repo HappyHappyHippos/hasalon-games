@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
-import { MAX_CAPTION_CHARS, templateById, type MemesPrivate } from '@mg/shared/memes';
+import {
+  MAX_CAPTION_CHARS,
+  templateById,
+  type MemeBoxPosition,
+  type MemesPrivate,
+} from '@mg/shared/memes';
 import { useStore } from '../../store';
 import { useT } from '../../strings';
 import { Button } from '../../ui/Button';
@@ -11,6 +16,7 @@ export function Composer({ view }: { view: MemesPrivate }): JSX.Element {
   const lang = useStore((state) => state.lang);
   const status = useStore((state) => state.status);
   const [texts, setTexts] = useState<string[]>(() => view.draft);
+  const [positions, setPositions] = useState<MemeBoxPosition[]>(() => view.positions);
   const hydratedRef = useRef('');
   const senderRef = useRef<DraftSender | null>(null);
   if (!senderRef.current) senderRef.current = createDraftSender();
@@ -25,7 +31,8 @@ export function Composer({ view }: { view: MemesPrivate }): JSX.Element {
     if (!view.templateId || hydratedRef.current === view.templateId) return;
     hydratedRef.current = view.templateId;
     setTexts(Array.from({ length: view.slots }, (_, index) => view.draft[index] ?? ''));
-  }, [view.draft, view.slots, view.templateId]);
+    setPositions(view.positions.map((position) => ({ ...position })));
+  }, [view.draft, view.positions, view.slots, view.templateId]);
   useEffect(() => () => senderRef.current?.destroy(), []);
 
   const template = templateById(view.templateId);
@@ -39,13 +46,25 @@ export function Composer({ view }: { view: MemesPrivate }): JSX.Element {
     const next = [...texts];
     next[index] = value;
     setTexts(next);
-    senderRef.current?.update(next[0] ?? '', next[1]);
+    senderRef.current?.update(next[0] ?? '', next[1], positions);
+  };
+
+  const move = (next: MemeBoxPosition[]): void => {
+    setPositions(next);
+    senderRef.current?.update(texts[0] ?? '', texts[1], next);
   };
 
   return (
     <section className="memes__composer">
       <div className="memes__preview">
-        <MemeCard templateId={view.templateId} texts={texts} size="composer" />
+        <MemeCard
+          templateId={view.templateId}
+          texts={texts}
+          positions={positions}
+          size="composer"
+          editable={!view.submitted}
+          onPositionsChange={move}
+        />
       </div>
       <div className="memes__fields">
         <h2>{view.submitted ? t.memesSubmitted : t.memesWrite}</h2>
@@ -72,7 +91,7 @@ export function Composer({ view }: { view: MemesPrivate }): JSX.Element {
         {!view.submitted && (
           <Button variant="primary" size="lg" full disabled={!usable} onClick={() => {
             senderRef.current?.flush();
-            sendSubmit(texts[0] ?? '', texts[1]);
+            sendSubmit(texts[0] ?? '', texts[1], positions);
           }}>
             {t.memesSubmit}
           </Button>

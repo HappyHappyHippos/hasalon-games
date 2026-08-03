@@ -9,6 +9,13 @@ body,
   margin: 0;
 }
 
+/* iOS otherwise enlarges text after rotating and can carry that scale into the
+   lobby when a match ends, making the whole standalone app look zoomed in. */
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
 body {
   background: var(--paper);
   color: var(--ink);
@@ -202,6 +209,8 @@ strong,
   border-radius: var(--radius-sm);
   color: var(--ink);
   font: inherit;
+  /* Explicitly 16px: iOS focus-zooms form controls below this threshold. */
+  font-size: 16px;
   font-weight: 600;
   padding: 12px 14px;
   width: 100%;
@@ -1806,11 +1815,18 @@ strong,
 .options__overlay {
   position: fixed;
   z-index: 25;
+  padding: 28px;
 }
 
 .options__panel {
-  width: min(460px, 100%);
+  width: min(500px, 100%);
+  max-height: calc(100% - 12px);
   gap: 18px;
+  padding: 24px;
+  /* A second hard colour offset gives the menu the same playful sticker depth
+     as the game cards, while the larger overlay inset keeps both shadows in
+     the visible bounding area. */
+  box-shadow: var(--shadow-lg), 12px 12px 0 var(--violet);
 }
 
 .options__head {
@@ -1992,10 +2008,13 @@ strong,
   display: flex;
   flex: none;
   gap: 4px;
-  padding: 3px;
+  /* The selected segment has a 3px hard shadow of its own. This inset is its
+     breathing room, so the button no longer pokes outside the pill. */
+  padding: 6px 8px 9px;
   border: var(--outline);
   border-radius: 999px;
   background: var(--paper);
+  box-shadow: var(--shadow-sm);
 }
 
 .seg {
@@ -2930,9 +2949,12 @@ strong,
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
 }
-.meme-card img { width: 100%; height: 100%; display: block; object-fit: cover; }
-.meme-card--composer { max-height: calc(100dvh - 150px); }
-.meme-card--stage { width: min(620px, 100%); max-height: min(58dvh, 560px); animation: meme-card-deal 320ms cubic-bezier(0.22, 1.35, 0.4, 1) both; }
+.meme-card img { width: 100%; height: 100%; display: block; object-fit: contain; }
+/* Width is capped from the available height *and* the image aspect ratio. The
+   old max-height clamp flattened the figure while `object-fit: cover` hid the
+   mismatch by cutting off the photo's edges. */
+.meme-card--composer { width: min(100%, calc((100dvh - 150px) * var(--meme-aspect))); }
+.meme-card--stage { width: min(620px, 100%, calc(58dvh * var(--meme-aspect)), calc(560px * var(--meme-aspect))); animation: meme-card-deal 320ms cubic-bezier(0.22, 1.35, 0.4, 1) both; }
 .meme-card--thumb { width: 120px; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
 .meme-card--broken { display: grid; place-items: center; }
 .meme-card__fallback { color: var(--ink-soft); font: 800 18px/1.2 var(--font-display); }
@@ -2955,7 +2977,32 @@ strong,
   text-shadow: 2px 2px 0 var(--ink);
 }
 .meme-card__caption--panel { padding: 7px; color: var(--ink); background: rgba(255, 255, 255, 0.9); border: 2px solid var(--ink); }
+.meme-card__caption--plain { color: var(--ink); text-shadow: 0 1px 0 rgba(255, 255, 255, 0.9); }
 .meme-card__caption--latin { text-transform: uppercase; }
+.meme-card__caption--editable {
+  z-index: 2;
+  border: 2px dashed var(--yellow);
+  cursor: grab;
+  touch-action: none;
+}
+.meme-card__caption--editable:active { cursor: grabbing; }
+.meme-card__caption--editable:focus-visible { outline: 3px solid var(--violet); outline-offset: 2px; }
+.meme-card__move {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: var(--yellow);
+  color: var(--ink);
+  font: 900 14px/1 var(--font-display);
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+}
 .meme-card--stage .meme-card__caption { animation: meme-caption 220ms 100ms ease-out both; }
 .meme-card--stage .meme-card__caption:nth-of-type(2) { animation-delay: 220ms; }
 
@@ -3071,14 +3118,14 @@ strong,
   .memes__top { min-height: 50px; padding: 4px 8px; padding-inline-end: calc(150px + env(safe-area-inset-right)); }
   .memes__clock { width: 39px; height: 39px; flex-basis: 39px; }
   .memes__composer { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 9px; }
-  .memes__preview .meme-card { max-height: 45dvh; width: auto; max-width: 100%; }
+  .memes__preview .meme-card { width: min(100%, calc(45dvh * var(--meme-aspect))); }
   .memes__fields { padding: 10px; gap: 8px; }
   .memes__fields h2 { font-size: 18px; }
   .memes__field textarea { min-height: 58px; font-size: 16px; }
   .memes__roster { margin-top: 9px; }
   .memes__roster li { min-width: 78px; grid-template-columns: 32px 1fr auto; }
   .memes__roster .avatar { width: 32px; height: 32px; }
-  .meme-card--stage { max-height: 50dvh; width: auto; max-width: 100%; }
+  .meme-card--stage { width: min(100%, calc(50dvh * var(--meme-aspect))); }
   .memes__vote-button { min-height: 48px; padding: 5px; flex-direction: column; gap: 2px; }
   .memes__vote-button b { font-size: 12px; }
   .memes__result { grid-template-columns: auto 1fr; }
@@ -3087,11 +3134,11 @@ strong,
 
 @media (max-height: 560px) and (orientation: landscape) {
   .memes__composer { grid-template-columns: minmax(240px, 1.15fr) minmax(260px, 0.85fr); }
-  .memes__preview .meme-card { max-height: calc(100dvh - 78px); }
+  .memes__preview .meme-card { width: min(100%, calc((100dvh - 78px) * var(--meme-aspect))); }
   .memes__roster { display: none; }
   .memes__stage { grid-template-columns: minmax(0, 1fr) minmax(250px, 0.75fr); align-items: center; }
   .memes__stage > .eyebrow { display: none; }
-  .memes__stage > .meme-card { grid-row: 1 / span 2; max-height: calc(100dvh - 76px); }
+  .memes__stage > .meme-card { grid-row: 1 / span 2; width: min(100%, calc((100dvh - 76px) * var(--meme-aspect))); }
   .memes__vote,
   .memes__result { grid-column: 2; }
 }

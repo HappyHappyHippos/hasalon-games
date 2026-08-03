@@ -27,9 +27,15 @@ export interface MemesConfig {
 
 export type MemesVote = -1 | 0 | 1;
 
+/** Normalised physical image coordinates for a player-moved caption box. */
+export interface MemeBoxPosition {
+  x: number;
+  y: number;
+}
+
 export type MemesInput =
-  | { k: 'draft'; a: string; b?: string }
-  | { k: 'submit'; a: string; b?: string }
+  | { k: 'draft'; a: string; b?: string; p?: MemeBoxPosition[] }
+  | { k: 'submit'; a: string; b?: string; p?: MemeBoxPosition[] }
   | { k: 'vote'; v: MemesVote }
   | { k: 'react'; r: number };
 
@@ -38,6 +44,7 @@ export interface MemesEntry {
   authorSeat: number;
   templateId: string;
   texts: string[];
+  positions: MemeBoxPosition[];
   ballots: Map<string, MemesVote>;
   award: number;
   top: boolean;
@@ -53,6 +60,7 @@ export interface MemesPlayer {
   roundScore: number;
   templateId: string;
   draft: string[];
+  draftPositions: MemeBoxPosition[];
   submitted: boolean;
   draftBudget: number;
   /** Server-only lifecycle fact, supplied through GameInstance.setConnected. */
@@ -77,6 +85,7 @@ export interface MemesState {
 export interface MemesStageEntry {
   templateId: string;
   texts: string[];
+  positions: MemeBoxPosition[];
   authorSeat: number;
   ballots: number;
   eligible: number;
@@ -114,6 +123,7 @@ export interface MemesPrivate {
   slots: number;
   nudge: string;
   draft: string[];
+  positions: MemeBoxPosition[];
   submitted: boolean;
   myVote: MemesVote | null;
   isAuthor: boolean;
@@ -124,8 +134,9 @@ export interface MemeTextBox {
   y: number;
   w: number;
   h: number;
-  style: 'impact' | 'panel';
-  align: 'center' | 'start';
+  style: 'impact' | 'panel' | 'plain';
+  /** Physical alignment from Imgflip's image coordinate system. */
+  align: 'center' | 'left' | 'right';
 }
 
 export interface MemeTemplate {

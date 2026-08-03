@@ -138,4 +138,6 @@ foreach ($item in $items) {
 }
 $generated.Add('];')
 [System.IO.File]::WriteAllLines((Join-Path $sharedDir 'templateAssets.ts'), $generated, [System.Text.UTF8Encoding]::new($false))
+& node (Join-Path $PSScriptRoot 'curate-meme-layouts.mjs')
+if ($LASTEXITCODE -ne 0) { throw 'Could not generate Imgflip text layouts.' }
 Write-Output "Wrote $($items.Count) current Imgflip templates and source rows."

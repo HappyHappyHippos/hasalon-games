@@ -81,7 +81,7 @@ export function MemesScreen({ room, mySeat }: Props): JSX.Element {
   } else if (phase === 'standings') {
     body = <MemesStandings room={room} mySeat={mySeat} />;
   } else if (stage) {
-    body = <section className="memes__stage"><p className="eyebrow">{stageLabel}</p><MemeCard templateId={stage.templateId} texts={stage.texts} size="stage" /><ReactionBursts key={stage.templateId} counts={stage.reactions} />
+    body = <section className="memes__stage"><p className="eyebrow">{stageLabel}</p><MemeCard templateId={stage.templateId} texts={stage.texts} positions={stage.positions} size="stage" /><ReactionBursts key={stage.templateId} counts={stage.reactions} />
       {phase === 'voting' && <VotePanel stage={stage} mine={mine} />}
       {phase === 'result' && <ResultCard room={room} stage={stage} />}
     </section>;

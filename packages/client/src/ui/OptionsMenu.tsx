@@ -9,6 +9,7 @@ import { Button } from './Button';
 import { Toggle } from './Toggle';
 import { useHasTouch } from './useTouchControls';
 import { useVoice } from './useVoice';
+import { isStandalone } from './useFullscreen';
 import type { TouchControlsMode } from '../store';
 import { LANGS, type Dict, type Lang } from '../i18n';
 
@@ -284,6 +285,11 @@ export function OptionsMenu(): JSX.Element {
         )}
 
         <div className="options__foot">
+          {isIOS() && isStandalone() && (
+            <Button full onClick={() => window.location.reload()}>
+              {t.reloadApp}
+            </Button>
+          )}
           <Button variant="primary" size="lg" full onClick={close}>
             {t.backToGame}
           </Button>

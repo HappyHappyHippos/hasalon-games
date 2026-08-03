@@ -175,6 +175,7 @@ const he = {
   controlsFor: (game: string) => `${game} — שליטה`,
   howToPlay: 'איך משחקים',
   backToGame: 'חזרה למשחק',
+  reloadApp: 'טעינה מחדש של האפליקציה',
 
   // -------------------------------------------------------------------------
   // Games
@@ -311,6 +312,7 @@ const he = {
   memesCaption: (n: number) => `כיתוב ${n}`,
   memesCaptionPlaceholder: 'מה קורה כאן?',
   memesCharacters: (n: number, max: number) => `${n}/${max}`,
+  memesMoveCaption: (n: number) => `הזיזו את כיתוב ${n}`,
   memesSubmit: 'סיימתי',
   memesSubmitted: 'הכיתוב בפנים!',
   memesWaitingWriters: 'מי כבר סיים',
@@ -494,6 +496,7 @@ const en: Dict = {
   controlsFor: (game: string) => `${game} — controls`,
   howToPlay: 'How to play',
   backToGame: 'Back to the game',
+  reloadApp: 'Reload app',
 
   chooseAGame: 'Choose a game',
   playersRange: (min: number, max: number) => `${min}–${max} players`,
@@ -620,6 +623,7 @@ const en: Dict = {
   memesCaption: (n: number) => `Caption ${n}`,
   memesCaptionPlaceholder: 'What is happening here?',
   memesCharacters: (n: number, max: number) => `${n}/${max}`,
+  memesMoveCaption: (n: number) => `Move caption ${n}`,
   memesSubmit: 'Submit',
   memesSubmitted: 'Caption locked in!',
   memesWaitingWriters: 'Who is finished',

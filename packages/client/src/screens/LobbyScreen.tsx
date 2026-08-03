@@ -1,4 +1,4 @@
-import { useState, type JSX } from 'react';
+import { useEffect, useState, type JSX } from 'react';
 import { colorFor } from '@mg/shared';
 import { useStore } from '../store';
 import { useT } from '../strings';
@@ -19,6 +19,13 @@ export function LobbyScreen(): JSX.Element {
   const t = useT();
   const speaking = new Set(useVoice().speaking);
   const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    // Creating/joining can replace HomeScreen while its input is still focused.
+    // iOS preserves that input-focus zoom across the route change, leaving the
+    // entire lobby enlarged even though it contains no focused field.
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  }, []);
 
   const me = room.players.find((p) => p.id === playerId);
   const isHost = me?.isHost ?? false;
