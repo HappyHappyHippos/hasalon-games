@@ -50,6 +50,7 @@ npm run build
 ```bash
 npm run smoke        # two real WS clients against a running deploy
 npm run audit:voice  # two real local browsers with fake microphones and RTP assertions
+npm run audit:voice -- https://hasalon-dev-dev.up.railway.app  # same audit against dev
 npm run probe:turn -- https://hasalon-dev-dev.up.railway.app  # relay-only deployed probe
 ```
 

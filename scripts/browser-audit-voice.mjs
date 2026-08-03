@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocket } from 'ws';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
+const remoteBase = process.argv[2]?.replace(/\/$/, '') || null;
 const serverPort = 4310;
 const clientPort = 4175;
 const profiles = [
@@ -16,21 +17,26 @@ const output = join(tmpdir(), 'hasalon-voice-browser-audit');
 await Promise.all(profiles.map((profile) => mkdir(profile, { recursive: true })));
 await mkdir(output, { recursive: true });
 
-const server = spawn(process.execPath, [join(root, 'packages/server/dist/server.js'), '--port', String(serverPort)], {
-  cwd: root,
-  stdio: 'ignore',
-  windowsHide: true,
-});
-const vite = spawn(
-  process.execPath,
-  [join(root, 'node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', String(clientPort)],
-  {
-    cwd: join(root, 'packages/client'),
-    env: { ...process.env, SERVER_PORT: String(serverPort) },
-    stdio: 'ignore',
-    windowsHide: true,
-  },
-);
+const server = remoteBase
+  ? null
+  : spawn(process.execPath, [join(root, 'packages/server/dist/server.js'), '--port', String(serverPort)], {
+      cwd: root,
+      stdio: 'ignore',
+      windowsHide: true,
+    });
+const vite = remoteBase
+  ? null
+  : spawn(
+      process.execPath,
+      [join(root, 'node_modules/vite/bin/vite.js'), '--host', '127.0.0.1', '--port', String(clientPort)],
+      {
+        cwd: join(root, 'packages/client'),
+        env: { ...process.env, SERVER_PORT: String(serverPort) },
+        stdio: 'ignore',
+        windowsHide: true,
+      },
+    );
+const appUrl = remoteBase ?? `http://127.0.0.1:${clientPort}`;
 
 const edgePath = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
 const edges = [0, 1].map((index) =>
@@ -44,7 +50,7 @@ const edges = [0, 1].map((index) =>
       '--use-fake-ui-for-media-stream',
       `--remote-debugging-port=${9340 + index}`,
       `--user-data-dir=${profiles[index]}`,
-      `http://127.0.0.1:${clientPort}/?voice-audit=${index}`,
+      `${appUrl}/?voice-audit=${index}`,
     ],
     { stdio: 'ignore', windowsHide: true },
   ),
@@ -135,8 +141,8 @@ async function diagnostics(browser) {
 
 const browsers = [];
 try {
-  await waitForHttp(`http://127.0.0.1:${serverPort}/healthz`);
-  await waitForHttp(`http://127.0.0.1:${clientPort}`);
+  if (!remoteBase) await waitForHttp(`http://127.0.0.1:${serverPort}/healthz`);
+  await waitForHttp(appUrl);
   browsers.push(await connectBrowser(9340), await connectBrowser(9341));
   const [alice, bob] = browsers;
   for (const browser of browsers) {
@@ -242,7 +248,7 @@ try {
 } finally {
   for (const browser of browsers) browser.ws.close();
   for (const process of edges) process.kill();
-  vite.kill();
-  server.kill();
+  vite?.kill();
+  server?.kill();
   await Promise.all(profiles.map((profile) => rm(profile, { recursive: true, force: true }).catch(() => undefined)));
 }
