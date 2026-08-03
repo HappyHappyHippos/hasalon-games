@@ -1,17 +1,18 @@
 import type { AchtungConfig, AchtungSnapshot } from './games/achtung/types';
 import type { GunMayhemConfig, GunMayhemSnapshot } from './games/gunmayhem/types';
+import type { MemesConfig, MemesSnapshot } from './games/memes/types';
 import type { SkribblConfig, SkribblSnapshot } from './games/skribbl/types';
 
 /** Every game the site knows about. */
-export type GameId = 'achtung' | 'gunmayhem' | 'skribbl';
+export type GameId = 'achtung' | 'gunmayhem' | 'memes' | 'skribbl';
 
 /**
  * Configs and snapshots are unions tagged with `game`, so both the server and
  * the client narrow them with a single check instead of threading generics
  * through the room, the protocol and the store.
  */
-export type GameConfig = AchtungConfig | GunMayhemConfig | SkribblConfig;
-export type GameSnapshot = AchtungSnapshot | GunMayhemSnapshot | SkribblSnapshot;
+export type GameConfig = AchtungConfig | GunMayhemConfig | MemesConfig | SkribblConfig;
+export type GameSnapshot = AchtungSnapshot | GunMayhemSnapshot | MemesSnapshot | SkribblSnapshot;
 
 export interface GameSeat {
   id: string;
@@ -64,6 +65,8 @@ export interface GameInstance {
    * input the player sent from then on.
    */
   resetInput(playerId: string): void;
+  /** Optional lifecycle signal for turn-paced games whose quorum excludes away seats. */
+  setConnected?(playerId: string, connected: boolean): void;
   stepTick(): void;
   /** Builds the wire snapshot and drains any events accumulated since the last call. */
   snapshot(): GameSnapshot;

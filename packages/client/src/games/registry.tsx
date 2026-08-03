@@ -9,6 +9,9 @@ import { AchtungSettings } from './achtung/Settings';
 import { GunMayhemBoxArt } from './gunmayhem/BoxArt';
 import { GunMayhemScreen } from './gunmayhem/GunMayhemScreen';
 import { GunMayhemSettings } from './gunmayhem/Settings';
+import { MemesBoxArt } from './memes/BoxArt';
+import { MemesScreen } from './memes/MemesScreen';
+import { MemesSettings } from './memes/Settings';
 
 export interface SettingsProps {
   settings: GameConfig;
@@ -56,10 +59,17 @@ export const CLIENT_GAMES: Record<GameId, ClientGame> = {
     Settings: SkribblSettings,
     accent: 'var(--violet)',
   },
+  memes: {
+    meta: GAMES.memes.meta,
+    BoxArt: MemesBoxArt,
+    Screen: MemesScreen,
+    Settings: MemesSettings,
+    accent: 'var(--orange)',
+  },
 };
 
 /** Display order in the lobby. */
-export const CLIENT_GAME_IDS: GameId[] = ['gunmayhem', 'achtung', 'skribbl'];
+export const CLIENT_GAME_IDS: GameId[] = ['gunmayhem', 'achtung', 'skribbl', 'memes'];
 
 export function renderGameScreen(room: RoomView, mySeat: number): JSX.Element {
   const game = CLIENT_GAMES[room.gameId];

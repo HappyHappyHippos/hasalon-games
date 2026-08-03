@@ -103,6 +103,7 @@ export class Room {
     this.settingsByGame = {
       achtung: GAMES.achtung.defaultConfig(2),
       gunmayhem: GAMES.gunmayhem.defaultConfig(2),
+      memes: GAMES.memes.defaultConfig(3),
       skribbl: GAMES.skribbl.defaultConfig(2),
     };
   }
@@ -190,6 +191,7 @@ export class Room {
     // The socket that reconnected is a fresh controller — most importantly its
     // input sequence counter has restarted — so the sim must forget the old one.
     this.instance?.resetInput(player.id);
+    this.instance?.setConnected?.(player.id, true);
     this.forgetPrivate(player.id);
 
     client.roomCode = this.code;
@@ -205,6 +207,7 @@ export class Room {
     // Let go of their buttons rather than yanking them out of a live round —
     // otherwise someone who drops mid-sprint keeps running for the full grace.
     this.instance?.resetInput(player.id);
+    this.instance?.setConnected?.(player.id, false);
     this.forgetPrivate(player.id);
     this.resumeIfPausedBy(player.id);
     this.reassignHostIfNeeded();
@@ -217,6 +220,7 @@ export class Room {
     if (index === -1) return;
 
     const [player] = this.players.splice(index, 1);
+    this.instance?.setConnected?.(playerId, false);
 
     // Detach the socket but leave it open. Removal also happens when a client
     // moves to another room, and closing the connection out from under it

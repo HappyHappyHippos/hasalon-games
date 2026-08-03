@@ -268,7 +268,7 @@ describe('lobby', () => {
     const client = await connect();
     client.send({
       t: 'create',
-      v: 13,
+      v: 14,
       identity: { name: 'Old tab', colorIndex: 0, hat: 0, face: 0 },
     });
     expect((await client.next('error')).code).toBe('BAD_VERSION');
@@ -509,6 +509,95 @@ describe('match', () => {
     if (revealed.snap.game !== 'skribbl') throw new Error('wrong game');
     expect(revealed.snap.masked).toBe(word);
   });
+
+  it('runs Meme Machine and keeps every caption off every other socket', async () => {
+    const clients = await makeLobby(3);
+    const [host, guest] = clients;
+    host!.send({ t: 'game', gameId: 'memes' });
+    host!.send({ t: 'settings', settings: { rounds: 1, writeSeconds: 20, voteSeconds: 5 } });
+    host!.send({ t: 'start' });
+    await host!.next('matchStarted');
+
+    const privateViews = await Promise.all(clients.map((client) => client.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'private' }> =>
+        m.t === 'private' && typeof (m.data as { templateId?: unknown } | null)?.templateId === 'string',
+    )));
+    const templates = privateViews.map((message) => (message.data as { templateId: string }).templateId);
+    expect(new Set(templates).size).toBe(3);
+
+    await host!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+        m.t === 'snapshot' && m.snap.game === 'memes' && m.snap.phase === 'writing',
+    );
+    const captions = clients.map((_, index) => `socket-secret-${index}`);
+    clients.forEach((client, index) => client.send({ t: 'input', i: { k: 'submit', a: captions[index]! } }));
+
+    const reveal = await guest!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+        m.t === 'snapshot' && m.snap.game === 'memes' && m.snap.phase === 'reveal',
+    );
+    if (reveal.snap.game !== 'memes' || !reveal.snap.stage) throw new Error('wrong game');
+    expect(reveal.snap.stage.authorSeat).toBe(-1);
+    const visibleCaption = reveal.snap.stage.texts[0];
+
+    // This guest may know their own caption privately, and the current stage is
+    // public. No other submitted text may occur anywhere in their received log.
+    const seenByGuest = JSON.stringify(guest!.received);
+    captions.forEach((caption, index) => {
+      if (index !== 1 && caption !== visibleCaption) expect(seenByGuest).not.toContain(caption);
+    });
+  }, 15_000);
+
+  it('scores Meme Machine from real votes and refuses every author ballot', async () => {
+    const clients = await makeLobby(3);
+    const [host] = clients;
+    host!.send({ t: 'game', gameId: 'memes' });
+    host!.send({ t: 'settings', settings: { rounds: 1, writeSeconds: 20, voteSeconds: 5 } });
+    host!.send({ t: 'start' });
+    await host!.next('matchStarted');
+
+    const privateViews = await Promise.all(clients.map((client) => client.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'private' }> =>
+        m.t === 'private' && Boolean((m.data as { templateId?: string } | null)?.templateId),
+    )));
+    const authorByTemplate = new Map(privateViews.map((message, index) => [
+      (message.data as { templateId: string }).templateId,
+      index,
+    ]));
+    await host!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+        m.t === 'snapshot' && m.snap.game === 'memes' && m.snap.phase === 'writing',
+    );
+    clients.forEach((client, index) => client.send({ t: 'input', i: { k: 'submit', a: `scored-caption-${index}` } }));
+
+    for (let entryIndex = 0; entryIndex < clients.length; entryIndex += 1) {
+      const voting = await host!.waitFor(
+        (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+          m.t === 'snapshot' && m.snap.game === 'memes' && m.snap.phase === 'voting' && m.snap.entryIndex === entryIndex,
+        12_000,
+      );
+      if (voting.snap.game !== 'memes' || !voting.snap.stage) throw new Error('wrong game');
+      const authorIndex = authorByTemplate.get(voting.snap.stage.templateId);
+      if (authorIndex === undefined) throw new Error('unknown template');
+
+      // All three try; the sim must silently discard the author's own ballot.
+      clients.forEach((client) => client.send({ t: 'input', i: { k: 'vote', v: 1 } }));
+      const result = await host!.waitFor(
+        (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+          m.t === 'snapshot' && m.snap.game === 'memes' && m.snap.phase === 'result' && m.snap.entryIndex === entryIndex,
+      );
+      if (result.snap.game !== 'memes' || !result.snap.stage) throw new Error('wrong game');
+      expect(result.snap.stage).toMatchObject({ ballots: 2, eligible: 2, award: 125 });
+      expect(result.snap.stage.tally).toEqual([2, 0, 0]);
+      expect(result.snap.stage.authorSeat).toBe(authorIndex);
+    }
+
+    const ended = await host!.next('matchEnded', 15_000);
+    expect(ended.winnerSeat).toBeNull();
+    // 125 own meme + 40 tied top-meme bonus + two 5-point ballots.
+    expect(ended.room.players.filter((player) => player.seat >= 0).map((player) => player.score))
+      .toEqual([175, 175, 175]);
+  }, 40_000);
 
   it('returns everyone to the lobby on a rematch with scores cleared', async () => {
     const clients = await makeLobby(2);

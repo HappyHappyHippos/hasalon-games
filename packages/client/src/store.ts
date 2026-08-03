@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { isFaceIndex, isHatIndex } from '@mg/shared';
 import type { ErrorCode, GameConfig, GameId, Identity, RoomView } from '@mg/shared';
+import type { MemesPrivate, MemesStageEntry } from '@mg/shared/memes';
 import { isLang, type Lang } from './i18n';
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'open' | 'closed';
@@ -31,6 +32,10 @@ export interface HudPlayer {
   guessed?: boolean;
   /** Skribbl: points earned this round, for the reveal screen. */
   roundScore?: number;
+  /** Meme Machine: finished writing this round. */
+  submitted?: boolean;
+  /** Meme Machine: cast a ballot on the staged entry. */
+  voted?: boolean;
 }
 
 /**
@@ -54,6 +59,17 @@ export interface SkribblHud {
   rounds: number;
 }
 
+/** Meme Machine is entirely React-rendered, so its latest whole stage view lives here. */
+export interface MemesHud {
+  phaseTicks: number;
+  phaseTotal: number;
+  phaseSeq: number;
+  rounds: number;
+  entryIndex: number;
+  entryCount: number;
+  stage: MemesStageEntry | null;
+}
+
 export interface Hud {
   phase: string;
   round: number;
@@ -61,6 +77,7 @@ export interface Hud {
   countdown: number;
   players: HudPlayer[];
   skribbl?: SkribblHud;
+  memes?: MemesHud;
 }
 
 /**
@@ -150,6 +167,8 @@ export interface AppState {
    * sent to the whole room — see `Room.sendPrivate`.
    */
   secret: Secret | null;
+  /** Meme Machine's per-socket template, draft, and ballot state. */
+  memesPrivate: MemesPrivate | null;
 
   setStatus(status: ConnectionStatus): void;
   setRoom(room: RoomView | null): void;
@@ -167,6 +186,7 @@ export interface AppState {
    */
   pushChat(lines: ChatLine[]): void;
   setSecret(secret: Secret | null): void;
+  setMemesPrivate(value: MemesPrivate | null): void;
   setNet(net: NetStats): void;
   setMuted(muted: boolean): void;
   setMusicMuted(muted: boolean): void;
@@ -285,6 +305,7 @@ export const useStore = create<AppState>((set) => ({
   hud: emptyHud,
   chat: [],
   secret: null,
+  memesPrivate: null,
   net: { rtt: 0, jitter: 0, delay: 0 },
   matchWinnerSeat: null,
   muted: false,
@@ -313,6 +334,7 @@ export const useStore = create<AppState>((set) => ({
   setBusy: (busy) => set({ busy }),
   setHud: (hud) => set({ hud }),
   setSecret: (secret) => set({ secret }),
+  setMemesPrivate: (memesPrivate) => set({ memesPrivate }),
 
   pushChat: (lines) =>
     set((state) => {
@@ -348,7 +370,13 @@ export const useStore = create<AppState>((set) => ({
   },
 
   onMatchStarted: (room) =>
-    set((state) => ({ room, chat: [], secret: null, matchNonce: state.matchNonce + 1 })),
+    set((state) => ({
+      room,
+      chat: [],
+      secret: null,
+      memesPrivate: null,
+      matchNonce: state.matchNonce + 1,
+    })),
 
   onWelcome: (room, playerId) =>
     set({ room, playerId, error: null, busy: false, matchWinnerSeat: null }),
@@ -362,6 +390,7 @@ export const useStore = create<AppState>((set) => ({
       hud: emptyHud,
       chat: [],
       secret: null,
+      memesPrivate: null,
       matchWinnerSeat: null,
       busy: false,
     }),

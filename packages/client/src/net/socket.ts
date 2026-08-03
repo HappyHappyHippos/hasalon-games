@@ -13,6 +13,7 @@ import { feed } from './feed';
 // Game-specific, and the only such import here. See `inkBus` for why this
 // cannot ride the throttled HUD mirror like everything else does.
 import { receiveSkribbl, resetInk } from '../games/skribbl/inkBus';
+import type { MemesPrivate } from '@mg/shared/memes';
 import { clock } from './clock';
 import { voice } from './voice';
 import { delayed, readNetSim } from './netsim';
@@ -23,6 +24,7 @@ import {
   useStore,
   type Hud,
   type HudPlayer,
+  type MemesHud,
   type Secret,
   type SkribblHud,
 } from '../store';
@@ -332,9 +334,16 @@ class GameSocket {
         return;
 
       case 'private':
-        // Game state for this socket alone — Skribbl's word, for the drawer.
-        // Null clears it, which is what arrives the moment they stop drawing.
-        store.setSecret((message.data as Secret | null) ?? null);
+        // The message is deliberately game-agnostic on the wire. The selected
+        // game supplies the private shape, and the other game's slice is cleared
+        // so a switch can never expose stale secret state.
+        if (store.room?.gameId === 'memes') {
+          store.setMemesPrivate((message.data as MemesPrivate | null) ?? null);
+          store.setSecret(null);
+        } else {
+          store.setSecret((message.data as Secret | null) ?? null);
+          store.setMemesPrivate(null);
+        }
         return;
 
       case 'error': {
@@ -357,7 +366,7 @@ class GameSocket {
   /** Throttled copy of snapshot data that the React HUD actually needs. */
   private mirrorHud(snap: GameSnapshot): void {
     const now = performance.now();
-    const isTransition = snap.events.length > 0;
+    const isTransition = 'events' in snap && snap.events.length > 0;
     if (!isTransition && now - this.lastHudAt < HUD_INTERVAL_MS) return;
     this.lastHudAt = now;
 
@@ -388,6 +397,7 @@ class GameSocket {
     // failure instead of a mystery.
     let players: HudPlayer[];
     let skribbl: SkribblHud | undefined;
+    let memes: MemesHud | undefined;
     switch (snap.game) {
       case 'achtung':
         players = snap.players.map((p) => ({
@@ -425,9 +435,28 @@ class GameSocket {
           rounds: snap.rounds,
         };
         break;
+      case 'memes':
+        players = snap.players.map((p) => ({
+          seat: p.s,
+          score: p.p,
+          alive: true,
+          roundScore: p.rp,
+          submitted: p.sub === 1,
+          voted: p.v === 1,
+        }));
+        memes = {
+          phaseTicks: snap.phaseTicks,
+          phaseTotal: snap.phaseTotal,
+          phaseSeq: snap.phaseSeq,
+          rounds: snap.rounds,
+          entryIndex: snap.entryIndex,
+          entryCount: snap.entryCount,
+          stage: snap.stage,
+        };
+        break;
     }
 
-    const hud: Hud = { phase: snap.phase, round: snap.round, countdown, players, skribbl };
+    const hud: Hud = { phase: snap.phase, round: snap.round, countdown, players, skribbl, memes };
     useStore.getState().setHud(hud);
   }
 }
