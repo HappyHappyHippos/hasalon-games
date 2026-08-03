@@ -28,7 +28,7 @@ export function placementPoints(finishers: ReadonlyArray<{ id: string; score: nu
     // Tied players split the points of the ranks they collectively occupy —
     // e.g. two people tied for 2nd/3rd each get (18 + 15) / 2.
     let pool = 0;
-    for (let rank = i; rank < j; rank++) pool += (playerCount - rank);
+    for (let rank = i; rank < j; rank++) pool += (playerCount - 2 - rank);
     const share = pool / (j - i);
     for (let rank = i; rank < j; rank++) out[sorted[rank]!.id] = share;
     i = j;
