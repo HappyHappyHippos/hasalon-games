@@ -19,8 +19,9 @@ export function App(): JSX.Element {
   const mySeat = useStore(selectMySeat);
   const lang = useStore((s) => s.lang);
 
-  // Adds and drops peer connections as speaking/listening flags change. Pure
-  // listeners open no microphone and listener-to-listener pairs cost nothing.
+  // Keeps a prompt-free audio path between willing listeners. Pure listeners
+  // open no microphone; the stable path lets a later mic use replaceTrack
+  // without renegotiating at the exact moment a phone is changing state.
   useVoiceMesh();
 
   // The document element, not a wrapper div: `dir` has to be on an ancestor of

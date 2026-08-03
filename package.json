@@ -18,7 +18,9 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "vitest run",
     "test:watch": "vitest",
-    "smoke": "node scripts/smoke-ws.mjs"
+    "smoke": "node scripts/smoke-ws.mjs",
+    "audit:voice": "node scripts/browser-audit-voice.mjs",
+    "probe:turn": "node scripts/probe-turn.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",

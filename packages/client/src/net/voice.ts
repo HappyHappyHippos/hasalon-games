@@ -1,165 +1,128 @@
 /**
- * Voice chat: a peer-to-peer mesh, signalled over the socket that already exists.
+ * Prompt-free, audio-only WebRTC voice for a room of at most eight people.
  *
- * No audio ever reaches the server. Each pair of players opens one
- * `RTCPeerConnection` and the media flows directly between them; the server only
- * forwards offers, answers and ICE candidates, and does not read those either.
+ * Every pair of willing listeners negotiates one `sendrecv` audio transceiver
+ * when they join. The transceiver exists before either microphone does, so
+ * opening and closing a microphone is only `RTCRtpSender.replaceTrack()` and
+ * never an SDP direction change. Negotiation follows the WebRTC "perfect
+ * negotiation" pattern; either endpoint may restart ICE without an offerer
+ * deadlock or glare race.
  *
- * ## Getting through carrier-grade NAT
- *
- * STUN alone is enough for two home routers to find each other and nothing
- * else. A player behind carrier-grade NAT — the norm on Israeli mobile
- * networks, and this game does get played phone-only — has no route a STUN
- * candidate can describe, so those peers connect to nobody while everyone on
- * wifi is fine.
- *
- * The ICE servers come from the server's `/ice` endpoint, which adds a TURN
- * relay (see `server/src/ice.ts` for which one and why it is free). That
- * endpoint never fails, so `FALLBACK_ICE_SERVERS` below is only for the network
- * being down entirely — in which case there is no signalling either.
- *
- * ## Two phones is the case that breaks
- *
- * Everything here that looks over-careful is because a desktop is forgiving and
- * two phones are not. Three separate bugs each produced "connected, but silence"
- * between an iPhone and an Android while iPhone-to-laptop worked: building the
- * mesh from room membership rather than who has a mic open (see `useVoice.ts`),
- * putting a *remote* stream through an `AudioContext` (which mutes the audio
- * element on WebKit — see `startLevels`), and creating that context outside the
- * user gesture so iOS left it suspended.
- *
- * Failure is still per-peer and still has to be *visible*: `peers` carries a
- * status for every other player and the UI reports it. "I can't hear Yoni"
- * should be diagnosable from the screen rather than a mystery. TURN makes that
- * rarer; it does not make it impossible.
- *
- * ## Why a mesh
- *
- * Eight players means seven connections each: about 40 kbps up per peer, so
- * ~300 kbps up at a full room. Fine on wifi, noticeable on cellular, and far
- * simpler than running an SFU for a game whose whole premise is that there is no
- * server state worth keeping.
- *
- * ## Deliberately outside React
- *
- * Like `feed` and `music`. Levels are sampled ten times a second and peers come
- * and go; pushing all of that through component state would re-render the tree
- * for no benefit. Only the parts the UI actually draws — who is connected, who
- * is talking — are mirrored into the store, and only when they change.
+ * Audio stays peer-to-peer. The game server relays opaque signalling and mints
+ * short-lived TURN credentials; it never receives media.
  */
-/**
- * Only used when `/ice` itself is unreachable.
- *
- * Public STUN — two, because the first occasionally rate-limits and ICE will use
- * whichever answers — plus the Open Relay Project's free TURN servers on
- * TCP/TLS 443. The relay entries matter: without them a client whose `/ice`
- * fetch times out (plausible on a phone right after the mic prompt) silently
- * drops to STUN-only, which is the configuration that cannot cross CGNAT.
- */
-const FALLBACK_ICE_SERVERS: RTCIceServer[] = [
-  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
-  {
-    urls: [
-      'turn:openrelay.metered.ca:443?transport=tcp',
-      'turns:openrelay.metered.ca:443?transport=tcp',
-    ],
-    username: 'openrelayproject',
-    credential: 'openrelayproject',
-  },
+const STUN_ONLY_SERVERS: RTCIceServer[] = [
+  { urls: ['stun:stun.cloudflare.com:3478', 'stun:stun.l.google.com:19302'] },
 ];
 
-/** Voice is optional; do not let a slow config fetch hold the microphone open. */
-const ICE_FETCH_TIMEOUT_MS = 4000;
-
-/** How often levels are sampled for the speaking indicator. */
-const LEVEL_INTERVAL_MS = 100;
-/** RMS above this counts as speech. */
+const ICE_FETCH_TIMEOUT_MS = 4_000;
+const CONNECT_TIMEOUT_MS = 12_000;
+const DISCONNECTED_GRACE_MS = 4_000;
+const RECOVERY_CHECK_MS = 8_000;
+const MAX_ICE_RESTARTS = 3;
+const LEVEL_INTERVAL_MS = 250;
 const SPEAKING_ON = 0.045;
-/** ...and it has to stay below for this long before the ring goes out again. */
 const SPEAKING_OFF = 0.03;
-const SPEAKING_HANG_MS = 280;
+const SPEAKING_HANG_MS = 350;
 
-export type PeerStatus = 'connecting' | 'connected' | 'failed';
-
+export type PeerStatus = 'connecting' | 'connected' | 'recovering' | 'failed';
 export type VoiceError = 'denied' | 'nodevice' | 'unsupported' | null;
+export type RelayStatus = 'loading' | 'cloudflare' | 'stun-only';
 
 export interface VoiceSnapshot {
-  /** Our own microphone is open. Not the same as un-muted. */
+  /** Our microphone exists. This remains true while its track is muted. */
   active: boolean;
-  /** In the mesh with no microphone — receiving only. Never true while `active`. */
+  /** Receiving room audio with no local microphone. */
   listening: boolean;
-  /** Opted out of auto-listen entirely: no peers, no audio. */
+  /** Explicitly opted out of hearing the room. */
   deaf: boolean;
   muted: boolean;
   error: VoiceError;
-  /** playerId -> how their connection is doing. */
+  relay: RelayStatus;
+  /** Safari has not yet accepted a gesture for remote playback. */
+  playbackBlocked: boolean;
   peers: Record<string, PeerStatus>;
-  /** playerIds currently making noise, including possibly our own. */
   speaking: string[];
+}
+export interface VoicePeerDiagnostic {
+  id: string;
+  status: PeerStatus;
+  connectionState: RTCPeerConnectionState;
+  iceState: RTCIceConnectionState;
+  signalingState: RTCSignalingState;
+  candidateType: string | null;
+  inboundBytes: number;
+  outboundBytes: number;
+  remoteTrack: MediaStreamTrackState | 'missing';
+  playbackPaused: boolean;
+  restarts: number;
+}
+
+export interface VoiceDiagnostic {
+  active: boolean;
+  muted: boolean;
+  deaf: boolean;
+  relay: RelayStatus;
+  peers: VoicePeerDiagnostic[];
+}
+
+interface IceResponse {
+  iceServers?: RTCIceServer[];
+  provider?: 'cloudflare' | 'stun-only';
+}
+
+export interface VoiceIceAuth {
+  code: string;
+  playerId: string;
+  token: string;
+}
+
+function loadVoiceSession(): VoiceIceAuth | null {
+  try {
+    const raw = sessionStorage.getItem('mg.session');
+    if (!raw) return null;
+    const value = JSON.parse(raw) as Partial<VoiceIceAuth>;
+    if (
+      typeof value.code === 'string' &&
+      typeof value.playerId === 'string' &&
+      typeof value.token === 'string'
+    ) {
+      return { code: value.code, playerId: value.playerId, token: value.token };
+    }
+  } catch {
+    // Storage can be unavailable in private browsing; STUN remains usable.
+  }
+  return null;
+}
+
+interface RtcSignal {
+  description?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidateInit | null;
 }
 
 interface Peer {
+  id: string;
   pc: RTCPeerConnection;
-  audio: HTMLAudioElement | null;
-  /** Last time this peer was over the speech threshold. */
-  loudAt: number;
+  transceiver: RTCRtpTransceiver;
+  remote: MediaStream;
+  remoteTrack: MediaStreamTrack | null;
+  audio: HTMLAudioElement;
   status: PeerStatus;
-  /** True if we are the offering side, which decides who re-offers on a restart. */
-  weOffer: boolean;
-  /** Whether this connection was built with a local track. Baked into the SDP. */
-  weSend: boolean;
-  /**
-   * An offer of ours is out and unanswered.
-   *
-   * Distinct from `weOffer`, which is a permanent role. This is the transient
-   * fact that decides whether an incoming offer is a collision — keying glare
-   * detection on the role instead made every later offer look like one.
-   */
-  offerPending: boolean;
-  /**
-   * Candidates that arrived before the remote description did.
-   *
-   * `addIceCandidate` throws if there is no remote description yet, and an
-   * offer and its answerer's first candidates genuinely race on a slow link.
-   * Buffering costs nothing and the alternative is dropping exactly the
-   * candidates a struggling connection most needs.
-   */
-  pending: RTCIceCandidateInit[];
-  /** One ICE restart is allowed per peer before we call it dead. */
-  restarted: boolean;
-  /** Guards the `getStats` level fallback against overlapping calls. */
+  polite: boolean;
+  makingOffer: boolean;
+  ignoreOffer: boolean;
+  isSettingRemoteAnswerPending: boolean;
+  pendingCandidates: Array<RTCIceCandidateInit | null>;
+  operations: Promise<void>;
+  restartAttempts: number;
+  recoveryTimer: number | null;
+  connectTimer: number | null;
+  loudAt: number;
   statsInFlight: boolean;
 }
 
 type Listener = (snapshot: VoiceSnapshot) => void;
 
-/**
- * Ask the server which ICE servers to use.
- *
- * `/ice` is itself designed never to fail, so reaching the fallback here means
- * the network is down — in which case there is no signalling either and the
- * value hardly matters. It exists so a thrown fetch cannot stop the microphone
- * from opening.
- */
-async function loadIceServers(): Promise<RTCIceServer[]> {
-  const abort = new AbortController();
-  const timer = window.setTimeout(() => abort.abort(), ICE_FETCH_TIMEOUT_MS);
-  try {
-    const response = await fetch('/ice', { signal: abort.signal });
-    if (!response.ok) return FALLBACK_ICE_SERVERS;
-    const body = (await response.json()) as { iceServers?: RTCIceServer[] };
-    if (!Array.isArray(body.iceServers) || body.iceServers.length === 0) {
-      return FALLBACK_ICE_SERVERS;
-    }
-    return body.iceServers;
-  } catch {
-    return FALLBACK_ICE_SERVERS;
-  } finally {
-    window.clearTimeout(timer);
-  }
-}
-
-/** The prefixed constructor is still the only one on older WebKit. */
 type WindowWithWebkitAudio = Window & { webkitAudioContext?: typeof AudioContext };
 
 function audioContextCtor(): typeof AudioContext | null {
@@ -172,68 +135,103 @@ function canReceive(): boolean {
 }
 
 function canSpeak(): boolean {
+  return canReceive() && !!navigator.mediaDevices?.getUserMedia;
+}
+
+async function loadIceConfig(
+  authenticatedSession: VoiceIceAuth | null,
+): Promise<{ iceServers: RTCIceServer[]; provider: RelayStatus }> {
+  const session = authenticatedSession ?? loadVoiceSession();
+  if (!session) return { iceServers: STUN_ONLY_SERVERS, provider: 'stun-only' };
+
+  const abort = new AbortController();
+  const timer = window.setTimeout(() => abort.abort(), ICE_FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch('/ice', {
+      signal: abort.signal,
+      headers: {
+        Authorization: `Bearer ${session.token}`,
+        'X-Room-Code': session.code,
+        'X-Player-Id': session.playerId,
+      },
+    });
+    if (!response.ok) return { iceServers: STUN_ONLY_SERVERS, provider: 'stun-only' };
+    const body = (await response.json()) as IceResponse;
+    if (!Array.isArray(body.iceServers) || body.iceServers.length === 0) {
+      return { iceServers: STUN_ONLY_SERVERS, provider: 'stun-only' };
+    }
+    return {
+      iceServers: body.iceServers,
+      provider: body.provider === 'cloudflare' ? 'cloudflare' : 'stun-only',
+    };
+  } catch {
+    return { iceServers: STUN_ONLY_SERVERS, provider: 'stun-only' };
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+function microphoneConstraints(): MediaStreamConstraints {
+  return {
+    audio: {
+      channelCount: 1,
+      echoCancellation: true,
+      noiseSuppression: true,
+      autoGainControl: true,
+    },
+    video: false,
+  };
+}
+
+function isHealthy(peer: Peer): boolean {
   return (
-    canReceive() &&
-    !!navigator.mediaDevices?.getUserMedia &&
-    audioContextCtor() !== null
+    peer.pc.connectionState === 'connected' ||
+    peer.pc.iceConnectionState === 'connected' ||
+    peer.pc.iceConnectionState === 'completed'
   );
 }
 
-class Voice {
+export class Voice {
   private peers = new Map<string, Peer>();
+  private wantedPeers = new Set<string>();
+  private meshSynced = false;
+  /** Candidates can beat both the offer and React's room-effect by one task. */
+  private orphanCandidates = new Map<string, Array<RTCIceCandidateInit | null>>();
   private stream: MediaStream | null = null;
   private ctx: AudioContext | null = null;
   private localAnalyser: AnalyserNode | null = null;
   private localLoudAt = 0;
   private levelTimer: number | null = null;
   private listeners = new Set<Listener>();
+  private selfId: string | null = null;
+  private iceAuth: VoiceIceAuth | null = null;
+  private deaf = false;
+  private iceServers: RTCIceServer[] = STUN_ONLY_SERVERS;
+  private iceReady: Promise<void> | null = null;
+  private iceRequest = 0;
+  private lifecycleWatched = false;
+  private contextWatched = false;
+  private wakeContext: (() => void) | null = null;
+  private recoveringMic = false;
+  /** Invalidates getUserMedia/fetch work that outlives a room. */
+  private generation = 0;
+
   private snapshot: VoiceSnapshot = {
     active: false,
     listening: false,
     deaf: false,
     muted: false,
     error: null,
+    relay: 'loading',
+    playbackBlocked: false,
     peers: {},
     speaking: [],
   };
 
-  /** Set by `socket` so this module does not have to import it (and cycle). */
+  /** Injected by `socket.ts` to avoid a module cycle. */
   send: ((to: string, data: unknown) => void) | null = null;
   announce: ((on: boolean) => void) | null = null;
   announceListening: ((on: boolean) => void) | null = null;
-
-  /** Our own id, needed to decide who offers to whom. */
-  private selfId: string | null = null;
-
-  /** The user has opted out of auto-listen. Mirrors `!listening` on the wire. */
-  private deaf = false;
-
-  /** Fetched once per room session and reused for every peer. */
-  private iceServers: RTCIceServer[] = FALLBACK_ICE_SERVERS;
-  /** Deduped `/ice` fetch, shared by the listener and speaker paths. */
-  private iceReady: Promise<void> | null = null;
-
-  /** Listeners that nudge a suspended `AudioContext` back awake. */
-  private contextWatched = false;
-  private wakeContext: (() => void) | null = null;
-
-  /**
-   * Listener that checks the mic and every peer when the tab comes back to
-   * the foreground.
-   *
-   * Android can suspend mic capture on a backgrounded tab with no error and no
-   * state change anywhere WebRTC exposes — `RTCPeerConnection.connectionState`
-   * stays `'connected'`, so nothing here notices on its own. This is the
-   * catch-all: on return to visibility, re-check the local track and every
-   * peer's actual connection state rather than trusting either.
-   */
-  private wakeLiveness: (() => void) | null = null;
-  /** True once a re-acquire is in flight, so a second visibility event can't stack another. */
-  private recovering = false;
-
-  // -------------------------------------------------------------------------
-  // Subscription — a store-shaped surface for `useSyncExternalStore`
-  // -------------------------------------------------------------------------
 
   subscribe = (listener: Listener): (() => void) => {
     this.listeners.add(listener);
@@ -242,200 +240,587 @@ class Voice {
 
   getSnapshot = (): VoiceSnapshot => this.snapshot;
 
+  get isActive(): boolean {
+    return this.snapshot.active;
+  }
+
+  /** Supply membership from the accepted welcome frame; storage is only a reload fallback. */
+  setIceAuth(auth: VoiceIceAuth): void {
+    const changed =
+      this.iceAuth?.code !== auth.code ||
+      this.iceAuth.playerId !== auth.playerId ||
+      this.iceAuth.token !== auth.token;
+    this.iceAuth = auth;
+    if (changed) {
+      this.iceReady = null;
+      this.iceRequest += 1;
+    }
+  }
+
   private emit(patch: Partial<VoiceSnapshot>): void {
     this.snapshot = { ...this.snapshot, ...patch };
     for (const listener of this.listeners) listener(this.snapshot);
   }
 
-  get isActive(): boolean {
-    return this.snapshot.active;
-  }
-
-  // -------------------------------------------------------------------------
-  // Turning it on and off
-  // -------------------------------------------------------------------------
-
-  /** Join the receive-only mesh without opening a device or an AudioContext. */
+  /** Prepare prompt-free receiving after the socket has confirmed membership. */
   prepare(selfId: string): void {
-    if (!canReceive()) return;
+    if (!canReceive()) {
+      this.emit({ error: 'unsupported', relay: 'stun-only' });
+      return;
+    }
+    if (this.selfId && this.selfId !== selfId) {
+      this.generation += 1;
+      this.wantedPeers.clear();
+      this.meshSynced = false;
+      this.orphanCandidates.clear();
+      this.teardownPeers();
+      this.iceReady = null;
+    }
     this.selfId = selfId;
-    this.watchLiveness();
+    this.watchLifecycle();
     this.startLevels();
     void this.ensureIce();
   }
 
-  private ensureIce(): Promise<void> {
+  private ensureIce(force = false): Promise<void> {
+    if (force) this.iceReady = null;
     if (!this.iceReady) {
-      this.iceReady = loadIceServers().then((servers) => {
-        this.iceServers = servers;
+      const generation = this.generation;
+      const request = ++this.iceRequest;
+      this.emit({ relay: 'loading' });
+      this.iceReady = loadIceConfig(this.iceAuth).then(({ iceServers, provider }) => {
+        if (generation !== this.generation || request !== this.iceRequest) return;
+        this.iceServers = iceServers;
+        this.emit({ relay: provider });
+        for (const peer of this.peers.values()) {
+          try {
+            peer.pc.setConfiguration({ iceServers });
+          } catch {
+            // An active connection can keep using its existing configuration.
+          }
+        }
       });
     }
     return this.iceReady;
   }
 
-  /**
-   * Open the microphone. Only ever called from a real click — permission
-   * prompts that appear on page load get denied out of reflex, and the
-   * `AudioContext` needs a gesture anyway.
-   */
+  /** Open the microphone. The caller must invoke this from a real user gesture. */
   async start(selfId: string): Promise<void> {
     if (this.stream) return;
     if (!canSpeak()) {
       this.emit({ error: 'unsupported' });
       return;
     }
-    this.selfId = selfId;
+    this.prepare(selfId);
+    const generation = this.generation;
 
-    // Built here, synchronously, *before* the first `await` — this is still
-    // inside the click that called us, and on iOS a context created after the
-    // gesture window closes starts suspended and stays that way. A suspended
-    // context makes the analyser read pure zeroes, so your own speaking ring
-    // never lights up and it looks exactly like a dead microphone.
+    // Optional and local-only. Creating it before the permission await keeps the
+    // iOS analyser inside the user-activation window; voice itself does not
+    // depend on the context succeeding.
     const Ctor = audioContextCtor();
     try {
       this.ctx = Ctor ? new Ctor() : null;
     } catch {
-      // Some browsers cap the number of live contexts. Levels are a nicety;
-      // losing them must not stop the call.
       this.ctx = null;
     }
 
+    let stream: MediaStream;
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({
-        // All three on: this is a living room, and half the players will be in
-        // the same room as their own speakers at some point.
-        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-        video: false,
-      });
-    } catch (err) {
-      const name = (err as DOMException | undefined)?.name;
+      stream = await navigator.mediaDevices.getUserMedia(microphoneConstraints());
+    } catch (error) {
+      const name = (error as DOMException | undefined)?.name;
       this.emit({ error: name === 'NotFoundError' ? 'nodevice' : 'denied' });
       void this.ctx?.close().catch(() => undefined);
       this.ctx = null;
       return;
     }
 
-    // After the permission prompt, not before: the prompt is the slow part and
-    // there is nothing to connect to until it is answered.
-    await this.ensureIce();
+    if (generation !== this.generation || this.selfId !== selfId) {
+      stream.getTracks().forEach((track) => track.stop());
+      return;
+    }
 
-    this.localAnalyser = this.analyserFor(this.stream);
-    this.startLevels();
-    this.watchContext();
-    this.watchLiveness();
-    const localTrack = this.stream.getAudioTracks()[0];
-    if (localTrack) this.watchTrack(localTrack);
-
+    this.stream = stream;
     this.deaf = false;
+    const track = stream.getAudioTracks()[0];
+    if (!track) {
+      stream.getTracks().forEach((item) => item.stop());
+      this.stream = null;
+      this.emit({ error: 'nodevice' });
+      return;
+    }
+    this.watchTrack(track);
+    this.localAnalyser = this.analyserFor(stream);
+    this.watchContext();
+
+    await Promise.all(
+      [...this.peers.values()].map((peer) =>
+        peer.transceiver.sender.replaceTrack(track).catch(() => this.beginRecovery(peer, true)),
+      ),
+    );
+
     this.emit({ active: true, listening: false, deaf: false, muted: false, error: null });
     this.announce?.(true);
   }
 
-  /**
-   * Notice a local mic track that has actually stopped and re-acquire it.
-   *
-   * `ended` is unambiguous — the track is gone and nothing will bring it back
-   * on its own. `mute`/`unmute` fire when the underlying source stops or
-   * resumes *without* the track ending (a common OS-level response to
-   * backgrounding), so they're left to the visibility check instead of
-   * reacting here — reacquiring on every transient mute would tear down and
-   * rebuild the mic far more often than the actual failures warrant.
-   */
   private watchTrack(track: MediaStreamTrack): void {
     track.addEventListener('ended', () => void this.recoverTrack(), { once: true });
   }
 
-  /**
-   * Re-open the microphone and hand the new track to every existing peer via
-   * `replaceTrack`, rather than tearing the connections down. A peer's audio
-   * transceiver survives a track swap with no renegotiation needed.
-   */
   private async recoverTrack(): Promise<void> {
-    if (!this.stream || !this.selfId || this.recovering) return;
-    this.recovering = true;
+    if (!this.stream || !this.selfId || this.recoveringMic) return;
+    this.recoveringMic = true;
+    const generation = this.generation;
     try {
-      let newStream: MediaStream;
-      try {
-        newStream = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
-          video: false,
-        });
-      } catch {
-        // Best-effort. If the mic won't reopen there is nothing else to try;
-        // the peer status readouts already show every connection as it is.
+      const replacement = await navigator.mediaDevices.getUserMedia(microphoneConstraints());
+      if (generation !== this.generation || !this.stream) {
+        replacement.getTracks().forEach((track) => track.stop());
         return;
       }
-      const newTrack = newStream.getAudioTracks()[0];
-      if (!newTrack) return;
-      newTrack.enabled = !this.snapshot.muted;
-      this.watchTrack(newTrack);
-
-      const oldStream = this.stream;
-      this.stream = newStream;
-      this.localAnalyser = this.analyserFor(newStream);
-
-      for (const peer of this.peers.values()) {
-        const sender = peer.pc.getSenders().find((s) => s.track?.kind === 'audio');
-        if (sender) void sender.replaceTrack(newTrack).catch(() => undefined);
+      const track = replacement.getAudioTracks()[0];
+      if (!track) {
+        replacement.getTracks().forEach((item) => item.stop());
+        return;
       }
-
-      oldStream.getTracks().forEach((t) => t.stop());
+      track.enabled = !this.snapshot.muted;
+      this.watchTrack(track);
+      const old = this.stream;
+      this.stream = replacement;
+      this.localAnalyser = this.analyserFor(replacement);
+      await Promise.all(
+        [...this.peers.values()].map((peer) =>
+          peer.transceiver.sender.replaceTrack(track).catch(() => this.beginRecovery(peer, true)),
+        ),
+      );
+      old.getTracks().forEach((item) => item.stop());
+    } catch {
+      // Permission/device errors are actionable only when the user explicitly
+      // opens the mic. During recovery, retain the visible active state and let
+      // the next foreground/online event retry without a misleading toast.
     } finally {
-      this.recovering = false;
+      this.recoveringMic = false;
     }
   }
 
-  /** Same role decision `syncPeers` uses, so a recreate can't disagree with a fresh connection. */
-  private recreatePeer(id: string): void {
-    if (!this.selfId) return;
-    const weOffer = this.selfId < id;
-    this.dropPeer(id);
-    this.createPeer(id, weOffer);
+  /** Close the microphone while preserving every receive path. */
+  stopMic(announce = true): void {
+    if (announce && this.stream) this.announce?.(false);
+    for (const peer of this.peers.values()) {
+      void peer.transceiver.sender.replaceTrack(null).catch(() => undefined);
+    }
+    this.stream?.getTracks().forEach((track) => track.stop());
+    this.stream = null;
+    this.localAnalyser = null;
+    this.unwatchContext();
+    void this.ctx?.close().catch(() => undefined);
+    this.ctx = null;
+    this.emit({ active: false, muted: false });
+    this.publishPeers();
   }
 
-  private watchLiveness(): void {
-    if (this.wakeLiveness) return;
-    const check = (): void => {
-      if (document.visibilityState !== 'visible') return;
+  setMuted(muted: boolean): void {
+    if (!this.stream) return;
+    for (const track of this.stream.getAudioTracks()) track.enabled = !muted;
+    this.emit({ muted });
+  }
 
-      const track = this.stream?.getAudioTracks()[0];
-      if (track && (track.readyState === 'ended' || track.muted)) void this.recoverTrack();
+  setDeaf(deaf: boolean): void {
+    if (this.deaf === deaf) return;
+    this.deaf = deaf;
+    this.announceListening?.(!deaf);
+    if (deaf) {
+      this.stopMic();
+      this.wantedPeers.clear();
+      this.teardownPeers();
+    } else {
+      // The server echo will immediately establish the new authoritative set;
+      // until then an offer from that same echo may legitimately win the race.
+      this.meshSynced = false;
+    }
+    this.emit({ deaf });
+  }
 
-      for (const [id, peer] of this.peers) {
-        if (peer.audio?.paused) void peer.audio.play().catch(() => undefined);
-        const state = peer.pc.connectionState;
-        const iceState = peer.pc.iceConnectionState;
-        const healthy = state === 'connected' || iceState === 'connected' || iceState === 'completed';
-        if (!healthy) this.recreatePeer(id);
-      }
+  /** Full teardown for leaving the room. */
+  stop(): void {
+    this.generation += 1;
+    this.stopMic(false);
+    this.wantedPeers.clear();
+    this.meshSynced = false;
+    this.orphanCandidates.clear();
+    this.teardownPeers();
+    this.unwatchLifecycle();
+    if (this.levelTimer !== null) {
+      window.clearInterval(this.levelTimer);
+      this.levelTimer = null;
+    }
+    this.selfId = null;
+    this.iceAuth = null;
+    this.iceReady = null;
+    this.iceRequest += 1;
+    this.iceServers = STUN_ONLY_SERVERS;
+    this.emit({
+      active: false,
+      listening: false,
+      muted: false,
+      relay: 'loading',
+      playbackBlocked: false,
+      peers: {},
+      speaking: [],
+    });
+  }
+
+  /** Explicit hard clear; normal transient socket closes deliberately do not call this. */
+  clearPeers(): void {
+    this.teardownPeers();
+  }
+
+  reannounce(): void {
+    if (this.stream) this.announce?.(true);
+    if (this.deaf) this.announceListening?.(false);
+    if ([...this.peers.values()].some((peer) => !isHealthy(peer))) this.retryFailed();
+  }
+
+  /** Reconcile against listening players from one authoritative room broadcast. */
+  async syncPeers(playerIds: string[]): Promise<void> {
+    if (!this.selfId || this.deaf) return;
+    this.wantedPeers = new Set(playerIds.filter((id) => id !== this.selfId));
+    this.meshSynced = true;
+    for (const id of [...this.peers.keys()]) {
+      if (!this.wantedPeers.has(id)) this.dropPeer(id);
+    }
+    if (this.wantedPeers.size === 0) {
+      this.publishPeers();
+      return;
+    }
+
+    const generation = this.generation;
+    await this.ensureIce();
+    if (generation !== this.generation || !this.selfId || this.deaf) return;
+    for (const id of this.wantedPeers) {
+      if (!this.peers.has(id)) this.createPeer(id);
+    }
+  }
+
+  private createPeer(id: string): Peer {
+    const pc = new RTCPeerConnection({ iceServers: this.iceServers });
+    const track = this.stream?.getAudioTracks()[0] ?? null;
+    const init: RTCRtpTransceiverInit = { direction: 'sendrecv' };
+    if (this.stream) init.streams = [this.stream];
+    const transceiver = pc.addTransceiver(track ?? 'audio', init);
+    const remote = new MediaStream();
+    const audio = document.createElement('audio');
+    audio.autoplay = true;
+    audio.setAttribute('playsinline', '');
+    audio.style.display = 'none';
+    audio.srcObject = remote;
+    document.body.appendChild(audio);
+
+    const peer: Peer = {
+      id,
+      pc,
+      transceiver,
+      remote,
+      remoteTrack: null,
+      audio,
+      status: 'connecting',
+      polite: !!this.selfId && this.selfId > id,
+      makingOffer: false,
+      ignoreOffer: false,
+      isSettingRemoteAnswerPending: false,
+      pendingCandidates: [],
+      operations: Promise.resolve(),
+      restartAttempts: 0,
+      recoveryTimer: null,
+      connectTimer: null,
+      loudAt: 0,
+      statsInFlight: false,
     };
-    this.wakeLiveness = check;
-    document.addEventListener('visibilitychange', check);
+    peer.pendingCandidates.push(...(this.orphanCandidates.get(id) ?? []));
+    this.orphanCandidates.delete(id);
+    this.peers.set(id, peer);
+
+    pc.onnegotiationneeded = () => {
+      this.queuePeer(peer, async () => {
+        peer.makingOffer = true;
+        try {
+          await pc.setLocalDescription();
+          this.send?.(id, { description: pc.localDescription?.toJSON() });
+        } finally {
+          peer.makingOffer = false;
+        }
+      });
+    };
+
+    pc.onicecandidate = ({ candidate }) => {
+      this.send?.(id, { candidate: candidate?.toJSON() ?? null });
+    };
+
+    pc.ontrack = ({ track: remoteTrack }) => {
+      if (peer.remoteTrack && peer.remoteTrack !== remoteTrack) peer.remote.removeTrack(peer.remoteTrack);
+      peer.remoteTrack = remoteTrack;
+      if (!peer.remote.getTracks().includes(remoteTrack)) peer.remote.addTrack(remoteTrack);
+      remoteTrack.onunmute = () => this.attemptPlay(peer);
+      remoteTrack.onended = () => {
+        if (peer.remoteTrack === remoteTrack) peer.remoteTrack = null;
+      };
+      this.attemptPlay(peer);
+    };
+
+    const checkState = () => this.observePeerState(peer);
+    pc.onconnectionstatechange = checkState;
+    pc.oniceconnectionstatechange = checkState;
+
+    peer.connectTimer = window.setTimeout(() => {
+      peer.connectTimer = null;
+      if (!isHealthy(peer)) this.beginRecovery(peer, true);
+    }, CONNECT_TIMEOUT_MS);
+    this.publishPeers();
+    return peer;
   }
 
-  private unwatchLiveness(): void {
-    if (!this.wakeLiveness) return;
-    document.removeEventListener('visibilitychange', this.wakeLiveness);
-    this.wakeLiveness = null;
+  private queuePeer(peer: Peer, operation: () => Promise<void>): Promise<void> {
+    peer.operations = peer.operations
+      .then(async () => {
+        if (this.peers.get(peer.id) !== peer) return;
+        await operation();
+      })
+      .catch(() => {
+        if (this.peers.get(peer.id) === peer) this.beginRecovery(peer, true);
+      });
+    return peer.operations;
   }
 
-  /**
-   * Keep the level-metering context awake.
-   *
-   * iOS suspends an `AudioContext` on backgrounding, on an incoming call, and
-   * sometimes on nothing much at all — and a suspended context silently reports
-   * zero level forever, so the speaking rings just stop. Nudging it on the next
-   * gesture or foreground is the whole remedy.
-   */
+  /** Opaque, untrusted signalling delivered by the room server. */
+  async onSignal(from: string, data: unknown): Promise<void> {
+    if (!this.selfId || this.deaf) return;
+    if (!data || typeof data !== 'object') return;
+    const signal = data as RtcSignal;
+    if (!('description' in signal) && !('candidate' in signal)) return;
+    if (this.meshSynced && !this.wantedPeers.has(from)) return;
+
+    let peer = this.peers.get(from);
+    if (!peer) {
+      if (!signal.description || signal.description.type !== 'offer') {
+        if ('candidate' in signal) {
+          const queued = this.orphanCandidates.get(from) ?? [];
+          // A normal gather is single digits. The cap keeps an authenticated but
+          // misbehaving room member from growing this before the room echo lands.
+          if (queued.length < 64) queued.push(signal.candidate ?? null);
+          this.orphanCandidates.set(from, queued);
+        }
+        return;
+      }
+      await this.ensureIce();
+      if (!this.selfId || this.deaf) return;
+      // The server only relays within this room. The authoritative room effect
+      // will retain or drop it moments later; accepting now closes the
+      // broadcast/offer race without letting local state decide peer shape.
+      this.wantedPeers.add(from);
+      peer = this.peers.get(from) ?? this.createPeer(from);
+    }
+
+    return this.queuePeer(peer, () => this.applySignal(peer!, signal));
+  }
+
+  private async applySignal(peer: Peer, signal: RtcSignal): Promise<void> {
+    const pc = peer.pc;
+    if (signal.description) {
+      const description = signal.description;
+      const readyForOffer =
+        !peer.makingOffer && (pc.signalingState === 'stable' || peer.isSettingRemoteAnswerPending);
+      const offerCollision = description.type === 'offer' && !readyForOffer;
+      peer.ignoreOffer = !peer.polite && offerCollision;
+      if (peer.ignoreOffer) return;
+
+      peer.isSettingRemoteAnswerPending = description.type === 'answer';
+      try {
+        await pc.setRemoteDescription(description);
+      } finally {
+        peer.isSettingRemoteAnswerPending = false;
+      }
+      await this.flushCandidates(peer);
+      if (description.type === 'offer') {
+        await pc.setLocalDescription();
+        this.send?.(peer.id, { description: pc.localDescription?.toJSON() });
+      }
+      return;
+    }
+
+    if ('candidate' in signal) {
+      const candidate = signal.candidate ?? null;
+      if (!pc.remoteDescription) {
+        peer.pendingCandidates.push(candidate);
+        return;
+      }
+      try {
+        await pc.addIceCandidate(candidate);
+      } catch (error) {
+        if (!peer.ignoreOffer) throw error;
+      }
+    }
+  }
+
+  private async flushCandidates(peer: Peer): Promise<void> {
+    const queued = peer.pendingCandidates;
+    peer.pendingCandidates = [];
+    for (const candidate of queued) {
+      try {
+        await peer.pc.addIceCandidate(candidate);
+      } catch (error) {
+        if (!peer.ignoreOffer) throw error;
+      }
+    }
+  }
+
+  private observePeerState(peer: Peer): void {
+    if (this.peers.get(peer.id) !== peer) return;
+    if (isHealthy(peer)) {
+      peer.restartAttempts = 0;
+      this.clearRecovery(peer);
+      if (peer.connectTimer !== null) {
+        window.clearTimeout(peer.connectTimer);
+        peer.connectTimer = null;
+      }
+      this.setPeerStatus(peer, 'connected');
+      this.attemptPlay(peer);
+      return;
+    }
+
+    const failed = peer.pc.connectionState === 'failed' || peer.pc.iceConnectionState === 'failed';
+    const disconnected =
+      peer.pc.connectionState === 'disconnected' || peer.pc.iceConnectionState === 'disconnected';
+    if (failed) this.beginRecovery(peer, true);
+    else if (disconnected) this.beginRecovery(peer, false);
+    else if (peer.pc.connectionState === 'closed' || peer.pc.iceConnectionState === 'closed') {
+      this.setPeerStatus(peer, 'failed');
+    } else {
+      this.setPeerStatus(peer, 'connecting');
+    }
+  }
+
+  private beginRecovery(peer: Peer, immediate: boolean): void {
+    if (this.peers.get(peer.id) !== peer || isHealthy(peer) || peer.recoveryTimer !== null) return;
+    if (peer.restartAttempts >= MAX_ICE_RESTARTS) {
+      this.setPeerStatus(peer, 'failed');
+      return;
+    }
+    this.setPeerStatus(peer, 'recovering');
+    const delay = immediate ? 0 : DISCONNECTED_GRACE_MS;
+    peer.recoveryTimer = window.setTimeout(() => {
+      peer.recoveryTimer = null;
+      if (this.peers.get(peer.id) !== peer || isHealthy(peer)) return;
+      peer.restartAttempts += 1;
+      void this.ensureIce(this.snapshot.relay !== 'cloudflare').then(() => {
+        if (this.peers.get(peer.id) !== peer || isHealthy(peer)) return;
+        try {
+          peer.pc.setConfiguration({ iceServers: this.iceServers });
+          peer.pc.restartIce();
+        } catch {
+          // The bounded follow-up below turns this into a visible failure.
+        }
+        peer.recoveryTimer = window.setTimeout(() => {
+          peer.recoveryTimer = null;
+          if (!isHealthy(peer)) this.beginRecovery(peer, true);
+        }, RECOVERY_CHECK_MS);
+      });
+    }, delay);
+  }
+
+  retryFailed(): void {
+    void this.ensureIce(true).then(() => {
+      for (const peer of this.peers.values()) {
+        if (isHealthy(peer)) continue;
+        this.clearRecovery(peer);
+        peer.restartAttempts = 0;
+        this.beginRecovery(peer, true);
+      }
+    });
+  }
+
+  private clearRecovery(peer: Peer): void {
+    if (peer.recoveryTimer !== null) window.clearTimeout(peer.recoveryTimer);
+    peer.recoveryTimer = null;
+  }
+
+  private dropPeer(id: string): void {
+    const peer = this.peers.get(id);
+    if (!peer) return;
+    this.peers.delete(id);
+    this.orphanCandidates.delete(id);
+    this.clearRecovery(peer);
+    if (peer.connectTimer !== null) window.clearTimeout(peer.connectTimer);
+    peer.pc.onnegotiationneeded = null;
+    peer.pc.onicecandidate = null;
+    peer.pc.ontrack = null;
+    peer.pc.onconnectionstatechange = null;
+    peer.pc.oniceconnectionstatechange = null;
+    peer.remoteTrack = null;
+    peer.remote.getTracks().forEach((track) => peer.remote.removeTrack(track));
+    peer.audio.srcObject = null;
+    peer.audio.remove();
+    peer.pc.close();
+    this.publishPeers();
+  }
+
+  private teardownPeers(): void {
+    for (const id of [...this.peers.keys()]) this.dropPeer(id);
+  }
+
+  private attemptPlay(peer: Peer): void {
+    if (this.peers.get(peer.id) !== peer) return;
+    void peer.audio
+      .play()
+      .then(() => this.refreshPlaybackBlocked())
+      .catch(() => this.emit({ playbackBlocked: true }));
+  }
+
+  private refreshPlaybackBlocked(): void {
+    const blocked = [...this.peers.values()].some(
+      (peer) => !!peer.remoteTrack && !peer.remoteTrack.muted && peer.audio.paused,
+    );
+    if (blocked !== this.snapshot.playbackBlocked) this.emit({ playbackBlocked: blocked });
+  }
+
+  private watchLifecycle(): void {
+    if (this.lifecycleWatched) return;
+    this.lifecycleWatched = true;
+    document.addEventListener('visibilitychange', this.wake);
+    window.addEventListener('pageshow', this.wake);
+    window.addEventListener('online', this.wake);
+    window.addEventListener('pointerdown', this.wake);
+    window.addEventListener('touchend', this.wake);
+    window.addEventListener('click', this.wake);
+  }
+
+  private unwatchLifecycle(): void {
+    if (!this.lifecycleWatched) return;
+    this.lifecycleWatched = false;
+    document.removeEventListener('visibilitychange', this.wake);
+    window.removeEventListener('pageshow', this.wake);
+    window.removeEventListener('online', this.wake);
+    window.removeEventListener('pointerdown', this.wake);
+    window.removeEventListener('touchend', this.wake);
+    window.removeEventListener('click', this.wake);
+  }
+
+  private wake = (): void => {
+    if (document.visibilityState === 'hidden') return;
+    if (this.ctx?.state === 'suspended') void this.ctx.resume().catch(() => undefined);
+    const track = this.stream?.getAudioTracks()[0];
+    if (track && (track.readyState === 'ended' || track.muted)) void this.recoverTrack();
+    for (const peer of this.peers.values()) {
+      if (peer.audio.paused) this.attemptPlay(peer);
+      if (!isHealthy(peer)) this.beginRecovery(peer, true);
+    }
+  };
+
   private watchContext(): void {
     if (this.contextWatched) return;
     this.contextWatched = true;
-
-    const wake = (): void => {
+    const wake = () => {
       if (this.ctx?.state === 'suspended') void this.ctx.resume().catch(() => undefined);
     };
     this.wakeContext = wake;
-
     document.addEventListener('visibilitychange', wake);
     window.addEventListener('pointerdown', wake);
   }
@@ -448,367 +833,6 @@ class Voice {
     this.contextWatched = false;
   }
 
-  /**
-   * Close the microphone but stay in the mesh, still hearing everyone.
-   *
-   * The peers are left alone: the broadcast that follows makes both ends
-   * re-evaluate the pair, dropping the ones that no longer carry anything and
-   * rebuilding ours as receive-only.
-   */
-  stopMic(announce = true): void {
-    // Starting the app with no room also performs a defensive full teardown.
-    // Announcing an already-closed microphone there queued `voice:false`, which
-    // the server correctly rejected as NOT_IN_ROOM and showed as a red toast.
-    if (announce && this.stream) this.announce?.(false);
-    this.stream?.getTracks().forEach((track) => track.stop());
-    this.stream = null;
-    this.localAnalyser = null;
-    this.unwatchContext();
-    void this.ctx?.close().catch(() => undefined);
-    this.ctx = null;
-    this.emit({ active: false, muted: false });
-  }
-
-  /** Opt out of hearing the room as well. The only way to have no connections. */
-  setDeaf(deaf: boolean): void {
-    this.deaf = deaf;
-    this.announceListening?.(!deaf);
-    if (deaf) {
-      this.stopMic();
-      for (const id of [...this.peers.keys()]) this.dropPeer(id);
-    }
-    this.emit({ deaf });
-  }
-
-  /** Full teardown — leaving the room, or the socket going for good. */
-  stop(): void {
-    // Leaving removes the player record, so a flag announcement is redundant;
-    // if it follows the leave frame it is also necessarily NOT_IN_ROOM.
-    this.stopMic(false);
-    for (const id of [...this.peers.keys()]) this.dropPeer(id);
-    this.unwatchLiveness();
-
-    if (this.levelTimer !== null) {
-      window.clearInterval(this.levelTimer);
-      this.levelTimer = null;
-    }
-
-    this.selfId = null;
-    this.iceReady = null;
-    this.iceServers = FALLBACK_ICE_SERVERS;
-    this.emit({ active: false, listening: false, muted: false, peers: {}, speaking: [] });
-  }
-
-  /** Drop all peers without closing the microphone. Used when socket reconnects. */
-  clearPeers(): void {
-    for (const id of [...this.peers.keys()]) this.dropPeer(id);
-  }
-
-  /**
-   * Tell the room our microphone is open, again.
-   *
-   * Idempotent on the server (`Room.setVoice` returns early when unchanged), so
-   * this is safe to call on every reconnect — which is the point, because a
-   * rejoin after the disconnect grace expires creates a fresh player record with
-   * the flag cleared.
-   */
-  reannounce(): void {
-    if (this.stream) this.announce?.(true);
-    if (this.deaf) this.announceListening?.(false);
-  }
-
-  /**
-   * Mute by disabling the track rather than dropping the stream.
-   *
-   * The connections stay up, so unmuting is instant instead of a fresh round of
-   * ICE — and the other side sees silence rather than a peer disappearing.
-   */
-  setMuted(muted: boolean): void {
-    if (!this.stream) return;
-    for (const track of this.stream.getAudioTracks()) track.enabled = !muted;
-    this.emit({ muted });
-  }
-
-  // -------------------------------------------------------------------------
-  // Mesh membership
-  // -------------------------------------------------------------------------
-
-  /**
-   * Reconcile the mesh against who is actually in the room.
-   *
-   * Called whenever the room view changes. Adds connections for new people,
-   * drops them for anyone who left, and rebuilds when our SDP direction changed.
-   */
-  async syncPeers(playerIds: string[]): Promise<void> {
-    // No longer gated on the microphone: a listener has no stream and still
-    // belongs in the mesh. `selfId` is set by `prepare` as well as `start`.
-    if (!this.selfId) return;
-    const wanted = new Set(playerIds.filter((id) => id !== this.selfId));
-
-    for (const [id, peer] of [...this.peers]) {
-      if (!wanted.has(id)) {
-        this.dropPeer(id);
-        continue;
-      }
-      // A connection's direction is baked into its SDP, and only the designated
-      // offerer may re-offer — so a pair whose roles changed cannot be adjusted,
-      // it has to be rebuilt. Both ends learn of the change from the same
-      // broadcast, so exactly one of them offers again.
-      if (peer.weSend !== (this.stream !== null)) this.recreatePeer(id);
-    }
-
-    if (wanted.size === 0) return;
-    await this.ensureIce();
-    for (const id of wanted) {
-      if (this.peers.has(id)) continue;
-      this.createPeer(id, this.selfId < id);
-    }
-  }
-
-  private createPeer(id: string, weOffer: boolean): Peer {
-    const pc = new RTCPeerConnection({ iceServers: this.iceServers });
-    const peer: Peer = {
-      pc,
-      audio: null,
-      loudAt: 0,
-      status: 'connecting',
-      weOffer,
-      weSend: this.stream !== null,
-      offerPending: false,
-      pending: [],
-      restarted: false,
-      statsInFlight: false,
-    };
-    this.peers.set(id, peer);
-    this.publishPeers();
-
-    if (this.stream) {
-      for (const track of this.stream.getTracks()) pc.addTrack(track, this.stream);
-    } else {
-      // Listening without a microphone. A connection with no senders offers
-      // zero m-lines, so the answerer would have nowhere to attach its track.
-      pc.addTransceiver('audio', { direction: 'recvonly' });
-    }
-
-    pc.onicecandidate = (event) => {
-      if (event.candidate) this.send?.(id, { kind: 'ice', candidate: event.candidate.toJSON() });
-    };
-
-    pc.ontrack = (event) => {
-      const [remote] = event.streams;
-      if (!remote) return;
-
-      // Handle repeat ontrack
-      const current = this.peers.get(id);
-      if (current && current.audio && current.audio.srcObject === remote) return;
-
-      this.attach(id, remote);
-    };
-
-    const checkState = () => {
-      const state = pc.connectionState;
-      const iceState = pc.iceConnectionState;
-      if (state === 'connected' || iceState === 'connected' || iceState === 'completed') {
-        this.setPeerStatus(id, 'connected');
-        return;
-      }
-      if (state === 'disconnected' || iceState === 'disconnected') {
-        this.setPeerStatus(id, 'connecting');
-        return;
-      }
-      if (state !== 'failed' && state !== 'closed' && iceState !== 'failed' && iceState !== 'closed') return;
-
-      // One restart before giving up. The case this recovers is a relay
-      // candidate that gathered after ICE had already run out of pairs to try
-      // — common on cellular, where the TURN allocation is the slowest
-      // candidate of the lot. A restart re-gathers with everything now known.
-      const current = this.peers.get(id);
-      const isFailed = state === 'failed' || iceState === 'failed';
-      if (isFailed && current && !current.restarted && pc.restartIce) {
-        current.restarted = true;
-        pc.restartIce();
-        // Only the offering side may re-offer; the other end will answer the
-        // restart, and two simultaneous offers is the glare this design avoids.
-        if (current.weOffer) void this.offer(id, pc);
-        return;
-      }
-
-      // Genuinely unreachable. The UI has to say so out loud rather than just
-      // going quiet — a peer that is silently absent is undiagnosable.
-      this.setPeerStatus(id, 'failed');
-    };
-
-    pc.onconnectionstatechange = checkState;
-    pc.oniceconnectionstatechange = checkState;
-
-    if (weOffer) void this.offer(id, pc);
-    return peer;
-  }
-
-  private async offer(id: string, pc: RTCPeerConnection): Promise<void> {
-    const peer = this.peers.get(id);
-    try {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      // Set only once the offer is really out. Marking it earlier would make a
-      // failed `createOffer` look like an outstanding negotiation forever.
-      if (peer) peer.offerPending = true;
-      this.send?.(id, { kind: 'offer', sdp: pc.localDescription?.toJSON() });
-    } catch {
-      if (peer) peer.offerPending = false;
-      this.setPeerStatus(id, 'failed');
-    }
-  }
-
-  private dropPeer(id: string): void {
-    const peer = this.peers.get(id);
-    if (!peer) return;
-    peer.pc.onicecandidate = null;
-    peer.pc.ontrack = null;
-    peer.pc.onconnectionstatechange = null;
-    // Cleared alongside `onconnectionstatechange` — without this, `checkState`
-    // could still fire on a closed connection for a peer that no longer exists.
-    peer.pc.oniceconnectionstatechange = null;
-    peer.pc.close();
-    if (peer.audio) {
-      peer.audio.srcObject = null;
-      peer.audio.remove();
-    }
-    this.peers.delete(id);
-    this.publishPeers();
-  }
-
-  // -------------------------------------------------------------------------
-  // Signalling
-  // -------------------------------------------------------------------------
-
-  /**
-   * Hand over every candidate that arrived early, now that there is somewhere
-   * to put them. Individually — one malformed candidate should not take the
-   * rest of the queue with it.
-   */
-  private async flushCandidates(peer: Peer): Promise<void> {
-    const queued = peer.pending;
-    peer.pending = [];
-    for (const candidate of queued) {
-      try {
-        await peer.pc.addIceCandidate(candidate);
-      } catch {
-        // Ignore this one and keep going.
-      }
-    }
-  }
-
-  /** A payload relayed from another player. Shape is ours; treat it as untrusted. */
-  async onSignal(from: string, data: unknown): Promise<void> {
-    if (!this.selfId || this.deaf) return;
-    const message = data as { kind?: string; sdp?: RTCSessionDescriptionInit; candidate?: RTCIceCandidateInit };
-    if (!message || typeof message.kind !== 'string') return;
-
-    // An offer can arrive before `syncPeers` has seen the new player — the room
-    // broadcast and the offer race. Create the connection on demand, as the
-    // answering side, which is what the id comparison would have decided anyway.
-    let peer = this.peers.get(from);
-    if (!peer) {
-      if (message.kind !== 'offer') return;
-      peer = this.createPeer(from, false);
-    }
-
-    try {
-      if (message.kind === 'offer' && message.sdp) {
-        // Glare: an offer arriving while one of ours is still outstanding.
-        //
-        // The test is `offerPending`, not `weOffer`. `weOffer` is a *permanent
-        // role* assigned at creation, so keying on it treated every incoming
-        // offer as a collision for the life of the connection — including a
-        // legitimate re-offer on a long-stable peer, which was then dropped in
-        // silence.
-        //
-        // Polite/impolite is settled by the same id comparison that picked the
-        // offerer, so the two can never disagree: the impolite side ignores the
-        // colliding offer and its own will land; the polite side rolls its
-        // offer back and answers.
-        const glare = peer.offerPending || peer.pc.signalingState === 'have-local-offer';
-        if (glare) {
-          const polite = this.selfId > from;
-          if (!polite) return;
-          // Explicit, not assumed. Chrome and Safari both accept an implicit
-          // rollback inside `setRemoteDescription`, but Firefox has historically
-          // not, and a silent throw here means one player hears nobody.
-          try {
-            await peer.pc.setLocalDescription({ type: 'rollback' });
-          } catch {
-            // Already stable, or unsupported. `setRemoteDescription` below is
-            // the thing that actually has to work.
-          }
-          peer.offerPending = false;
-        }
-        await peer.pc.setRemoteDescription(message.sdp);
-        await this.flushCandidates(peer);
-        const answer = await peer.pc.createAnswer();
-        await peer.pc.setLocalDescription(answer);
-        this.send?.(from, { kind: 'answer', sdp: peer.pc.localDescription?.toJSON() });
-      } else if (message.kind === 'answer' && message.sdp) {
-        await peer.pc.setRemoteDescription(message.sdp);
-        peer.offerPending = false;
-        await this.flushCandidates(peer);
-      } else if (message.kind === 'ice' && message.candidate) {
-        // Hold it rather than dropping it. This used to be an `addIceCandidate`
-        // whose throw was swallowed as "routine and recoverable" — routine it
-        // is, but the candidate was gone, and on a link slow enough for the
-        // race to happen it is the relay candidate you cannot spare.
-        if (peer.pc.remoteDescription) await peer.pc.addIceCandidate(message.candidate);
-        else peer.pending.push(message.candidate);
-      }
-    } catch {
-      // A genuinely broken negotiation shows up as `failed` on the connection
-      // state, which is where it gets reported.
-    }
-  }
-
-  // -------------------------------------------------------------------------
-  // Playback and levels
-  // -------------------------------------------------------------------------
-
-  private attach(id: string, remote: MediaStream): void {
-    const peer = this.peers.get(id);
-    if (!peer) return;
-
-    if (!peer.audio) {
-      const audio = document.createElement('audio');
-      audio.autoplay = true;
-      // Without this iOS opens the stream full-screen in a video player.
-      audio.setAttribute('playsinline', '');
-      audio.style.display = 'none';
-      document.body.appendChild(audio);
-      peer.audio = audio;
-    }
-
-    peer.audio.srcObject = remote;
-    // iOS refuses playback until a gesture. Voice is always started by a tap, so
-    // this rarely fires — but the retry is the same pattern `music.ts` uses, and
-    // the failure mode without it is silence nobody can explain.
-    const attemptPlay = (): void => {
-      // A peer dropped while a retry was armed must not keep re-arming — that
-      // listener holds the closure, and with it the whole `RTCPeerConnection`.
-      if (this.peers.get(id) !== peer) return;
-      void peer.audio?.play().catch(() => {
-        const retry = (): void => {
-          window.removeEventListener('pointerdown', retry);
-          window.removeEventListener('touchend', retry);
-          window.removeEventListener('click', retry);
-          attemptPlay();
-        };
-        // `touchend`/`click` as well as `pointerdown`: iOS grants media
-        // activation on the former, never the latter.
-        window.addEventListener('pointerdown', retry, { once: true });
-        window.addEventListener('touchend', retry, { once: true });
-        window.addEventListener('click', retry, { once: true });
-      });
-    };
-    attemptPlay();
-  }
-
   private analyserFor(stream: MediaStream): AnalyserNode | null {
     if (!this.ctx) return null;
     try {
@@ -816,38 +840,25 @@ class Voice {
       const analyser = this.ctx.createAnalyser();
       analyser.fftSize = 512;
       source.connect(analyser);
-      // Deliberately not connected to the destination: playback is the
-      // `<audio>` element's job, and routing it here as well would double it.
       return analyser;
     } catch {
       return null;
     }
   }
 
-  /**
-   * Sample everyone's level on an interval — **not** `requestAnimationFrame`,
-   * which browsers throttle to a crawl and then suspend outright in a
-   * backgrounded tab. Someone alt-tabbed out of the game is exactly the person
-   * still talking.
-   */
   private startLevels(): void {
     if (this.levelTimer !== null) return;
-
     const buffer = new Float32Array(256);
     const rms = (analyser: AnalyserNode): number => {
       analyser.getFloatTimeDomainData(buffer);
       let sum = 0;
-      for (let i = 0; i < buffer.length; i++) sum += buffer[i]! * buffer[i]!;
+      for (let i = 0; i < buffer.length; i += 1) sum += buffer[i]! * buffer[i]!;
       return Math.sqrt(sum / buffer.length);
     };
 
     this.levelTimer = window.setInterval(() => {
       const now = performance.now();
       const speaking: string[] = [];
-
-      // Hysteresis both ways: a bare threshold makes the indicator flicker on
-      // every syllable gap, which reads as a broken connection rather than as
-      // speech.
       if (this.localAnalyser && this.selfId && !this.snapshot.muted) {
         const level = rms(this.localAnalyser);
         if (level > SPEAKING_ON) this.localLoudAt = now;
@@ -856,67 +867,43 @@ class Voice {
         }
       }
 
-      for (const [id, peer] of this.peers) {
-        // Levels come from the receiver, never from a Web Audio node built on
-        // the remote stream. Routing a remote WebRTC track through an
-        // `AudioContext` silences the `<audio>` element playing it on WebKit,
-        // which is why voice worked to a desktop and not between two phones.
-        let level = 0;
-        let sampled = false;
-        for (const receiver of peer.pc.getReceivers()) {
-          for (const source of receiver.getSynchronizationSources?.() ?? []) {
-            if (source.audioLevel === undefined) continue;
-            level = Math.max(level, source.audioLevel);
-            sampled = true;
-          }
-        }
-
-        if (sampled) {
-          // Same hysteresis as the local path: `SPEAKING_ON` to light up,
-          // `SPEAKING_OFF` plus the hang time to go out, so the ring does not
-          // flicker on every gap between syllables.
-          if (level > SPEAKING_ON) peer.loudAt = now;
-          if (level > SPEAKING_OFF && now - peer.loudAt < SPEAKING_HANG_MS) speaking.push(id);
-        } else {
-          // Firefox and Safari do not fill in `audioLevel` here, so fall back to
-          // `getStats`. It is async, so it updates `loudAt` for the *next* pass
-          // rather than this one — and one flight at a time, because kicking off
-          // a fresh promise per peer per 100 ms was ~70 a second in a full room.
-          if (!peer.statsInFlight) {
-            peer.statsInFlight = true;
-            void peer.pc
-              .getStats()
-              .then((stats) => {
-                let best = 0;
-                stats.forEach((report) => {
-                  const r = report as { type?: string; kind?: string; audioLevel?: number };
-                  if (r.type === 'inbound-rtp' && r.kind === 'audio' && r.audioLevel !== undefined) {
-                    best = Math.max(best, r.audioLevel);
-                  }
-                });
-                if (best > SPEAKING_ON) peer.loudAt = performance.now();
-              })
-              .catch(() => undefined)
-              .finally(() => {
-                peer.statsInFlight = false;
+      for (const peer of this.peers.values()) {
+        if (!peer.remoteTrack || peer.remoteTrack.muted) continue;
+        if (!peer.statsInFlight) {
+          peer.statsInFlight = true;
+          void peer.pc
+            .getStats(peer.remoteTrack)
+            .then((stats) => {
+              let best = 0;
+              stats.forEach((report) => {
+                const item = report as { type?: string; kind?: string; audioLevel?: number };
+                if (
+                  (item.type === 'inbound-rtp' || item.type === 'media-source') &&
+                  (!item.kind || item.kind === 'audio') &&
+                  typeof item.audioLevel === 'number'
+                ) {
+                  best = Math.max(best, item.audioLevel);
+                }
               });
-          }
-          if (now - peer.loudAt < SPEAKING_HANG_MS) speaking.push(id);
+              if (best > SPEAKING_ON) peer.loudAt = performance.now();
+            })
+            .catch(() => undefined)
+            .finally(() => {
+              peer.statsInFlight = false;
+            });
         }
+        if (now - peer.loudAt < SPEAKING_HANG_MS) speaking.push(peer.id);
       }
 
-      // Only publish on a change, so the HUD is not re-rendered ten times a
-      // second to show the same thing.
       const previous = this.snapshot.speaking;
-      if (speaking.length !== previous.length || speaking.some((id, i) => previous[i] !== id)) {
+      if (speaking.length !== previous.length || speaking.some((id, index) => previous[index] !== id)) {
         this.emit({ speaking });
       }
     }, LEVEL_INTERVAL_MS);
   }
 
-  private setPeerStatus(id: string, status: PeerStatus): void {
-    const peer = this.peers.get(id);
-    if (!peer || peer.status === status) return;
+  private setPeerStatus(peer: Peer, status: PeerStatus): void {
+    if (peer.status === status) return;
     peer.status = status;
     this.publishPeers();
   }
@@ -924,8 +911,82 @@ class Voice {
   private publishPeers(): void {
     const peers: Record<string, PeerStatus> = {};
     for (const [id, peer] of this.peers) peers[id] = peer.status;
-    this.emit({ peers, listening: !this.stream && this.peers.size > 0 });
+    this.emit({
+      peers,
+      listening: !this.stream && !this.deaf && this.peers.size > 0,
+    });
+  }
+
+  /** Safe production diagnostics: no SDP, credentials, candidate addresses, or device labels. */
+  async diagnostics(): Promise<VoiceDiagnostic> {
+    const peers = await Promise.all(
+      [...this.peers.values()].map(async (peer): Promise<VoicePeerDiagnostic> => {
+        let candidateType: string | null = null;
+        let inboundBytes = 0;
+        let outboundBytes = 0;
+        try {
+          const stats = await peer.pc.getStats();
+          let selectedPair: { localCandidateId?: string; remoteCandidateId?: string } | null = null;
+          stats.forEach((report) => {
+            const item = report as {
+              type?: string;
+              state?: string;
+              nominated?: boolean;
+              selectedCandidatePairId?: string;
+              localCandidateId?: string;
+              remoteCandidateId?: string;
+              candidateType?: string;
+              bytesReceived?: number;
+              bytesSent?: number;
+            };
+            if (item.type === 'inbound-rtp') inboundBytes += Number(item.bytesReceived ?? 0);
+            if (item.type === 'outbound-rtp') outboundBytes += Number(item.bytesSent ?? 0);
+            if (item.type === 'transport' && item.selectedCandidatePairId) {
+              selectedPair = stats.get(item.selectedCandidatePairId) as typeof selectedPair;
+            } else if (item.type === 'candidate-pair' && item.state === 'succeeded' && item.nominated) {
+              selectedPair = item;
+            }
+          });
+          if (selectedPair) {
+            const pair = selectedPair as { localCandidateId?: string; remoteCandidateId?: string };
+            const local = pair.localCandidateId ? stats.get(pair.localCandidateId) : null;
+            const remote = pair.remoteCandidateId ? stats.get(pair.remoteCandidateId) : null;
+            const types = [local, remote]
+              .map((item) => (item as { candidateType?: string } | undefined)?.candidateType)
+              .filter((value): value is string => !!value);
+            candidateType = types.includes('relay') ? 'relay' : (types[0] ?? null);
+          }
+        } catch {
+          // Diagnostics must never interfere with media.
+        }
+        return {
+          id: peer.id,
+          status: peer.status,
+          connectionState: peer.pc.connectionState,
+          iceState: peer.pc.iceConnectionState,
+          signalingState: peer.pc.signalingState,
+          candidateType,
+          inboundBytes,
+          outboundBytes,
+          remoteTrack: peer.remoteTrack?.readyState ?? 'missing',
+          playbackPaused: peer.audio.paused,
+          restarts: peer.restartAttempts,
+        };
+      }),
+    );
+    return {
+      active: this.snapshot.active,
+      muted: this.snapshot.muted,
+      deaf: this.snapshot.deaf,
+      relay: this.snapshot.relay,
+      peers,
+    };
   }
 }
 
 export const voice = new Voice();
+
+if (typeof window !== 'undefined') {
+  (window as unknown as { mgVoiceDiagnostics: () => Promise<VoiceDiagnostic> }).mgVoiceDiagnostics =
+    () => voice.diagnostics();
+}

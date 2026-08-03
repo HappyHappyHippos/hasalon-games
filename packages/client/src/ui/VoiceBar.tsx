@@ -9,7 +9,6 @@ interface Props {
   /** Compact form for the in-match HUD; the lobby gets the full thing. */
   compact?: boolean;
 }
-
 /**
  * The microphone control, and the only place voice failures are reported.
  *
@@ -27,7 +26,9 @@ export function VoiceBar({ compact = false }: Props): JSX.Element | null {
   if (!room || !playerId) return null;
 
   const failed = Object.values(state.peers).filter((s) => s === 'failed').length;
-  const connecting = Object.values(state.peers).filter((s) => s === 'connecting').length;
+  const connecting = Object.values(state.peers).filter(
+    (s) => s === 'connecting' || s === 'recovering',
+  ).length;
 
   const toggle = (): void => {
     sfx.click();
@@ -84,7 +85,14 @@ export function VoiceBar({ compact = false }: Props): JSX.Element | null {
           connecting={connecting}
           listening={state.listening}
           active={state.active}
+          relay={state.relay}
+          playbackBlocked={state.playbackBlocked}
         />
+      )}
+      {!compact && failed > 0 && (
+        <button type="button" className="btn btn--ghost btn--sm" onClick={() => voice.retryFailed()}>
+          {t.voiceRetry}
+        </button>
       )}
     </div>
   );
@@ -96,12 +104,16 @@ function VoiceNote({
   connecting,
   listening,
   active,
+  relay,
+  playbackBlocked,
 }: {
   error: ReturnType<typeof useVoice>['error'];
   failed: number;
   connecting: number;
   listening: boolean;
   active: boolean;
+  relay: ReturnType<typeof useVoice>['relay'];
+  playbackBlocked: boolean;
 }): JSX.Element | null {
   const t = useT();
 
@@ -111,6 +123,8 @@ function VoiceNote({
   else if (error === 'unsupported') note = t.voiceUnsupported;
   else if (failed > 0) note = t.voiceFailed(failed);
   else if (connecting > 0) note = t.voiceConnecting;
+  else if (playbackBlocked) note = t.voiceTapToHear;
+  else if (relay === 'stun-only') note = t.voiceRelayUnavailable;
   else if (listening && !active) note = t.voiceListening;
 
   const iosNote = (listening || active) && isIOS() ? t.voiceIosNote : null;

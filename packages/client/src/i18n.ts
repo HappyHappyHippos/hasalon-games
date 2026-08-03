@@ -135,6 +135,9 @@ const he = {
   voiceUnsupported: 'הדפדפן הזה לא תומך בשיחות קוליות.',
   voiceConnecting: 'מתחברים…',
   voiceConnected: 'מחובר',
+  voiceRetry: 'נסו לחבר שוב',
+  voiceTapToHear: 'הקישו פעם אחת כדי לשמוע את החדר.',
+  voiceRelayUnavailable: 'החיבור הקולי מוגבל כרגע — רשת סלולרית עלולה לא לעבוד.',
   /** Per-person, next to a name. `voiceFailed` is the room-wide summary. */
   voicePeerFailed: 'אין חיבור',
   voiceIosNote: 'באייפון: בדקו שהטלפון לא על שקט (המתג בצד), שהווליום מוגבר, ושהרשיתם לספארי להשתמש במיקרופון.',
@@ -463,6 +466,9 @@ const en: Dict = {
   voiceUnsupported: 'This browser does not support voice chat.',
   voiceConnecting: 'Connecting…',
   voiceConnected: 'Connected',
+  voiceRetry: 'Retry voice',
+  voiceTapToHear: 'Tap once to hear the room.',
+  voiceRelayUnavailable: 'Voice relay is unavailable; cellular networks may not connect.',
   voicePeerFailed: 'No connection',
   voiceIosNote: 'On iPhone: make sure the physical silent switch is off, volume is up, and Safari has microphone permission.',
   voiceFailed: (n: number) =>

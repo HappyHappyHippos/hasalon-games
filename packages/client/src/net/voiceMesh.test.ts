@@ -17,14 +17,13 @@ describe('meshPair', () => {
   it.each([
     ['speaker/listener', speaker, listener, true],
     ['speaker/speaker', speaker, speaker, true],
-    ['listener/listener', listener, listener, false],
+    ['listener/listener', listener, listener, true],
     ['speaker/deaf', speaker, deaf, false],
     ['deaf/deaf', deaf, deaf, false],
   ] as const)('%s is %s', (_label, a, b, expected) => {
     expect(meshPair(a, b)).toBe(expected);
   });
 });
-
 describe('meshMembers', () => {
   const room: MeshPlayer[] = [
     { id: 'h', ...speaker },
@@ -63,5 +62,10 @@ describe('meshMembers', () => {
     const speakers = room.map((player) => ({ ...player, ...speaker }));
     const deafSelf = { ...speakers[0]!, ...deaf };
     expect(meshMembers(deafSelf.id, [deafSelf, ...speakers.slice(1)])).toEqual([]);
+  });
+
+  it('pre-connects a quiet room so enabling a microphone needs no renegotiation', () => {
+    const quiet = room.map((player) => ({ ...player, ...listener }));
+    expect(meshMembers('h', quiet)).toEqual(['a', 'b', 'c', 'd', 'e', 'f', 'g']);
   });
 });

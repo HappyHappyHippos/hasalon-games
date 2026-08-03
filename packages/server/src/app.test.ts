@@ -268,10 +268,48 @@ describe('lobby', () => {
     const client = await connect();
     client.send({
       t: 'create',
-      v: 15,
+      v: PROTOCOL_VERSION - 1,
       identity: { name: 'Old tab', colorIndex: 0, hat: 0, face: 0 },
     });
     expect((await client.next('error')).code).toBe('BAD_VERSION');
+  });
+
+  it('serves ICE credentials only to an authenticated room member', async () => {
+    const host = await connect();
+    host.send({
+      t: 'create',
+      v: PROTOCOL_VERSION,
+      identity: { name: 'Host', colorIndex: 0, hat: 0, face: 0 },
+    });
+    await host.next('welcome');
+
+    const url = `http://127.0.0.1:${port}/ice`;
+    expect((await fetch(url)).status).toBe(401);
+    expect(
+      (
+        await fetch(url, {
+          headers: {
+            Authorization: 'Bearer wrong',
+            'X-Room-Code': host.code,
+            'X-Player-Id': host.playerId,
+          },
+        })
+      ).status,
+    ).toBe(401);
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${host.token}`,
+        'X-Room-Code': host.code,
+        'X-Player-Id': host.playerId,
+      },
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toMatchObject({
+      provider: expect.stringMatching(/^(cloudflare|stun-only)$/),
+      iceServers: expect.any(Array),
+    });
   });
 
   it('broadcasts listen opt-outs and safely coerces invalid values to false', async () => {
