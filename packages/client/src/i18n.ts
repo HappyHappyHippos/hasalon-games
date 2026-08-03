@@ -92,15 +92,12 @@ const he = {
   totalScoreTitle: 'ניקוד מצטבר בחדר הזה, על פני כל המשחקים',
   totalScoreLabel: (n: number) => `סה״כ ${n}`,
   /** One picked at random per match end. Silly on purpose — this is a living room. */
-  winnerQuips: [
-    'המדעים עדיין לא מסבירים איך.',
-    'תרימו לו כיסא, הוא מלך עכשיו.',
-    'זה היה ברור מההתחלה. לכולם חוץ מכם.',
-    'תיהנו מ־15 השניות של התהילה.',
-    'עכשיו אפשר להתרברב בקבוצת הוואטסאפ.',
-    'האגו שלו עכשיו גדול מהמסך.',
-    'זה בטח בגלל הכיסא.',
-    'המומחים בהלם. אתם - פחות.',
+  winnerQuips: (name: string) => [
+    `כל הכבוד ל${name}! בטח מתאמנים בבית...`,
+    `${name} נגד ליל מוג' מוג' חמינאי מי ינצח?`,
+    `המשחק מכור, השופט משוחד, ו${name} לא סופר פה אף אחד`,
+    'לא שותים בזמן שמשחקים',
+    `אולי להעביר ל${name} כמה שקלים בביט כפרס?`,
   ],
   backToLobby: 'חזרה ללובי',
   waitingForHost: 'מחכים למארח…',
@@ -366,9 +363,9 @@ const en: Dict = {
   totalScoreTitle: 'Total points in this room, across every game',
   totalScoreLabel: (n: number) => `total ${n}`,
   /** One picked at random per match end. Silly on purpose — this is a living room. */
-  winnerQuips: [
+  winnerQuips: (name: string) => [
     'Science cannot yet explain how.',
-    'Someone get this person a throne.',
+    `Someone get ${name} a throne.`,
     'Called it. Nobody else did.',
     'Enjoy your 15 seconds of fame.',
     'Bragging rights secured for the group chat.',

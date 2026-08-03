@@ -63,7 +63,10 @@ export function MatchOver({
   // is the phase, so a fresh mount is a fresh match), not re-rolled on every
   // re-render while the overlay sits on screen.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const quip = useMemo(() => t.winnerQuips[Math.floor(Math.random() * t.winnerQuips.length)], []);
+  const quip = useMemo(() => {
+    const quips = t.winnerQuips(winner ? winner.name : '');
+    return quips[Math.floor(Math.random() * quips.length)];
+  }, []);
 
   return (
     <div className="overlay overlay--solid">
