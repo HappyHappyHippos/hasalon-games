@@ -35,7 +35,12 @@ export function Composer({ view }: { view: MemesPrivate }): JSX.Element {
     const count = Math.max(view.slots, view.draft.length);
     const boxes = boxesForCaptionCount(templateById(view.templateId), count);
     setTexts(Array.from({ length: count }, (_, index) => view.draft[index] ?? ''));
-    setPositions(boxes.map((box, index) => ({ ...(view.positions[index] ?? box) })));
+    setPositions(boxes.map((box, index) => ({
+      x: view.positions[index]?.x ?? box.x,
+      y: view.positions[index]?.y ?? box.y,
+      w: view.positions[index]?.w ?? box.w,
+      h: view.positions[index]?.h ?? box.h,
+    })));
   }, [view.draft, view.positions, view.slots, view.templateId]);
   useEffect(() => () => senderRef.current?.destroy(), []);
 
@@ -64,7 +69,12 @@ export function Composer({ view }: { view: MemesPrivate }): JSX.Element {
     const boxes = boxesForCaptionCount(template, nextTexts.length);
     const nextPositions = [
       ...positions,
-      { x: boxes[nextTexts.length - 1]!.x, y: boxes[nextTexts.length - 1]!.y },
+      {
+        x: boxes[nextTexts.length - 1]!.x,
+        y: boxes[nextTexts.length - 1]!.y,
+        w: boxes[nextTexts.length - 1]!.w,
+        h: boxes[nextTexts.length - 1]!.h,
+      },
     ];
     setTexts(nextTexts);
     setPositions(nextPositions);

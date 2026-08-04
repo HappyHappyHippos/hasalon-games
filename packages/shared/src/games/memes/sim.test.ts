@@ -135,24 +135,34 @@ describe('Meme Machine secrecy', () => {
     applyInput(state, player.id, {
       k: 'draft',
       texts: ['move me'],
-      p: [{ x: movedX, y: 0.234567 }],
+      p: [{ x: movedX, y: 0.234567, w: 0.35, h: 0.2 }],
     });
     expect(JSON.stringify(makeSnapshot(state))).not.toContain(String(movedX));
-    expect(privateFor(state, player.id)?.positions[0]).toMatchObject({ x: movedX, y: 0.234567 });
+    expect(privateFor(state, player.id)?.positions[0]).toMatchObject({
+      x: movedX,
+      y: 0.234567,
+      w: 0.35,
+      h: 0.2,
+    });
 
     for (const candidate of state.players) {
       applyInput(state, candidate.id, {
         k: 'submit',
         texts: [`caption-${candidate.id}`],
-        p: candidate === player ? [{ x: movedX, y: 0.234567 }] : undefined,
+        p: candidate === player ? [{ x: movedX, y: 0.234567, w: 0.35, h: 0.2 }] : undefined,
       });
     }
     const entry = state.entries.find((candidate) => candidate.authorId === player.id)!;
     state.entryIndex = state.entries.indexOf(entry);
-    expect(makeSnapshot(state).stage?.positions[0]).toMatchObject({ x: movedX, y: 0.234567 });
+    expect(makeSnapshot(state).stage?.positions[0]).toMatchObject({
+      x: movedX,
+      y: 0.234567,
+      w: 0.35,
+      h: 0.2,
+    });
   });
 
-  it('clamps hostile box coordinates inside the template image', () => {
+  it('clamps hostile box coordinates and sizes inside the template image', () => {
     const state = makeState();
     intoWriting(state);
     const player = state.players[0]!;
@@ -160,12 +170,26 @@ describe('Meme Machine secrecy', () => {
     applyInput(state, player.id, {
       k: 'draft',
       texts: ['bounded'],
-      p: [{ x: -20, y: 20 }, { x: Number.NaN, y: Number.POSITIVE_INFINITY }],
+      p: [
+        { x: -20, y: 20, w: -20, h: 20 },
+        { x: Number.NaN, y: Number.POSITIVE_INFINITY, w: Number.NaN, h: Number.NEGATIVE_INFINITY },
+      ],
     });
     const positions = privateFor(state, player.id)!.positions;
     expect(positions[0]?.x).toBe(0);
-    expect(positions[0]?.y).toBe(1 - template.boxes[0]!.h);
-    expect(positions.every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
+    expect(positions[0]?.y).toBe(0);
+    expect(positions[0]?.h).toBe(1);
+    expect(positions[0]?.w).toBeGreaterThanOrEqual(Math.min(template.boxes[0]!.w, 0.16));
+    expect(positions.every(({ x, y, w, h }) => (
+      Number.isFinite(x)
+      && Number.isFinite(y)
+      && Number.isFinite(w)
+      && Number.isFinite(h)
+      && x >= 0
+      && y >= 0
+      && x + w <= 1
+      && y + h <= 1
+    ))).toBe(true);
   });
 
   it('accepts at most four captions and restores added boxes privately', () => {

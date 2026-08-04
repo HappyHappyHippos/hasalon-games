@@ -15,6 +15,8 @@ import type { GameId } from '@mg/shared';
 import { sfx } from './audio';
 
 const SETTINGS_KEY = 'mg.music';
+/** Quiet enough to sit under a roomful of conversation on first launch. */
+export const DEFAULT_MUSIC_VOLUME = 0.16;
 
 export type MusicTrack = 'lobby' | GameId;
 
@@ -327,7 +329,7 @@ function release(player: HTMLAudioElement): void {
 }
 
 function loadSettings(): MusicSettings {
-  const fallback: MusicSettings = { muted: false, volume: 0.4 };
+  const fallback: MusicSettings = { muted: false, volume: DEFAULT_MUSIC_VOLUME };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return fallback;

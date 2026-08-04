@@ -58,14 +58,16 @@ function drawCaption(
   box: MemeTextBox,
   x: number,
   y: number,
+  widthRatio: number,
+  heightRatio: number,
   canvasWidth: number,
   canvasHeight: number,
 ): void {
   if (!text.trim()) return;
   const left = x * canvasWidth;
   const top = y * canvasHeight;
-  const width = box.w * canvasWidth;
-  const height = box.h * canvasHeight;
+  const width = widthRatio * canvasWidth;
+  const height = heightRatio * canvasHeight;
   const padding = Math.max(4, canvasWidth * 0.008);
   const availableWidth = Math.max(1, width - padding * 2);
   const availableHeight = Math.max(1, height - padding * 2);
@@ -129,7 +131,17 @@ export async function downloadMeme(stage: MemesStageEntry): Promise<void> {
   ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
   boxesForCaptionCount(template, stage.texts.length).forEach((box, index) => {
     const position = stage.positions[index] ?? box;
-    drawCaption(ctx, stage.texts[index] ?? '', box, position.x, position.y, canvas.width, canvas.height);
+    drawCaption(
+      ctx,
+      stage.texts[index] ?? '',
+      box,
+      position.x,
+      position.y,
+      position.w ?? box.w,
+      position.h ?? box.h,
+      canvas.width,
+      canvas.height,
+    );
   });
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Could not encode meme')), 'image/jpeg', 0.9);

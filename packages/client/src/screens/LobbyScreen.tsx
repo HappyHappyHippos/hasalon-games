@@ -94,7 +94,9 @@ export function LobbyScreen(): JSX.Element {
                   key={player.id}
                   className={`person${player.ready ? ' person--ready' : ''}${
                     player.connected ? '' : ' person--away'
-                  }${speaking.has(player.id) ? ' person--speaking' : ''}`}
+                  }${speaking.has(player.id) ? ' person--speaking' : ''}${
+                    player.id === playerId ? ' person--self' : ''
+                  }`}
                 >
                   {player.id === playerId ? (
                     <div style={{ marginLeft: '-0.5rem', marginRight: '0.25rem' }}>

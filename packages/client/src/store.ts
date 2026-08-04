@@ -3,6 +3,7 @@ import { isFaceIndex, isHatIndex } from '@mg/shared';
 import type { ErrorCode, GameConfig, GameId, Identity, RoomView } from '@mg/shared';
 import type { MemesPrivate, MemesStageEntry } from '@mg/shared/memes';
 import { isLang, type Lang } from './i18n';
+import { DEFAULT_MUSIC_VOLUME } from './music';
 
 export type ConnectionStatus = 'idle' | 'connecting' | 'open' | 'closed';
 
@@ -310,7 +311,7 @@ export const useStore = create<AppState>((set) => ({
   matchWinnerSeat: null,
   muted: false,
   musicMuted: false,
-  musicVolume: 0.4,
+  musicVolume: DEFAULT_MUSIC_VOLUME,
   touchControls: loadTouchControls(),
   lang: loadLang(),
   matchNonce: 0,

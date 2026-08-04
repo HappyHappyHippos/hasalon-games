@@ -27,10 +27,12 @@ export interface MemesConfig {
 
 export type MemesVote = -1 | 0 | 1;
 
-/** Normalised physical image coordinates for a player-moved caption box. */
+/** Normalised physical image geometry for a player-moved/resized caption box. */
 export interface MemeBoxPosition {
   x: number;
   y: number;
+  w: number;
+  h: number;
 }
 
 export type MemesInput =

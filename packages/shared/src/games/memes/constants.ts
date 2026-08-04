@@ -26,6 +26,9 @@ export const MAX_ROUNDS = 8;
 
 export const MAX_CAPTION_CHARS = 60;
 export const MAX_CAPTION_BOXES = 4;
+/** Small enough for a short label, large enough to remain usable on a phone. */
+export const MIN_CAPTION_BOX_WIDTH = 0.16;
+export const MIN_CAPTION_BOX_HEIGHT = 0.12;
 export const MIN_USABLE_CHARS = 2;
 export const MAX_DRAFTS_PER_SECOND = 6;
 export const DRAFT_BUDGET_REFILL_TICKS = TICK_RATE;

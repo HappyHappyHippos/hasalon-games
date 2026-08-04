@@ -12,6 +12,8 @@ import {
   MAX_ROUNDS,
   MAX_VOTE_SECONDS,
   MAX_WRITE_SECONDS,
+  MIN_CAPTION_BOX_HEIGHT,
+  MIN_CAPTION_BOX_WIDTH,
   MIN_ROUNDS,
   MIN_VOTE_SECONDS,
   MIN_WRITE_SECONDS,
@@ -124,7 +126,7 @@ function dealRound(state: MemesState): void {
     player.roundScore = 0;
     player.templateId = template?.id ?? '';
     player.draft = Array.from({ length: template?.slots ?? 1 }, () => '');
-    player.draftPositions = (template?.boxes ?? []).map(({ x, y }) => ({ x, y }));
+    player.draftPositions = (template?.boxes ?? []).map(({ x, y, w, h }) => ({ x, y, w, h }));
     player.submitted = false;
     player.draftBudget = MAX_DRAFTS_PER_SECOND;
     if (template) state.usedTemplates.add(template.id);
@@ -141,6 +143,12 @@ function clampPosition(value: unknown, fallback: number, max: number): number {
     : fallback;
 }
 
+function clampSize(value: unknown, fallback: number, min: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(1, Math.max(min, value))
+    : fallback;
+}
+
 function normalizePositions(
   raw: unknown,
   boxes: readonly MemeTextBox[],
@@ -153,9 +161,16 @@ function normalizePositions(
       ? candidate as Record<string, unknown>
       : null;
     const fallback = current[index] ?? box;
+    // Some curated template boxes are intentionally shallow strips. Do not
+    // enlarge those on first load; the shared minimum only limits how far a
+    // player can shrink a box that started larger.
+    const width = clampSize(value?.w, fallback.w ?? box.w, Math.min(box.w, MIN_CAPTION_BOX_WIDTH));
+    const height = clampSize(value?.h, fallback.h ?? box.h, Math.min(box.h, MIN_CAPTION_BOX_HEIGHT));
     return {
-      x: clampPosition(value?.x, fallback.x, 1 - box.w),
-      y: clampPosition(value?.y, fallback.y, 1 - box.h),
+      x: clampPosition(value?.x, fallback.x, 1 - width),
+      y: clampPosition(value?.y, fallback.y, 1 - height),
+      w: width,
+      h: height,
     };
   });
 }

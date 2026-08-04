@@ -3083,9 +3083,22 @@ strong,
   border: 2px dashed var(--yellow);
   cursor: grab;
   touch-action: none;
+  overflow: visible;
 }
 .meme-card__caption--editable:active { cursor: grabbing; }
 .meme-card__caption--editable:focus-visible { outline: 3px solid var(--violet); outline-offset: 2px; }
+.meme-card__text {
+  position: absolute;
+  inset: 0;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+.meme-card__caption--panel .meme-card__text { padding: 7px; }
 .meme-card__move {
   position: absolute;
   top: 2px;
@@ -3102,6 +3115,27 @@ strong,
   -webkit-text-stroke: 0;
   text-shadow: none;
 }
+.meme-card__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: end;
+  padding: 0 5px 4px 0;
+  border: 0;
+  border-radius: 18px 0 0 0;
+  background: color-mix(in srgb, var(--yellow) 88%, transparent);
+  color: var(--ink);
+  cursor: nwse-resize;
+  font: 900 20px/1 var(--font-display);
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+  touch-action: none;
+}
+.meme-card__resize:focus-visible { outline: 3px solid var(--violet); outline-offset: -3px; }
 .meme-card--stage .meme-card__caption { animation: meme-caption 220ms 100ms ease-out both; }
 .meme-card--stage .meme-card__caption:nth-of-type(2) { animation-delay: 220ms; }
 
@@ -3235,14 +3269,98 @@ strong,
 }
 
 @media (max-height: 560px) and (orientation: landscape) {
-  .memes__composer { grid-template-columns: minmax(240px, 1.15fr) minmax(260px, 0.85fr); }
+  .memes { height: 100dvh; min-height: 0; overflow: hidden; }
+  .memes__phase { overflow: hidden; padding-inline-end: 7px; padding-block-end: 7px; }
+  .memes__composer {
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: minmax(240px, 1.15fr) minmax(280px, 0.85fr);
+    align-items: stretch;
+  }
   .memes__preview .meme-card { width: min(100%, calc((100dvh - 78px) * var(--meme-aspect))); }
+  .memes__fields {
+    min-height: 0;
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
   .memes__roster { display: none; }
-  .memes__stage { grid-template-columns: minmax(0, 1fr) minmax(250px, 0.75fr); align-items: center; }
+  .memes__stage { height: 100%; grid-template-columns: minmax(0, 1fr) minmax(250px, 0.75fr); align-items: center; }
   .memes__stage > .eyebrow { display: none; }
   .memes__stage > .meme-card { grid-row: 1 / span 2; width: min(100%, calc((100dvh - 76px) * var(--meme-aspect))); }
   .memes__vote,
   .memes__result { grid-column: 2; }
+}
+
+/* Short, wide phones use the width they have instead of turning every lobby
+   item into a full-width row. Four compact columns keep the people and all
+   four games visible with far less vertical scrolling. */
+@media (max-height: 560px) and (orientation: landscape) and (min-width: 600px) {
+  .lobby {
+    padding-block: calc(8px + env(safe-area-inset-top)) calc(22px + env(safe-area-inset-bottom));
+  }
+  .lobby__inner { gap: 10px; }
+  .lobby__head,
+  .lobby__people,
+  .lobby__settings,
+  .lobby__foot { padding: 11px; }
+  .lobby__code { font-size: 30px; }
+  .lobby__grid,
+  .lobby__choice { gap: 10px; }
+  .people {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .person {
+    min-width: 0;
+    gap: 5px;
+    padding: 4px 6px;
+  }
+  .person--self { grid-column: 1 / -1; }
+  .person > .avatar { width: 38px; height: 38px; }
+  .person__meta { font-size: 10px; }
+  .person__tick { width: 24px; height: 24px; }
+  .person--self .appearance { gap: 4px; }
+  .person--self .appearance__preview { width: 52px; height: 52px; }
+  .person--self .appearance__preview .avatar { width: 48px; height: 48px; }
+  .person--self .appearance__arrows { flex-direction: row; gap: 2px; }
+  .person--self .appearance__arrow.btn { width: 44px; min-width: 44px; }
+  .lobby__ready { padding: 9px; }
+  .picker {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 9px;
+  }
+  .gamecard { gap: 6px; padding: 7px; box-shadow: var(--shadow-sm); }
+  .gamecard__name { font-size: 15px; }
+  .gamecard__tagline { display: none; }
+  .gamecard__players { font-size: 10px; letter-spacing: 0; }
+  .gamecard__badge { top: -8px; inset-inline-end: -5px; padding: 3px 6px; font-size: 9px; }
+}
+
+/* Skribbl has three genuinely useful regions. In short landscape they fit
+   side by side; stacking them made the board and chat consume the drawing
+   area and produced the odd stretched mobile layout. */
+@media (max-height: 560px) and (orientation: landscape) and (min-width: 600px) {
+  .skribbl { height: 100dvh; overflow: hidden; }
+  .skribbl__body {
+    grid-template-columns: minmax(100px, 0.35fr) minmax(280px, 1.55fr) minmax(180px, 0.65fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .skribbl__side { max-height: none; }
+  .skribbl__board {
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    gap: 4px;
+  }
+  .skribbl__row { width: 100%; gap: 4px; padding: 3px 5px; font-size: 11px; }
+  .skribbl__name { max-width: 48px; }
+  .skribbl__tag { display: none; }
+  .skribbl__tools { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-inline: contain; }
+  .skribbl__swatch { width: 44px; height: 44px; }
+  .skribbl__log { padding: 6px; font-size: 12px; }
+  .skribbl__guessbar { padding: 6px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
