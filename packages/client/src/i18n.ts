@@ -120,6 +120,7 @@ const he = {
   // Touch controls. Short on purpose — they are printed inside the buttons.
   padFire: 'ירי',
   padBomb: 'בוםבום',
+  padFlip: 'הפוך',
 
   // Voice chat
   voiceListening: 'אפשר לשמוע את החדר',
@@ -232,6 +233,31 @@ const he = {
         'מי שצובר הכי הרבה נקודות מנצח.',
       ],
     },
+    tanks: {
+      tagline: 'לירות מעבר לפינה, בדרך כלל על עצמכם',
+      controls: 'חצים או WASD לנהיגה · M או רווח לירי',
+      rules: [
+        'נוסעים במבוך ויורים על הטנקים האחרים. האחרון ששורד מנצח בסיבוב.',
+        'הפגזים מוקפצים מהקירות — הירי הטוב הוא זה שחוזר מעבר לפינה.',
+        'הפגז שלכם יכול להרוג גם אתכם ברגע שיצא מהקנה. בדרך כלל זה מה שקורה.',
+        'עד שישה פגזים באוויר בו־זמנית, ועם הפסקה קצרה בין יריות.',
+        'שדרוגים מופיעים במבוך: מגן, ירי משולש, מהירות ופגז כבד.',
+        'אם הזמן נגמר, או ששני הטנקים האחרונים מתים יחד — הסיבוב מסתיים בתיקו.',
+        'הראשון שמגיע למספר הסיבובים שנקבע מנצח במשחק.',
+      ],
+    },
+    gravity: {
+      tagline: 'כפתור אחד. לרוץ זה חובה, ליפול זה בחירה',
+      controls: 'רווח, חץ למעלה, או נגיעה במסך כדי להפוך כיוון',
+      rules: [
+        'אתם רצים ימינה לבד ואי אפשר לעצור. כפתור אחד הופך את כיוון הכבידה.',
+        'הפיכת כיוון בזמן שאתם על משטח משגרת אתכם לצד השני. אין קפיצה.',
+        'נפילה לתוך בור או התנגשות בקיר מוציאה אתכם מהסיבוב.',
+        'כולם רצים באותה מהירות, והיא רק הולכת ועולה.',
+        'האחרון שממשיך לרוץ מנצח בסיבוב — או הראשון שמגיע לסוף המסלול.',
+        'הראשון שמגיע למספר הסיבובים שנקבע מנצח במשחק.',
+      ],
+    },
   } satisfies Record<GameId, { tagline: string; controls: string; rules: string[] }>,
 
   // -------------------------------------------------------------------------
@@ -259,6 +285,11 @@ const he = {
   setBombs: 'פצצות',
   setLivesEach: 'חיים לכל אחד',
   setRoundsToWin: 'סיבובים לניצחון',
+  setArenaSize: 'גודל המבוך',
+  arenaSizeLabels: ['קטן', 'רגיל', 'גדול'],
+  setRoundSeconds: 'שניות לסיבוב',
+  setPace: 'קצב',
+  paceLabels: ['רגוע', 'רגיל', 'מהיר'],
 
   // -------------------------------------------------------------------------
   // Identity
@@ -449,6 +480,7 @@ const en: Dict = {
 
   padFire: 'FIRE',
   padBomb: 'BOMB',
+  padFlip: 'FLIP',
 
   voiceHeading: 'Voice chat',
   voiceListening: 'You can hear the room',
@@ -552,6 +584,31 @@ const en: Dict = {
         'The player with the most points wins.',
       ],
     },
+    tanks: {
+      tagline: 'Shoot round corners. Mostly at yourself.',
+      controls: 'Arrows or WASD to drive · M or Space to shoot',
+      rules: [
+        'Drive around a maze and shoot the other tanks. Last one alive wins the round.',
+        'Shells bounce off walls — the good shots are the ones that come round a corner.',
+        'Your own shells can kill you once they have left the barrel. They usually do.',
+        'Six shells in the air at a time, and a short pause between shots.',
+        'Powerups drop in the maze: shield, triple shot, speed and a heavy shell.',
+        'If the clock runs out, or the last two tanks die together, the round is a draw.',
+        'First to the target number of rounds wins the match.',
+      ],
+    },
+    gravity: {
+      tagline: 'One button. Falling is optional; running is not.',
+      controls: 'Space, Up, or tap anywhere to flip',
+      rules: [
+        'You run to the right on your own and you cannot stop. One button flips gravity.',
+        'Flipping while stuck to a surface throws you at the other one. There is no jump.',
+        'Fall through a gap or run into a wall and you are out for the round.',
+        'Everyone runs at the same speed, and it keeps going up.',
+        'Last one running wins the round — or the first to reach the end of the track.',
+        'First to the target number of rounds wins the match.',
+      ],
+    },
   },
 
   achtungEffects: {
@@ -576,6 +633,11 @@ const en: Dict = {
   setBombs: 'Bombs',
   setLivesEach: 'Lives each',
   setRoundsToWin: 'Rounds to win',
+  setArenaSize: 'Maze size',
+  arenaSizeLabels: ['Small', 'Normal', 'Large'],
+  setRoundSeconds: 'Seconds per round',
+  setPace: 'Pace',
+  paceLabels: ['Chill', 'Normal', 'Fast'],
 
 
   // -------------------------------------------------------------------------

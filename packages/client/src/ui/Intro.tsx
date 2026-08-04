@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type CSSProperties, type JSX } from 'react';
 import { Couch } from './Logo';
 import { music } from '../music';
+import { prefersReducedMotion } from './motion';
 
 /**
  * A logo sting before a match.
@@ -42,13 +43,6 @@ const REDUCED_MS = 400;
  * unchanged.
  */
 const SKIP_ARM_MS = 250;
-
-function prefersReducedMotion(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  );
-}
 
 interface Props {
   /** Fires when the splash is done, whether it timed out or was skipped. */

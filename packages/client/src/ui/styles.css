@@ -1317,6 +1317,58 @@ strong,
   font-size: 13px;
 }
 
+/* Gravity Guy's one button.
+ *
+ * The whole arena is the target, because with a single control there is nothing
+ * to aim at and a small button would only be a way to miss. The label fades once
+ * the round is under way — it is an instruction for the first few seconds, not a
+ * permanent overlay on the thing you are trying to watch. */
+.tapcontrol {
+  position: absolute;
+  inset: 0;
+  pointer-events: auto;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.tapcontrol:active {
+  background: rgba(255, 210, 63, 0.12);
+}
+
+.tapcontrol__hint {
+  margin-bottom: calc(18px + env(safe-area-inset-bottom));
+  padding: 6px 18px;
+  border-radius: 999px;
+  border: 3px solid rgba(255, 255, 255, 0.6);
+  background: rgba(20, 17, 15, 0.55);
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+  animation: tapfade 1.2s ease-out 3.5s forwards;
+}
+
+@keyframes tapfade {
+  to {
+    opacity: 0.18;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tapcontrol__hint {
+    animation: none;
+    opacity: 0.4;
+  }
+}
+
 /* ==========================================================================
    Overlays
    ========================================================================== */

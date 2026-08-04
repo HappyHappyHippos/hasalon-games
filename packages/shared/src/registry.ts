@@ -1,8 +1,10 @@
 import type { GameId, GameMeta, GameModule } from './gameModule';
 import { achtungModule } from './games/achtung/module';
+import { gravityModule } from './games/gravity/module';
 import { gunMayhemModule } from './games/gunmayhem/module';
 import { memesModule } from './games/memes/module';
 import { skribblModule } from './games/skribbl/module';
+import { tanksModule } from './games/tanks/module';
 
 /**
  * The whole catalogue. Adding a game means writing a module, adding it here,
@@ -11,13 +13,22 @@ import { skribblModule } from './games/skribbl/module';
  */
 export const GAMES: Record<GameId, GameModule> = {
   achtung: achtungModule,
+  gravity: gravityModule,
   gunmayhem: gunMayhemModule,
   memes: memesModule,
   skribbl: skribblModule,
+  tanks: tanksModule,
 };
 
 /** Display order in the lobby's game picker. */
-export const GAME_IDS: GameId[] = ['gunmayhem', 'achtung', 'skribbl', 'memes'];
+export const GAME_IDS: GameId[] = [
+  'gunmayhem',
+  'tanks',
+  'achtung',
+  'gravity',
+  'skribbl',
+  'memes',
+];
 
 export const GAME_LIST: GameMeta[] = GAME_IDS.map((id) => GAMES[id].meta);
 

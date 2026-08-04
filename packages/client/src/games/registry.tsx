@@ -12,6 +12,12 @@ import { GunMayhemSettings } from './gunmayhem/Settings';
 import { MemesBoxArt } from './memes/BoxArt';
 import { MemesScreen } from './memes/MemesScreen';
 import { MemesSettings } from './memes/Settings';
+import { TanksBoxArt } from './tanks/BoxArt';
+import { TanksScreen } from './tanks/TanksScreen';
+import { TanksSettings } from './tanks/Settings';
+import { GravityBoxArt } from './gravity/BoxArt';
+import { GravityScreen } from './gravity/GravityScreen';
+import { GravitySettings } from './gravity/Settings';
 
 export interface SettingsProps {
   settings: GameConfig;
@@ -66,10 +72,31 @@ export const CLIENT_GAMES: Record<GameId, ClientGame> = {
     Settings: MemesSettings,
     accent: 'var(--orange)',
   },
+  tanks: {
+    meta: GAMES.tanks.meta,
+    BoxArt: TanksBoxArt,
+    Screen: TanksScreen,
+    Settings: TanksSettings,
+    accent: 'var(--green)',
+  },
+  gravity: {
+    meta: GAMES.gravity.meta,
+    BoxArt: GravityBoxArt,
+    Screen: GravityScreen,
+    Settings: GravitySettings,
+    accent: 'var(--yellow)',
+  },
 };
 
 /** Display order in the lobby. */
-export const CLIENT_GAME_IDS: GameId[] = ['gunmayhem', 'achtung', 'skribbl', 'memes'];
+export const CLIENT_GAME_IDS: GameId[] = [
+  'gunmayhem',
+  'tanks',
+  'achtung',
+  'gravity',
+  'skribbl',
+  'memes',
+];
 
 export function renderGameScreen(room: RoomView, mySeat: number): JSX.Element {
   const game = CLIENT_GAMES[room.gameId];

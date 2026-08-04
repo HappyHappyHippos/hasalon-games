@@ -1,18 +1,32 @@
 import type { AchtungConfig, AchtungSnapshot } from './games/achtung/types';
+import type { GravityConfig, GravitySnapshot } from './games/gravity/types';
 import type { GunMayhemConfig, GunMayhemSnapshot } from './games/gunmayhem/types';
 import type { MemesConfig, MemesSnapshot } from './games/memes/types';
 import type { SkribblConfig, SkribblSnapshot } from './games/skribbl/types';
+import type { TanksConfig, TanksSnapshot } from './games/tanks/types';
 
 /** Every game the site knows about. */
-export type GameId = 'achtung' | 'gunmayhem' | 'memes' | 'skribbl';
+export type GameId = 'achtung' | 'gravity' | 'gunmayhem' | 'memes' | 'skribbl' | 'tanks';
 
 /**
  * Configs and snapshots are unions tagged with `game`, so both the server and
  * the client narrow them with a single check instead of threading generics
  * through the room, the protocol and the store.
  */
-export type GameConfig = AchtungConfig | GunMayhemConfig | MemesConfig | SkribblConfig;
-export type GameSnapshot = AchtungSnapshot | GunMayhemSnapshot | MemesSnapshot | SkribblSnapshot;
+export type GameConfig =
+  | AchtungConfig
+  | GravityConfig
+  | GunMayhemConfig
+  | MemesConfig
+  | SkribblConfig
+  | TanksConfig;
+export type GameSnapshot =
+  | AchtungSnapshot
+  | GravitySnapshot
+  | GunMayhemSnapshot
+  | MemesSnapshot
+  | SkribblSnapshot
+  | TanksSnapshot;
 
 export interface GameSeat {
   id: string;

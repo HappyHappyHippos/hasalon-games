@@ -6,11 +6,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 הסלון (hasalon, "the living room") — a room-based multiplayer game site. Create
 a room, share the code/link, everyone joins, the host picks a game from a
-live game picker, then plays. No accounts, rooms live in memory only. Three
-games ship today: **Gun Mayhem** (4-player platform fighter, the priority —
-this is the flagship game and should get the most care), **Achtung die Kurve**
-(up to 8-player curve/Snake game) and **Skribbl** (up to 8-player draw and
-guess, Hebrew or English).
+live game picker, then plays. No accounts, rooms live in memory only. The games
+that ship today: **Gun Mayhem** (4-player platform fighter, the priority — this
+is the flagship game and should get the most care), **Tank Trouble** (up to
+8-player top-down maze duel with ricocheting shells), **Achtung die Kurve** (up
+to 8-player curve/Snake game), **Gravity Guy** (up to 8-player one-button
+auto-run elimination race), **Skribbl** (up to 8-player draw and guess, Hebrew
+or English) and **Meme Machine**.
 
 npm workspaces monorepo. Git repo with `origin` at
 `github.com/HappyHappyHippos/hasalon-games` (public), deployed on Railway at
@@ -156,6 +158,26 @@ compile error until it is done, which is the point:
   is a type error rather than a silent misread (it used to be a two-way ternary,
   which would have read a third game's snapshot as Gun Mayhem's)
 
+And the ones no compiler catches, which is why they are worth writing down:
+
+- **`meta.touchSupported` is an unenforced claim.** Nothing in the client reads
+  it. Touch is per-screen: mount your own controls behind
+  `ui/useTouchControls.ts:useShowTouchControls`. Setting it true and shipping no
+  touch UI compiles and is broken on every phone in the family.
+- `client/ui/styles.css` — a `.<id>__*` block. No `rotate` on cards, hard offset
+  shadows only.
+- `client/public/music/<id>.mp3` and its `ATTRIBUTION.md` entry. **mp3 only.**
+  Point the `TRACKS` entry at an existing file rather than a missing one while a
+  real track is being sourced — silence reads as the Ogg bug all over again.
+- `server/src/room.test.ts` and `app.test.ts` enumerate games.
+- Reuse rather than copy: `client/games/bitInput.ts` is the whole 60 Hz
+  sampler/tap-latch/sequence-in-`sessionStorage` machinery, parameterised by key
+  map. `ui/motion.ts:prefersReducedMotion` gates shake, trails and parallax.
+- `client/net/socket.ts:354` still branches private state on
+  `gameId === 'memes'` in a two-way if/else with no exhaustiveness check — the
+  same shape `mirrorHud` was fixed out of. Harmless while only Memes and Skribbl
+  have secrets; make it an exhaustive switch before a third game does.
+
 ### Private per-player state
 
 `Room.broadcastSnapshot` builds the snapshot **once**, encodes it **once**, and
@@ -250,6 +272,70 @@ client replay unacknowledged inputs after a correction
 (`client/games/gunmayhem/predictor.ts`). Prediction only runs while the local
 player is actually in control (not respawning or out of stocks) —
 knockback isn't predictable so the code deliberately doesn't try.
+
+### Tank Trouble specifics
+
+**The arena is a wall lattice, not a tilemap.** `tanks/types.ts:Maze` is two
+`Uint8Array`s of cell *edges*. Every wall is therefore an axis-aligned segment at
+a known coordinate, which is what makes shell reflection exact and tank collision
+a lookup rather than a broadphase. Almost everything else follows from it.
+
+**Generation cannot fail, by construction** (`tanks/maze.ts`): a randomised-DFS
+spanning tree is connected by definition, and the braid pass only *removes*
+walls, which cannot disconnect anything. So there is no generate-and-retry loop.
+`validateMaze` and `fallbackMaze` exist to prove that in tests and to guard a
+live match, not because generation is expected to misbehave. `BRAID_FRACTION` is
+the one number that decides whether the arena plays like Tank Trouble or like a
+hedge maze — a perfect maze is all dead ends with nowhere to circle.
+
+**Shells march the lattice** (`tanks/ballistics.ts`), they do not integrate. Three
+things in that file are load-bearing and all three were found by the tests:
+
+- The crossed axis is **assigned** to the grid line, not integrated onto it.
+  `pos + vel * ((line - pos) / vel)` does not land exactly on `line`, and the
+  residue accumulates until a shell sits a hair past a wall and walks out of the
+  arena.
+- The *un*-crossed axis is clamped so it cannot slip past its own next line at a
+  corner, for the same reason.
+- The crossing test is `t <= remaining`, not `<`. A shell landing exactly on a
+  line as the tick runs out would otherwise arrive untested, and the next march —
+  which treats "sitting on a line" as meaning the next one is a full cell away —
+  skips that wall entirely.
+
+**The maze is never in the snapshot.** It is deterministic from `(matchSeed,
+round)`, so the snapshot carries `az`/`aw`/`ah` and the client regenerates and
+memoises. A mid-round joiner gets the arena from the first frame they receive.
+
+Tank-vs-tank shoving is the one place prediction is not exact — the predictor
+only knows the others as of the last snapshot. `PositionSmoother` absorbs it;
+don't add rollback for a shove.
+
+### Gravity Guy specifics
+
+**Everyone runs right at the same speed**, and `speedAt(distance, pace)` is a
+pure function of distance rather than of anyone's input. That single decision
+buys a shared camera, nobody off screen, no falling behind, and a client that can
+extrapolate x exactly. Don't make run speed per-player.
+
+Vertical motion depends only on your own body, your own button and static
+geometry, so prediction is genuinely exact here — expect corrections to be
+invisible, and treat a visible one as a bug.
+
+`GRAVITY` is deliberately enormous (a full-height crossing takes ~0.29 s). At
+gentle gravity a flip is a swan dive, every gap has to be telegraphed most of a
+screen ahead, and the game stops being about reflexes.
+
+**Chunks are ASCII art** (`gravity/chunks.ts`) on a 7×8 tile grid, so editing the
+level design is editing the picture. One invariant makes assembly safe and
+`validateChunk` enforces it: *the first and last column of every chunk are a solid
+ceiling and floor with clear air between*. That is the whole seam rule — any
+chunk may follow any other, and pairwise entry/exit matching buys nothing.
+Inside a chunk, a floor gap and a ceiling gap never overlap and always have a
+both-solid column between them.
+
+`track.test.ts` runs a greedy bot — one tick of lookahead on both futures, no
+knowledge of the layout — over every seed and pace. If that bot cannot finish, a
+person cannot either, and a new chunk that breaks is caught immediately.
 
 ### Skribbl specifics
 

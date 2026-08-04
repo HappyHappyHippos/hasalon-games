@@ -8,9 +8,11 @@
   "exports": {
     ".": "./src/index.ts",
     "./achtung": "./src/games/achtung/index.ts",
+    "./gravity": "./src/games/gravity/index.ts",
     "./gunmayhem": "./src/games/gunmayhem/index.ts",
     "./memes": "./src/games/memes/index.ts",
-    "./skribbl": "./src/games/skribbl/index.ts"
+    "./skribbl": "./src/games/skribbl/index.ts",
+    "./tanks": "./src/games/tanks/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit"

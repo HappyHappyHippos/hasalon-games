@@ -209,6 +209,55 @@ class Sfx {
     this.tone({ freq: 300, to: 60, duration: 0.35, gain: 0.2, type: 'sawtooth' });
   }
 
+  // -------------------------------------------------------------------------
+  // Tank Trouble
+  // -------------------------------------------------------------------------
+
+  /** A tank's main gun: short, blunt, and lower than Gun Mayhem's pistol. */
+  tankFire(heavy = false): void {
+    this.tone({
+      freq: heavy ? 220 : 320,
+      to: heavy ? 50 : 90,
+      duration: heavy ? 0.2 : 0.13,
+      gain: 0.16,
+      type: 'sawtooth',
+    });
+    this.burst(heavy ? 0.16 : 0.09, 0.14, 1800, 300);
+  }
+
+  /**
+   * A wall bounce.
+   *
+   * Very quiet and very short on purpose: with six shells in the air and six
+   * bounces each, this fires dozens of times a second in a busy round, and
+   * anything with a tail turns the arena into a wall of noise. The renderer
+   * additionally caps how many it plays per frame.
+   */
+  ricochet(): void {
+    this.tone({ freq: 1400, to: 2200, duration: 0.035, gain: 0.05, type: 'square' });
+  }
+
+  // -------------------------------------------------------------------------
+  // Gravity Guy
+  // -------------------------------------------------------------------------
+
+  /** The gravity flip — a swoop whose direction follows the one you flipped to. */
+  flip(down = true): void {
+    this.tone({
+      freq: down ? 700 : 300,
+      to: down ? 300 : 700,
+      duration: 0.14,
+      gain: 0.11,
+      type: 'triangle',
+    });
+  }
+
+  /** Running into a wall. Blunter and shorter than `crash`. */
+  crush(): void {
+    this.tone({ freq: 180, to: 45, duration: 0.22, gain: 0.18, type: 'square' });
+    this.burst(0.16, 0.16, 900, 120);
+  }
+
   /**
    * The title sting under the intro splash.
    *

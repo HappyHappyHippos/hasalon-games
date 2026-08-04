@@ -46,6 +46,10 @@ const TRACKS: Record<MusicTrack, string> = {
   gunmayhem: '/music/gunmayhem.mp3',
   achtung: '/music/achtung.mp3',
   memes: '/music/lobby.mp3',
+  // Placeholders until tracks are sourced. Silence would read as the codec bug
+  // above all over again, so both point at something that definitely plays.
+  tanks: '/music/gunmayhem.mp3',
+  gravity: '/music/achtung.mp3',
   // Deliberately the same file as the lobby. The swing bed is exactly right
   // under a drawing game — unhurried, and it does not fight a room full of
   // people talking. `play` notices the url is unchanged and lets it keep

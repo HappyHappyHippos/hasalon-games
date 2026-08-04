@@ -421,6 +421,20 @@ class GameSocket {
           effects: p.fx,
         }));
         break;
+      case 'tanks':
+        players = snap.players.map((p) => ({
+          seat: p.s,
+          score: p.p,
+          alive: p.al === 1,
+        }));
+        break;
+      case 'gravity':
+        players = snap.players.map((p) => ({
+          seat: p.s,
+          score: p.p,
+          alive: p.al === 1,
+        }));
+        break;
       case 'gunmayhem':
         players = snap.players.map((p) => ({
           seat: p.s,
