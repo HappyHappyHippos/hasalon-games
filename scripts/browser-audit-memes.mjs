@@ -84,7 +84,7 @@ try {
     platform: 'iPhone',
   });
   await call('Page.addScriptToEvaluateOnNewDocument', {
-    source: `Object.defineProperty(navigator, 'standalone', { configurable: true, get: () => true });`,
+    source: `Object.defineProperty(navigator, 'virtualKeyboard', { configurable: true, value: { overlaysContent: false } });`,
   });
   await call('Page.reload', { ignoreCache: true });
   await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
@@ -93,6 +93,23 @@ try {
     if (await evaluate(`typeof window.mgStore !== 'undefined'`)) break;
     await sleep(100);
   }
+  const install = await screenshot('install-iphone-portrait');
+  const installAudit = await evaluate(`(() => {
+    const dialog = document.querySelector('.installprompt');
+    const share = document.querySelector('.installprompt__share-demo svg');
+    const home = document.querySelector('.installprompt__home-demo svg');
+    return {
+      present: !!dialog,
+      steps: document.querySelectorAll('.installprompt__steps li').length,
+      sharePaths: share?.querySelectorAll('path').length ?? 0,
+      homeIcon: !!home?.querySelector('rect'),
+      benefitsFullscreen: dialog?.textContent.includes('Safari') ?? false,
+      keyboardOverlays: navigator.virtualKeyboard?.overlaysContent ?? false,
+      appFixed: getComputedStyle(document.querySelector('.app')).position,
+    };
+  })()`);
+  await evaluate(`document.querySelector('.installprompt .btn')?.click()`);
+  await sleep(100);
   await evaluate(`localStorage.setItem('mg.lang','en'); window.mgStore.setState({ lang: 'en' })`);
 
   const room = {
@@ -237,6 +254,7 @@ try {
       playerWidth: Math.round(document.querySelector('.person:not(.person--self)').getBoundingClientRect().width),
       arrowDirection: getComputedStyle(document.querySelector('.person--self .appearance__arrows')).flexDirection,
       gameExplanationPresent: !!document.querySelector('.controls-hint'),
+      pickerHeadingPresent: !!document.querySelector('.lobby__choice > .eyebrow'),
       micNotes: [...document.querySelectorAll('.voicebar p')].map((element) => element.textContent),
     };
   })()`);
@@ -262,6 +280,26 @@ try {
     };
   })()`);
 
+  const gunPlayRoom = { ...gunLobbyRoom, phase: 'playing' };
+  const gunHud = {
+    phase: 'playing', round: 1, countdown: 0,
+    players: [0, 1].map((seat) => ({ seat, score: 0, alive: true, stocks: 4, damage: seat * 12, weapon: 'pistol', ammo: 8, bombs: 2 })),
+  };
+  await evaluate(`window.mgStore.setState(${JSON.stringify({ room: gunPlayRoom, playerId: 'p0', hud: gunHud, net: { rtt: 54, jitter: 11, delay: 72 }, error: null })})`);
+  await sleep(300);
+  const pingLandscape = await screenshot('ping-landscape');
+  const pingAudit = await evaluate(`(() => {
+    const badge = document.querySelector('.netbadge');
+    const rect = badge?.getBoundingClientRect();
+    return {
+      text: badge?.textContent,
+      display: badge ? getComputedStyle(badge).display : 'missing',
+      fontSize: badge ? parseFloat(getComputedStyle(badge).fontSize) : 0,
+      insideViewport: !!rect && rect.left >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight,
+      bottomGap: rect ? innerHeight - rect.bottom : null,
+    };
+  })()`);
+
   const musicAudit = await evaluate(`Promise.all(['/music/lobby.mp3', '/music/gunmayhem.mp3', '/music/achtung.mp3', '/music/memes.mp3'].map((url) => new Promise((resolve) => {
     const audio = new Audio(url);
     const finish = (ok) => resolve({ url, ok, duration: Number.isFinite(audio.duration) ? audio.duration : null });
@@ -271,21 +309,29 @@ try {
     audio.load();
   })))`);
 
-  await evaluate(`window.mgStore.setState(${JSON.stringify({ room, hud: writingHud, memesPrivate: privateView })})`);
+  await evaluate(`window.mgStore.setState(${JSON.stringify({ room, hud: writingHud, memesPrivate: privateView, error: null })})`);
   await sleep(500);
   const landscape = await screenshot('writing-landscape');
   const landscapeAudit = await evaluate(`(() => {
     const caption = document.querySelector('.meme-card__caption--editable');
     const handle = caption?.querySelector('.meme-card__resize');
     const fields = document.querySelector('.memes__fields');
+    const preview = document.querySelector('.memes__preview');
+    const card = document.querySelector('.memes__preview .meme-card');
     const before = parseFloat(caption?.style.width ?? '0');
     handle?.focus();
     handle?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
     const handleRect = handle?.getBoundingClientRect();
+    const previewRect = preview?.getBoundingClientRect();
+    const cardRect = card?.getBoundingClientRect();
     return new Promise((resolve) => requestAnimationFrame(() => resolve({
       overflowX: document.documentElement.scrollWidth > innerWidth,
       overflowY: document.documentElement.scrollHeight > innerHeight,
       fieldsScrollable: !!fields && fields.scrollHeight > fields.clientHeight,
+      fieldsPaddingBlock: fields ? [getComputedStyle(fields).paddingTop, getComputedStyle(fields).paddingBottom] : [],
+      cardFitsPreview: !!previewRect && !!cardRect && cardRect.top >= previewRect.top && cardRect.bottom <= previewRect.bottom,
+      cardHeight: cardRect?.height ?? 0,
+      previewHeight: previewRect?.height ?? 0,
       resizeTarget: handleRect ? { width: handleRect.width, height: handleRect.height } : null,
       resized: { before, after: parseFloat(caption?.style.width ?? '0') },
     })));
@@ -309,6 +355,8 @@ try {
         const paper = document.querySelector('.skribbl__paper').getBoundingClientRect();
         return Math.abs(paper.top - rects[0].top) < 1 && Math.abs(paper.bottom - rects[0].bottom) < 1;
       })(),
+      fillPresent: [...document.querySelectorAll('.skribbl__act')].some((button) => button.textContent.trim() === 'Fill'),
+      actionTargets: [...document.querySelectorAll('.skribbl__act')].map((button) => ({ width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height })),
       rects,
     };
   })()`);
@@ -329,7 +377,7 @@ try {
     };
   })()`);
 
-  console.log(JSON.stringify({ output, screenshots: { lobby, boxArt, skribblArt, memesArt, writing, voting, result, matchOver, skribbl, lobbyLandscape, settingsLandscape, landscape, skribblLandscape, options }, lobbyAudit, writingAudit, dragAudit, animatedAudit, votingAudit, downloadAudit, matchOverAudit, skribblAudit, lobbyLandscapeAudit, settingsLandscapeAudit, musicAudit, landscapeAudit, skribblLandscapeAudit, optionsAudit, browserErrors }, null, 2));
+  console.log(JSON.stringify({ output, screenshots: { install, lobby, boxArt, skribblArt, memesArt, writing, voting, result, matchOver, skribbl, lobbyLandscape, settingsLandscape, pingLandscape, landscape, skribblLandscape, options }, installAudit, lobbyAudit, writingAudit, dragAudit, animatedAudit, votingAudit, downloadAudit, matchOverAudit, skribblAudit, lobbyLandscapeAudit, settingsLandscapeAudit, pingAudit, musicAudit, landscapeAudit, skribblLandscapeAudit, optionsAudit, browserErrors }, null, 2));
 } finally {
   cdp?.close();
   edge.kill();

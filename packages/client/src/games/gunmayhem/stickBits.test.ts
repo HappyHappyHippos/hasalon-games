@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { IN_DOWN, IN_JUMP, IN_LEFT, IN_RIGHT } from '@mg/shared/gunmayhem';
-import { JUMP_OFF, JUMP_ON, newStickState, stickToBits } from './stickBits';
+import { HOLD_REJUMP_MS, JUMP_OFF, JUMP_ON, REARM_RELEASE_MS, newStickState, stickToBits } from './stickBits';
 
 /** Reads a whole gesture and returns the bits at each step. */
 function drag(points: Array<[number, number]>, now = 0): number[] {
@@ -64,12 +64,14 @@ describe('stickToBits', () => {
     const state = newStickState();
     // Press down
     expect(stickToBits({ x: 0, y: -1 }, state, 0) & IN_JUMP).toBeTruthy();
-    // Held for 400ms: still outputting jump
-    expect(stickToBits({ x: 0, y: -1 }, state, 400) & IN_JUMP).toBeTruthy();
-    // Held past HOLD_REJUMP_MS (500ms): drops the bit
-    expect(stickToBits({ x: 0, y: -1 }, state, 525) & IN_JUMP).toBeFalsy();
-    // Past HOLD_REJUMP_MS + REARM_RELEASE_MS (550ms): raises the bit again
-    expect(stickToBits({ x: 0, y: -1 }, state, 560) & IN_JUMP).toBeTruthy();
+    // Just before the re-arm window: still outputting jump.
+    expect(stickToBits({ x: 0, y: -1 }, state, HOLD_REJUMP_MS - 1) & IN_JUMP).toBeTruthy();
+    // The short release creates the rising edge for the air jump.
+    expect(stickToBits({ x: 0, y: -1 }, state, HOLD_REJUMP_MS + 10) & IN_JUMP).toBeFalsy();
+    expect(
+      stickToBits({ x: 0, y: -1 }, state, HOLD_REJUMP_MS + REARM_RELEASE_MS + 10)
+        & IN_JUMP,
+    ).toBeTruthy();
   });
 
   it('never asks to jump and drop at once', () => {

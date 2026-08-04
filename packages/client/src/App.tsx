@@ -13,6 +13,7 @@ import { OptionsMenu } from './ui/OptionsMenu';
 import { PauseButton } from './ui/PauseButton';
 import { Toast } from './ui/Toast';
 import { useVoiceMesh } from './ui/useVoice';
+import { enableKeyboardOverlay } from './ui/mobileViewport';
 
 export function App(): JSX.Element {
   const room = useStore((s) => s.room);
@@ -23,6 +24,8 @@ export function App(): JSX.Element {
   // open no microphone; the stable path lets a later mic use replaceTrack
   // without renegotiating at the exact moment a phone is changing state.
   useVoiceMesh();
+
+  useEffect(() => enableKeyboardOverlay(), []);
 
   // The document element, not a wrapper div: `dir` has to be on an ancestor of
   // everything, and that includes the portal-free overlays and the browser's own

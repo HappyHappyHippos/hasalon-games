@@ -117,10 +117,12 @@ const he = {
   fullscreenInstallHint: 'כדי שתוכלו להגדיל את המסך. ב־iPhone: שתפו ← «הוסף למסך הבית», ופתחו משם למסך מלא.',
 
   // First-visit iPhone install prompt.
-  installTitle: 'תוסיפו את הסלון למסך הבית, זה בשבילכם',
-  installBody:
-    'כדי לשחק במסך מלא בלי סרגלי ספארי — הקישו על כפתור השיתוף ⎋ בסרגל, ואז «הוסף למסך הבית».',
-  installDismiss: 'הבנתי די להפריע לי',
+  installTitle: 'יותר מקום למשחק באייפון',
+  installBenefit:
+    'הוסיפו את הסלון למסך הבית ותקבלו מסך משחק גדול יותר בלי סרגלי Safari, כפתורים נוחים יותר וכניסה מהירה בפעם הבאה.',
+  installStepShare: 'בסרגל של Safari, לחצו על כפתור השיתוף שנראה בדיוק כך:',
+  installStepHome: 'בתפריט שנפתח בחרו „הוספה למסך הבית”, ואז פתחו את הסלון מהסמל החדש.',
+  installDismiss: 'הבנתי — אוסיף למסך הבית',
 
   // Touch controls. Short on purpose — they are printed inside the buttons.
   padFire: 'ירי',
@@ -299,6 +301,7 @@ const he = {
   skribblEraser: 'מחק',
   skribblUndo: 'בטלו',
   skribblClear: 'נקו הכל',
+  skribblFill: 'מילוי',
   // Settings
   skribblWordLanguage: 'שפת המילים',
   skribblDrawTime: 'זמן ציור',
@@ -458,10 +461,12 @@ const en: Dict = {
   fullscreenInstallHint: 'On iPhone: Share → "Add to Home Screen", then open it from there.',
 
   // First-visit iPhone install prompt.
-  installTitle: 'Add הסלון to your Home Screen',
-  installBody:
-    'To play fullscreen with no Safari bars in the way: tap the Share button ⎋ in the toolbar, then "Add to Home Screen".',
-  installDismiss: 'Got it',
+  installTitle: 'Give the game more room on iPhone',
+  installBenefit:
+    'Add הסלון to your Home Screen for a larger game area without Safari bars, easier controls, and one-tap access next time.',
+  installStepShare: 'In Safari’s toolbar, tap the Share button that looks exactly like this:',
+  installStepHome: 'Choose “Add to Home Screen”, then open הסלון from its new icon.',
+  installDismiss: 'Got it — I’ll add it',
 
   padFire: 'FIRE',
   padBomb: 'BOMB',
@@ -624,6 +629,7 @@ const en: Dict = {
   skribblEraser: 'Eraser',
   skribblUndo: 'Undo',
   skribblClear: 'Clear',
+  skribblFill: 'Fill',
   // Settings
   skribblWordLanguage: 'Word language',
   skribblDrawTime: 'Drawing time',

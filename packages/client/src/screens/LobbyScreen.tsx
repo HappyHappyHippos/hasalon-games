@@ -178,7 +178,6 @@ export function LobbyScreen(): JSX.Element {
           </section>
 
           <section className="lobby__choice">
-            <h2 className="eyebrow">{isHost ? t.pickAGame : t.hostIsPicking}</h2>
             <GamePicker
               selected={room.gameId}
               canChoose={isHost}

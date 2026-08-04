@@ -133,16 +133,18 @@ export function Composer({ view }: { view: MemesPrivate }): JSX.Element {
             </div>
           );
         })}
-        {!view.submitted && texts.length < MAX_CAPTION_BOXES && (
-          <Button full onClick={addBox}>{t.memesAddCaption}</Button>
-        )}
         {!view.submitted && (
-          <Button variant="primary" size="lg" full disabled={!usable} onClick={() => {
-            senderRef.current?.flush();
-            sendSubmit(texts, positions);
-          }}>
-            {t.memesSubmit}
-          </Button>
+          <div className="memes__field-actions">
+            {texts.length < MAX_CAPTION_BOXES && (
+              <Button full onClick={addBox}>{t.memesAddCaption}</Button>
+            )}
+            <Button variant="primary" size="lg" full disabled={!usable} onClick={() => {
+              senderRef.current?.flush();
+              sendSubmit(texts, positions);
+            }}>
+              {t.memesSubmit}
+            </Button>
+          </div>
         )}
       </div>
     </section>

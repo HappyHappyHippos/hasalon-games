@@ -7,6 +7,7 @@ import {
   type ClientMessage,
   type ServerMessage,
 } from '@mg/shared';
+import { OP_CLEAR, OP_FILL } from '@mg/shared/skribbl';
 import { createApp, type App } from './app';
 
 /**
@@ -507,6 +508,32 @@ describe('match', () => {
       (m) => m.t === 'snapshot' && m.snap.game === 'skribbl' && m.snap.ink.length > 0,
     );
     expect(inked).toBe(true);
+
+    const filledPromise = guest!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+        m.t === 'snapshot' && m.snap.game === 'skribbl' && m.snap.ink.includes(OP_FILL),
+    );
+    host!.send({ t: 'input', i: { k: 'fill', c: 4 } });
+    const filled = await filledPromise;
+    if (filled.snap.game !== 'skribbl') throw new Error('wrong game');
+    expect(filled.snap.ink).toContain(OP_FILL);
+
+    const undonePromise = guest!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+        m.t === 'snapshot' && m.snap.game === 'skribbl' && m.snap.ink[0] === OP_CLEAR,
+    );
+    host!.send({ t: 'input', i: { k: 'undo' } });
+    const undone = await undonePromise;
+    if (undone.snap.game !== 'skribbl') throw new Error('wrong game');
+    expect(undone.snap.ink.slice(1, 3)).not.toEqual([OP_FILL, 4]);
+
+    const clearedPromise = guest!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+        m.t === 'snapshot' && m.snap.game === 'skribbl' && m.snap.ink.length === 1
+          && m.snap.ink[0] === OP_CLEAR,
+    );
+    host!.send({ t: 'input', i: { k: 'clear' } });
+    await clearedPromise;
   });
 
   it('scores a correct Skribbl guess and refuses to score it twice', async () => {

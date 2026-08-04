@@ -5,6 +5,7 @@ import {
   INK_COLORS,
   OP_BEGIN,
   OP_CLEAR,
+  OP_FILL,
   OP_TO,
 } from '@mg/shared/skribbl';
 import { CanvasStage } from '../../game/CanvasStage';
@@ -94,6 +95,11 @@ export class InkSurface {
       if (op === OP_CLEAR) {
         this.clear();
         i += 1;
+      } else if (op === OP_FILL) {
+        const color = INK_COLORS[ops[i + 1]!] ?? INK_COLORS[0]!;
+        this.ink.fillStyle = color;
+        this.ink.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        i += 2;
       } else if (op === OP_BEGIN) {
         const color = INK_COLORS[ops[i + 1]!] ?? INK_COLORS[0]!;
         const size = BRUSH_SIZES[ops[i + 2]!] ?? BRUSH_SIZES[1]!;

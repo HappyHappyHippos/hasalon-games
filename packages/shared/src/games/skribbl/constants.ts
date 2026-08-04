@@ -76,6 +76,9 @@ export const OP_TO = 1;
 /** `OP_CLEAR` — wipe everything drawn so far. */
 export const OP_CLEAR = 2;
 
+/** `OP_FILL, colour` — cover the whole sheet with one palette colour. */
+export const OP_FILL = 3;
+
 // ---------------------------------------------------------------------------
 // Pacing
 // ---------------------------------------------------------------------------
