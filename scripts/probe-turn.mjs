@@ -55,7 +55,7 @@ const edge = spawn(
     '--use-fake-ui-for-media-stream',
     '--remote-debugging-port=9342',
     `--user-data-dir=${profile}`,
-    target,
+    'about:blank',
   ],
   { stdio: 'ignore', windowsHide: true },
 );
@@ -74,8 +74,12 @@ async function waitForHttp(url) {
 
 let cdp;
 try {
-  const targets = await (await waitForHttp('http://127.0.0.1:9342/json/list')).json();
-  const page = targets.find((item) => item.type === 'page');
+  let page = null;
+  for (let attempt = 0; attempt < 100 && !page; attempt += 1) {
+    const targets = await (await waitForHttp('http://127.0.0.1:9342/json/list')).json();
+    page = targets.find((item) => item.type === 'page' && item.url === 'about:blank');
+    if (!page) await sleep(100);
+  }
   if (!page) throw new Error('No browser page for TURN probe');
   cdp = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => {
@@ -105,7 +109,12 @@ try {
       const iceServers = ${JSON.stringify(config.iceServers)};
       const a = new RTCPeerConnection({ iceServers, iceTransportPolicy: 'relay' });
       const b = new RTCPeerConnection({ iceServers, iceTransportPolicy: 'relay' });
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const audioContext = new AudioContext();
+      const oscillator = audioContext.createOscillator();
+      const destination = audioContext.createMediaStreamDestination();
+      oscillator.connect(destination);
+      oscillator.start();
+      const stream = destination.stream;
       a.addTrack(stream.getAudioTracks()[0], stream);
       b.addTransceiver('audio', { direction: 'recvonly' });
       a.onicecandidate = ({ candidate }) => candidate && b.addIceCandidate(candidate);
@@ -138,6 +147,8 @@ try {
         outboundBytes,
       };
       stream.getTracks().forEach((track) => track.stop());
+      oscillator.stop();
+      await audioContext.close();
       a.close();
       b.close();
       return answer;
