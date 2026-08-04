@@ -49,6 +49,9 @@ npm run build
 
 ```bash
 npm run smoke        # two real WS clients against a running deploy
+npm run audit:voice  # two real local browsers with fake microphones and RTP assertions
+npm run audit:voice -- https://hasalon-dev-dev.up.railway.app  # same audit against dev
+npm run probe:turn -- https://hasalon-dev-dev.up.railway.app  # relay-only deployed probe
 ```
 
 `npm start` runs the production build (server + built client on one port).
@@ -167,10 +170,17 @@ far past a family game) and set both on **every** environment, `dev` included:
 railway variables --set CF_TURN_KEY_ID=xxx --set CF_TURN_KEY_TOKEN=yyy
 ```
 
-Without them `GET /ice` falls back to public STUN plus the free Open Relay
-Project TURN servers on TCP/TLS 443, so voice still works — just on a
-best-effort third party rather than one with an SLA. `curl <host>/ice` shows
-which of the two you are getting.
+Without them the authenticated `GET /ice` endpoint returns public STUN only and
+the voice UI reports that relay coverage is unavailable. Direct calls may still
+work on ordinary home networks, but cellular/restrictive Wi-Fi is not considered
+supported until Cloudflare returns `provider: "cloudflare"`. Anonymous public
+TURN credentials are deliberately not used: intermittent shared infrastructure
+made a broken deployment look healthy.
+
+`/ice` requires the current room code, player id and resume token in request
+headers. Never paste the long-lived Cloudflare token into chat, source, logs or a
+client bundle; set it directly in Railway. Use separate TURN keys for dev and
+production, and configure production only after the dev device matrix passes.
 
 > **Moving to Israel.** Every player is in Israel and Railway has no Middle East
 > region — EU West measures ~114 ms median round trip, against ~10–20 ms for a

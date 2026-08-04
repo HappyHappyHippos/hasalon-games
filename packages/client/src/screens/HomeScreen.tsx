@@ -1,4 +1,4 @@
-import { useState, type FormEvent, type JSX } from 'react';
+import { useEffect, useState, type FormEvent, type JSX } from 'react';
 import { ROOM_CODE_LENGTH, isValidRoomCode } from '@mg/shared';
 import { useStore } from '../store';
 import { useT } from '../strings';
@@ -8,6 +8,8 @@ import { AppearancePicker } from '../ui/AppearancePicker';
 import { Button } from '../ui/Button';
 import { Logo } from '../ui/Logo';
 import { CLIENT_GAMES, CLIENT_GAME_IDS } from '../games/registry';
+import { isIOSDevice } from '../ui/mobileViewport';
+import { isStandalone } from '../ui/useFullscreen';
 
 export function HomeScreen(): JSX.Element {
   const identity = useStore((s) => s.identity);
@@ -20,6 +22,7 @@ export function HomeScreen(): JSX.Element {
   // Null means "not chosen yet", so an invite code arriving after mount still
   // opens the join form without stranding the Back button.
   const [mode, setMode] = useState<'idle' | 'join' | null>(null);
+  const [codeCopied, setCodeCopied] = useState(false);
   const effectiveMode = mode ?? (pendingCode ? 'join' : 'idle');
 
   const name = identity.name.trim();
@@ -34,6 +37,21 @@ export function HomeScreen(): JSX.Element {
     event.preventDefault();
     if (!name || !codeReady) return;
     socket.join(pendingCode, { ...identity, name });
+  };
+
+  useEffect(() => {
+    if (!codeCopied) return;
+    const timer = window.setTimeout(() => setCodeCopied(false), 1800);
+    return () => window.clearTimeout(timer);
+  }, [codeCopied]);
+
+  const copyPendingCode = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(pendingCode);
+      setCodeCopied(true);
+    } catch {
+      window.prompt(t.copyRoomCode, pendingCode);
+    }
   };
 
   return (
@@ -98,6 +116,15 @@ export function HomeScreen(): JSX.Element {
                   autoFocus
                 />
               </label>
+              {codeReady && isIOSDevice() && !isStandalone() && (
+                <aside className="invite-app-hint">
+                  <strong>{t.inviteAppTitle}</strong>
+                  <p>{t.inviteAppBody(pendingCode)}</p>
+                  <Button size="sm" full onClick={() => void copyPendingCode()}>
+                    {codeCopied ? t.copied : t.copyRoomCode}
+                  </Button>
+                </aside>
+              )}
               <Button
                 type="submit"
                 variant="primary"

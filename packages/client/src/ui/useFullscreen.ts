@@ -90,6 +90,11 @@ export async function exitFullscreen(): Promise<void> {
   } catch {
     // Already gone.
   }
+  try {
+    screen.orientation.unlock();
+  } catch {
+    // Unsupported, or the browser already unlocked on fullscreen exit.
+  }
 }
 
 /** Toggle, for the button in the HUD. */

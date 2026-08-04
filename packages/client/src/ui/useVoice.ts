@@ -10,6 +10,8 @@ const EMPTY: VoiceSnapshot = {
   deaf: false,
   muted: false,
   error: null,
+  relay: 'loading',
+  playbackBlocked: false,
   peers: {},
   speaking: [],
 };
@@ -17,7 +19,6 @@ const EMPTY: VoiceSnapshot = {
 export function useVoice(): VoiceSnapshot {
   return useSyncExternalStore(voice.subscribe, voice.getSnapshot, () => EMPTY);
 }
-
 /** Keep the prompt-free receive mesh matched to the broadcast room flags. */
 export function useVoiceMesh(): void {
   const room = useStore((s) => s.room);
@@ -39,10 +40,10 @@ export function useVoiceMesh(): void {
       : '';
 
   useEffect(() => {
-    if (status === 'closed') {
-      voice.clearPeers();
-      return;
-    }
+    // A signalling reconnect must not tear down healthy WebRTC media. Existing
+    // calls keep flowing without the socket; on resume, the room echo reconciles
+    // membership and any failed ICE path restarts in place.
+    if (status === 'closed') return;
     if (!playerId || status !== 'open') return;
     // `prepare` opens no device and creates no AudioContext.
     voice.prepare(playerId);

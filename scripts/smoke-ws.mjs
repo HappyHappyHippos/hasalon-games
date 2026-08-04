@@ -420,6 +420,102 @@ reloaded.send(JSON.stringify({ t: 'leave' }));
 host.close();
 reloaded.close();
 
+// ---------------------------------------------------------------------------
+// Meme caption geometry over the real wire
+// ---------------------------------------------------------------------------
+
+const memeHost = await connect('meme-host');
+memeHost.send(JSON.stringify({ t: 'create', v: PROTOCOL_VERSION, identity: identity('MemeHost', 4) }));
+const memeWelcome = await next(memeHost, (m) => m.t === 'welcome', 'meme host welcome');
+const memeCode = memeWelcome.room.code;
+const memeGuest = await connect('meme-guest');
+memeGuest.send(JSON.stringify({ t: 'join', v: PROTOCOL_VERSION, code: memeCode, identity: identity('MemeGuest', 5) }));
+await Promise.all([
+  next(memeGuest, (m) => m.t === 'welcome', 'meme guest welcome'),
+  next(memeHost, (m) => m.t === 'room' && m.room.players.length === 2, 'meme host sees guest'),
+]);
+
+memeHost.send(JSON.stringify({ t: 'game', gameId: 'memes' }));
+await next(memeHost, (m) => m.t === 'room' && m.room.gameId === 'memes', 'Meme Machine selected');
+memeHost.send(JSON.stringify({ t: 'ready', ready: true }));
+memeGuest.send(JSON.stringify({ t: 'ready', ready: true }));
+await next(memeHost, (m) => m.t === 'room' && m.room.players.every((player) => player.ready), 'meme players ready');
+
+const memeHostPrivate = next(memeHost, (m) => m.t === 'private' && !!m.data?.templateId, 'meme host private template');
+const memeStarted = next(memeHost, (m) => m.t === 'matchStarted', 'meme match started');
+memeHost.send(JSON.stringify({ t: 'start' }));
+await Promise.all([memeStarted, memeHostPrivate]);
+await next(
+  memeHost,
+  (m) => m.t === 'snapshot' && m.snap.game === 'memes' && m.snap.phase === 'writing',
+  'meme writing phase',
+);
+
+const resized = { x: 0.11, y: 0.13, w: 0.31, h: 0.22 };
+memeHost.send(JSON.stringify({
+  t: 'input',
+  i: { k: 'draft', texts: ['resize-smoke'], p: [resized] },
+}));
+const drafted = await next(
+  memeHost,
+  (m) => m.t === 'private' && m.data?.draft?.[0] === 'resize-smoke',
+  'resized meme draft echo',
+);
+if (drafted.data.positions?.[0]?.w !== resized.w || drafted.data.positions?.[0]?.h !== resized.h) {
+  throw new Error('resized meme geometry did not survive the server draft path');
+}
+
+// Reconnection must restore the private geometry before composing continues.
+memeHost.close();
+const memeReloaded = await connect('meme-host-reloaded');
+const memeResumeWelcome = next(memeReloaded, (m) => m.t === 'welcome', 'meme resume welcome');
+const restoredPrivate = next(
+  memeReloaded,
+  (m) => m.t === 'private' && m.data?.draft?.[0] === 'resize-smoke',
+  'meme restored private geometry',
+);
+memeReloaded.send(JSON.stringify({
+  t: 'resume',
+  v: PROTOCOL_VERSION,
+  code: memeCode,
+  playerId: memeWelcome.playerId,
+  token: memeWelcome.token,
+}));
+const [, restored] = await Promise.all([memeResumeWelcome, restoredPrivate]);
+if (restored.data.positions?.[0]?.w !== resized.w || restored.data.positions?.[0]?.h !== resized.h) {
+  throw new Error('resized meme geometry was lost across reconnect');
+}
+
+const hostSubmitted = next(
+  memeReloaded,
+  (m) => m.t === 'private' && m.data?.submitted === true,
+  'meme host submission',
+);
+memeReloaded.send(JSON.stringify({
+  t: 'input',
+  i: { k: 'submit', texts: ['resize-smoke'], p: [resized] },
+}));
+await hostSubmitted;
+const revealedStage = next(
+  memeReloaded,
+  (m) => m.t === 'snapshot' && m.snap.game === 'memes' && m.snap.phase === 'reveal' && !!m.snap.stage,
+  'resized meme reveal',
+);
+memeGuest.send(JSON.stringify({
+  t: 'input',
+  i: { k: 'submit', texts: ['guest-smoke'], p: [resized] },
+}));
+const revealed = await revealedStage;
+if (revealed.snap.stage.positions?.[0]?.w !== resized.w || revealed.snap.stage.positions?.[0]?.h !== resized.h) {
+  throw new Error(`resized meme geometry did not reach the shared stage: ${JSON.stringify(revealed.snap.stage)}`);
+}
+console.log('  ✓ resized Meme caption survived draft, reconnect, and reveal');
+
+memeReloaded.send(JSON.stringify({ t: 'leave' }));
+memeGuest.send(JSON.stringify({ t: 'leave' }));
+memeReloaded.close();
+memeGuest.close();
+
 console.log(`\nPASS — two clients shared a room over ${wsUrl.startsWith('wss') ? 'wss' : 'ws'}.`);
 if (rtt > 150) {
   console.log(`NOTE: median ${rtt.toFixed(0)}ms is high for a 60 Hz fighter. Check the deploy region.`);

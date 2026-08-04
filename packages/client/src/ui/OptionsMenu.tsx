@@ -9,7 +9,7 @@ import { Button } from './Button';
 import { Toggle } from './Toggle';
 import { useHasTouch } from './useTouchControls';
 import { useVoice } from './useVoice';
-import { isStandalone } from './useFullscreen';
+import { exitFullscreen, isStandalone, useIsFullscreen } from './useFullscreen';
 import type { TouchControlsMode } from '../store';
 import { LANGS, type Dict, type Lang } from '../i18n';
 import { isIOSDevice } from './mobileViewport';
@@ -52,6 +52,7 @@ export function OptionsMenu(): JSX.Element {
   const setLang = useStore((s) => s.setLang);
   const hasTouch = useHasTouch();
   const voice = useVoice();
+  const fullscreen = useIsFullscreen();
   const t = useT();
 
   // Escape is the reflex for "get this off my screen", and it should also be
@@ -157,27 +158,6 @@ export function OptionsMenu(): JSX.Element {
             />
           </label>
 
-          {/*
-            The lobby track is CC BY 4.0, so this credit is a licence condition
-            rather than a courtesy — and the options menu is where the licensor
-            asks for it. Remove it only alongside the track. See
-            `public/music/ATTRIBUTION.md`.
-          */}
-          <p className="muted small options__credit">
-            Hot Swing ·{' '}
-            <a href="https://incompetech.com/" target="_blank" rel="noreferrer noopener">
-              Kevin MacLeod
-            </a>{' '}
-            ·{' '}
-            <a
-              href="https://creativecommons.org/licenses/by/4.0/"
-              target="_blank"
-              rel="noreferrer noopener"
-            >
-              CC BY 4.0
-            </a>
-          </p>
-
           {voice.active && <VoicePeers />}
         </section>
 
@@ -207,6 +187,17 @@ export function OptionsMenu(): JSX.Element {
 
         <section className="options__section">
           <h3 className="eyebrow">{t.sectionControls}</h3>
+          {fullscreen && (
+            <Button
+              full
+              onClick={() => {
+                void exitFullscreen();
+                close();
+              }}
+            >
+              {t.exitFullscreen}
+            </Button>
+          )}
           <div className="options__choice">
             <span className="toggle__label">{t.onScreenControls}</span>
             <div className="options__segmented">
@@ -321,7 +312,7 @@ function VoicePeers(): JSX.Element | null {
   const t = useT();
 
   const peers = Object.entries(voice.peers);
-  if (peers.length === 0 && !isIOS()) return null;
+  if (peers.length === 0) return null;
 
   return (
     <div className="options__peers">
@@ -341,23 +332,6 @@ function VoicePeers(): JSX.Element | null {
           ))}
         </ul>
       )}
-      {/*
-        The settings half of "why can't I hear anyone": iOS routes WebRTC
-        playback through the ring/silent switch and the media volume, so a
-        perfectly connected peer can still be inaudible.
-      */}
-      {isIOS() && <p className="muted small">{t.voiceIosNote}</p>}
     </div>
   );
-}
-
-/**
- * Best-effort iOS detection, for a hint that is only true there.
- *
- * `navigator.platform` is deprecated but is still the only way to tell an iPad
- * on iPadOS 13+ from a Mac — it reports `MacIntel` either way, and only the
- * iPad has touch points. Wrong answers here cost a line of advice, nothing more.
- */
-function isIOS(): boolean {
-  return isIOSDevice();
 }

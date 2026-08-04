@@ -7,6 +7,7 @@ import {
   type ClientMessage,
   type ServerMessage,
 } from '@mg/shared';
+import { OP_CLEAR, OP_FILL } from '@mg/shared/skribbl';
 import { createApp, type App } from './app';
 
 /**
@@ -268,10 +269,48 @@ describe('lobby', () => {
     const client = await connect();
     client.send({
       t: 'create',
-      v: 15,
+      v: PROTOCOL_VERSION - 1,
       identity: { name: 'Old tab', colorIndex: 0, hat: 0, face: 0 },
     });
     expect((await client.next('error')).code).toBe('BAD_VERSION');
+  });
+
+  it('serves ICE credentials only to an authenticated room member', async () => {
+    const host = await connect();
+    host.send({
+      t: 'create',
+      v: PROTOCOL_VERSION,
+      identity: { name: 'Host', colorIndex: 0, hat: 0, face: 0 },
+    });
+    await host.next('welcome');
+
+    const url = `http://127.0.0.1:${port}/ice`;
+    expect((await fetch(url)).status).toBe(401);
+    expect(
+      (
+        await fetch(url, {
+          headers: {
+            Authorization: 'Bearer wrong',
+            'X-Room-Code': host.code,
+            'X-Player-Id': host.playerId,
+          },
+        })
+      ).status,
+    ).toBe(401);
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${host.token}`,
+        'X-Room-Code': host.code,
+        'X-Player-Id': host.playerId,
+      },
+    });
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toMatchObject({
+      provider: expect.stringMatching(/^(cloudflare|stun-only)$/),
+      iceServers: expect.any(Array),
+    });
   });
 
   it('broadcasts listen opt-outs and safely coerces invalid values to false', async () => {
@@ -469,6 +508,32 @@ describe('match', () => {
       (m) => m.t === 'snapshot' && m.snap.game === 'skribbl' && m.snap.ink.length > 0,
     );
     expect(inked).toBe(true);
+
+    const filledPromise = guest!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+        m.t === 'snapshot' && m.snap.game === 'skribbl' && m.snap.ink.includes(OP_FILL),
+    );
+    host!.send({ t: 'input', i: { k: 'fill', c: 4 } });
+    const filled = await filledPromise;
+    if (filled.snap.game !== 'skribbl') throw new Error('wrong game');
+    expect(filled.snap.ink).toContain(OP_FILL);
+
+    const undonePromise = guest!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+        m.t === 'snapshot' && m.snap.game === 'skribbl' && m.snap.ink[0] === OP_CLEAR,
+    );
+    host!.send({ t: 'input', i: { k: 'undo' } });
+    const undone = await undonePromise;
+    if (undone.snap.game !== 'skribbl') throw new Error('wrong game');
+    expect(undone.snap.ink.slice(1, 3)).not.toEqual([OP_FILL, 4]);
+
+    const clearedPromise = guest!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+        m.t === 'snapshot' && m.snap.game === 'skribbl' && m.snap.ink.length === 1
+          && m.snap.ink[0] === OP_CLEAR,
+    );
+    host!.send({ t: 'input', i: { k: 'clear' } });
+    await clearedPromise;
   });
 
   it('scores a correct Skribbl guess and refuses to score it twice', async () => {
@@ -530,7 +595,11 @@ describe('match', () => {
         m.t === 'snapshot' && m.snap.game === 'memes' && m.snap.phase === 'writing',
     );
     const captions = clients.map((_, index) => `socket-secret-${index}`);
-    clients.forEach((client, index) => client.send({ t: 'input', i: { k: 'submit', a: captions[index]! } }));
+    const extras = clients.map((_, index) => `private-extra-${index}`);
+    clients.forEach((client, index) => client.send({
+      t: 'input',
+      i: { k: 'submit', texts: [captions[index]!, extras[index]!] },
+    }));
 
     const reveal = await guest!.waitFor(
       (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
@@ -539,12 +608,18 @@ describe('match', () => {
     if (reveal.snap.game !== 'memes' || !reveal.snap.stage) throw new Error('wrong game');
     expect(reveal.snap.stage.authorSeat).toBe(-1);
     const visibleCaption = reveal.snap.stage.texts[0];
+    const visibleTexts = new Set(reveal.snap.stage.texts);
 
     // This guest may know their own caption privately, and the current stage is
     // public. No other submitted text may occur anywhere in their received log.
     const seenByGuest = JSON.stringify(guest!.received);
     captions.forEach((caption, index) => {
       if (index !== 1 && caption !== visibleCaption) expect(seenByGuest).not.toContain(caption);
+    });
+    extras.forEach((caption, index) => {
+      if (index !== 1 && !visibleTexts.has(caption)) {
+        expect(seenByGuest).not.toContain(caption);
+      }
     });
   }, 15_000);
 
@@ -580,7 +655,10 @@ describe('match', () => {
       (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
         m.t === 'snapshot' && m.snap.game === 'memes' && m.snap.phase === 'writing',
     );
-    clients.forEach((client, index) => client.send({ t: 'input', i: { k: 'submit', a: `scored-caption-${index}` } }));
+    clients.forEach((client, index) => client.send({
+      t: 'input',
+      i: { k: 'submit', texts: [`scored-caption-${index}`] },
+    }));
 
     for (let entryIndex = 0; entryIndex < clients.length; entryIndex += 1) {
       const voting = await host!.waitFor(

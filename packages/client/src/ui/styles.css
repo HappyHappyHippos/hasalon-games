@@ -9,6 +9,11 @@ body,
   margin: 0;
 }
 
+html,
+body {
+  overflow: hidden;
+}
+
 /* iOS otherwise enlarges text after rotating and can carry that scale into the
    lobby when a match ends, making the whole standalone app look zoomed in. */
 html {
@@ -59,7 +64,9 @@ textarea,
   height: 100dvh;
   display: flex;
   flex-direction: column;
-  position: relative;
+  position: fixed;
+  inset: 0;
+  width: 100%;
 }
 
 h1,
@@ -236,17 +243,12 @@ strong,
   text-indent: 0.35em;
 }
 
-.input--number {
-  width: 84px;
-  padding: 8px 10px;
-  text-align: end;
-}
-
 .setting {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-height: 44px;
   font-weight: 600;
   font-size: 15px;
 }
@@ -258,9 +260,53 @@ strong,
 }
 
 .settings {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  align-items: end;
   gap: 14px;
+}
+.settings > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* Native number spinners are tiny and inconsistent on phones. */
+.number-stepper {
+  display: grid;
+  grid-template-columns: 44px minmax(42px, auto) 44px;
+  align-items: stretch;
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  background: var(--surface);
+}
+
+.number-stepper__button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 25px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+.number-stepper__button:first-child { border-inline-end: 2.5px solid var(--ink); }
+.number-stepper__button:last-child { border-inline-start: 2.5px solid var(--ink); }
+.number-stepper__button:disabled { opacity: 0.35; cursor: not-allowed; }
+.number-stepper__value {
+  display: grid;
+  place-items: center;
+  min-width: 42px;
+  padding-inline: 6px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Toggle */
@@ -270,6 +316,7 @@ strong,
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-height: 44px;
   font-weight: 600;
   font-size: 15px;
 }
@@ -500,6 +547,22 @@ strong,
   gap: 10px;
 }
 
+.invite-app-hint {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: var(--yellow);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  text-align: start;
+}
+.invite-app-hint p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .home__games {
   display: flex;
   flex-direction: column;
@@ -717,12 +780,6 @@ strong,
   flex-direction: column;
 }
 
-.controls-hint {
-  margin: 14px 0 0;
-  padding-top: 12px;
-  border-top: 2px dashed var(--paper-2);
-}
-
 .lobby__foot {
   display: flex;
   gap: 12px;
@@ -795,7 +852,11 @@ strong,
   aspect-ratio: 200 / 130;
   border: 3px solid var(--ink);
   border-radius: 10px;
+  overflow: hidden;
 }
+.boxart--gunmayhem { background: #2d1f3d; }
+.boxart--memes { background: #f58a3a; }
+.boxart--skribbl { background: #8d63d6; }
 
 .gamecard__body {
   display: flex;
@@ -1142,8 +1203,8 @@ strong,
 }
 
 .fullscreenbtn {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   flex: none;
   border: 2px solid var(--ink);
   border-radius: 999px;
@@ -1417,18 +1478,69 @@ strong,
   z-index: 70;
 }
 .installprompt__card {
+  width: min(440px, 100%);
   text-align: center;
   align-items: center;
   padding: 28px 22px;
 }
-.installprompt__icon {
-  margin: 0;
-  font-size: 40px;
-  line-height: 1;
-}
-.installprompt__body {
+.installprompt__benefit {
   margin: 0;
   color: var(--ink-soft);
+  line-height: 1.45;
+}
+.installprompt__steps {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  text-align: start;
+}
+.installprompt__steps li {
+  min-height: 70px;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) 54px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--paper);
+  border: 2.5px solid var(--ink);
+  border-radius: var(--radius-sm);
+  font-weight: 700;
+  line-height: 1.35;
+}
+.installprompt__step-number {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--yellow);
+  border: 2px solid var(--ink);
+  font-family: var(--font-display);
+  font-weight: 900;
+}
+.installprompt__share-demo,
+.installprompt__home-demo {
+  width: 50px;
+  height: 50px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: white;
+  color: #007aff;
+  border: 1px solid rgba(20, 17, 15, 0.18);
+}
+.installprompt__share-demo svg,
+.installprompt__home-demo svg {
+  width: 32px;
+  height: 32px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .countdown {
@@ -1932,16 +2044,6 @@ strong,
   cursor: not-allowed;
 }
 
-/* Licence credit for the lobby track. Small, but it is a CC BY condition, not
-   decoration — see public/music/ATTRIBUTION.md. */
-.options__credit {
-  margin: 0;
-  opacity: 0.7;
-}
-.options__credit a {
-  color: inherit;
-}
-
 /* Who your microphone actually reached. */
 .options__peers {
   display: flex;
@@ -2258,8 +2360,29 @@ strong,
     font-size: 10px;
   }
 
-  /* No room for it on a phone — it was overlapping the round counter. */
+  /* A quiet physical readout at the otherwise-unused bottom centre. Keeping it
+     out of the score row avoids the overlap that caused the old mobile badge
+     to be hidden entirely. */
   .netbadge {
+    position: fixed;
+    z-index: 3;
+    inset-inline-start: 50%;
+    bottom: calc(4px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    display: flex;
+    margin: 0;
+    padding: 2px 6px;
+    gap: 4px;
+    background: rgba(253, 246, 232, 0.68);
+    font-size: 10px;
+    line-height: 1;
+    pointer-events: none;
+  }
+  .netbadge__dot {
+    width: 5px;
+    height: 5px;
+  }
+  .netbadge__jitter {
     display: none;
   }
 }
@@ -2305,6 +2428,40 @@ strong,
   }
   .options__head-actions .btn--sm {
     min-height: 44px;
+  }
+}
+
+/* Every major room card sits on one mobile measure. Keeping the gutter on the
+   outer scroller leaves room for hard shadows without letting any child make
+   the page pan sideways. The height arm covers phones held in landscape. */
+@media (max-width: 760px), (max-height: 560px) {
+  .lobby {
+    padding: calc(16px + env(safe-area-inset-top)) 0 calc(32px + env(safe-area-inset-bottom));
+    overflow-x: hidden;
+    overflow-x: clip;
+    overscroll-behavior-inline: none;
+    touch-action: pan-y pinch-zoom;
+  }
+  .lobby__inner {
+    width: calc(100% - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
+    max-width: calc(100% - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
+    margin-inline: auto;
+  }
+  .lobby__grid,
+  .lobby__choice,
+  .picker,
+  .lobby__head,
+  .lobby__people,
+  .lobby__settings,
+  .lobby__foot,
+  .gamecard {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .lobby__grid,
+  .picker {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -2745,6 +2902,17 @@ strong,
   background: var(--red);
   color: var(--paper);
 }
+.skribbl__act--fill::before {
+  content: '';
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-inline-end: 5px;
+  vertical-align: -1px;
+  border: 2px solid var(--ink);
+  border-radius: 3px;
+  background: var(--fill-color);
+}
 
 .skribbl__watching {
   margin: 0;
@@ -3015,6 +3183,16 @@ strong,
 .memes__fields p { margin: 0; }
 .memes__nudge { color: var(--ink-soft); font-family: var(--font-display); }
 .memes__field { display: grid; gap: 5px; font-weight: 800; }
+.memes__field-head {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.memes__field-head .btn {
+  min-height: 44px;
+}
 .memes__field textarea {
   width: 100%;
   min-height: 70px;
@@ -3027,6 +3205,14 @@ strong,
   font: 700 17px/1.3 var(--font-display);
 }
 .memes__field small { justify-self: end; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.memes__field-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.memes__field-actions > :only-child {
+  grid-column: 1 / -1;
+}
 
 .meme-card {
   position: relative;
@@ -3075,9 +3261,22 @@ strong,
   border: 2px dashed var(--yellow);
   cursor: grab;
   touch-action: none;
+  overflow: visible;
 }
 .meme-card__caption--editable:active { cursor: grabbing; }
 .meme-card__caption--editable:focus-visible { outline: 3px solid var(--violet); outline-offset: 2px; }
+.meme-card__text {
+  position: absolute;
+  inset: 0;
+  padding: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+}
+.meme-card__caption--panel .meme-card__text { padding: 7px; }
 .meme-card__move {
   position: absolute;
   top: 2px;
@@ -3094,6 +3293,27 @@ strong,
   -webkit-text-stroke: 0;
   text-shadow: none;
 }
+.meme-card__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: end;
+  padding: 0 5px 4px 0;
+  border: 0;
+  border-radius: 18px 0 0 0;
+  background: color-mix(in srgb, var(--yellow) 88%, transparent);
+  color: var(--ink);
+  cursor: nwse-resize;
+  font: 900 20px/1 var(--font-display);
+  -webkit-text-stroke: 0;
+  text-shadow: none;
+  touch-action: none;
+}
+.meme-card__resize:focus-visible { outline: 3px solid var(--violet); outline-offset: -3px; }
 .meme-card--stage .meme-card__caption { animation: meme-caption 220ms 100ms ease-out both; }
 .meme-card--stage .meme-card__caption:nth-of-type(2) { animation-delay: 220ms; }
 
@@ -3210,6 +3430,7 @@ strong,
   .memes { padding: calc(6px + env(safe-area-inset-top)) calc(6px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left)); gap: 6px; }
   .memes__top { min-height: 50px; padding: 4px 8px; padding-inline-end: calc(150px + env(safe-area-inset-right)); }
   .memes__clock { width: 39px; height: 39px; flex-basis: 39px; }
+  .memes__phase { align-content: start; }
   .memes__composer { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 9px; }
   .memes__preview .meme-card { width: min(100%, calc(45dvh * var(--meme-aspect))); }
   .memes__fields { padding: 10px; gap: 8px; }
@@ -3226,14 +3447,150 @@ strong,
 }
 
 @media (max-height: 560px) and (orientation: landscape) {
-  .memes__composer { grid-template-columns: minmax(240px, 1.15fr) minmax(260px, 0.85fr); }
-  .memes__preview .meme-card { width: min(100%, calc((100dvh - 78px) * var(--meme-aspect))); }
+  .memes { height: 100dvh; min-height: 0; overflow: hidden; }
+  .memes__phase { overflow: hidden; padding-inline-end: 7px; padding-block-end: 7px; }
+  .memes__composer {
+    height: 100%;
+    min-height: 0;
+    grid-template-columns: minmax(240px, 1.15fr) minmax(280px, 0.85fr);
+    align-items: stretch;
+  }
+  .memes__preview {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    padding: 2px 7px 7px 2px;
+  }
+  .memes__preview .meme-card {
+    width: min(100%, calc((100dvh - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * var(--meme-aspect)));
+    box-shadow: var(--shadow-sm);
+  }
+  .memes__fields {
+    min-height: 0;
+    max-height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 4px 8px;
+    gap: 3px;
+  }
+  .memes__field {
+    gap: 2px;
+  }
+  .memes__field-head {
+    min-height: 28px;
+  }
+  .memes__field textarea {
+    min-height: 44px;
+    padding: 6px 8px;
+  }
+  .memes__field small {
+    display: none;
+  }
   .memes__roster { display: none; }
-  .memes__stage { grid-template-columns: minmax(0, 1fr) minmax(250px, 0.75fr); align-items: center; }
+  .memes__stage { height: 100%; grid-template-columns: minmax(0, 1fr) minmax(250px, 0.75fr); align-items: center; }
   .memes__stage > .eyebrow { display: none; }
   .memes__stage > .meme-card { grid-row: 1 / span 2; width: min(100%, calc((100dvh - 76px) * var(--meme-aspect))); }
   .memes__vote,
   .memes__result { grid-column: 2; }
+}
+
+/* Short, wide phones use the width they have instead of turning every lobby
+   item into a full-width row. Four compact columns keep the people and all
+   four games visible with far less vertical scrolling. */
+@media (max-height: 560px) and (orientation: landscape) and (min-width: 600px) {
+  .lobby {
+    padding-block: calc(8px + env(safe-area-inset-top)) calc(22px + env(safe-area-inset-bottom));
+  }
+  .lobby__inner { gap: 10px; }
+  .lobby__head,
+  .lobby__people,
+  .lobby__settings,
+  .lobby__foot { padding: 11px; }
+  .lobby__code { font-size: 30px; }
+  .lobby__grid,
+  .lobby__choice { gap: 10px; }
+  .people {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .person {
+    min-width: 0;
+    gap: 5px;
+    padding: 4px 6px;
+  }
+  .person--self { grid-column: span 2; }
+  .person > .avatar { width: 38px; height: 38px; }
+  .person__meta { font-size: 10px; }
+  .person__tick { width: 24px; height: 24px; }
+  .person--self .appearance { gap: 4px; }
+  .person--self .appearance__preview { width: 52px; height: 52px; }
+  .person--self .appearance__preview .avatar { width: 48px; height: 48px; }
+  .person--self .appearance__arrows { gap: 2px; }
+  .person--self .appearance__arrow.btn { width: 44px; min-width: 44px; }
+  .lobby__ready { padding: 9px; }
+  .picker {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 9px;
+  }
+  .gamecard { gap: 6px; padding: 7px; box-shadow: var(--shadow-sm); }
+  .gamecard__name { font-size: 15px; }
+  .gamecard__tagline { display: none; }
+  .gamecard__players { font-size: 10px; letter-spacing: 0; }
+  .gamecard__badge { top: -8px; inset-inline-end: -5px; padding: 3px 6px; font-size: 9px; }
+}
+
+/* Skribbl has three genuinely useful regions. In short landscape they fit
+   side by side; stacking them made the board and chat consume the drawing
+   area and produced the odd stretched mobile layout. */
+@media (max-height: 560px) and (orientation: landscape) and (min-width: 600px) {
+  .skribbl { height: 100dvh; overflow: hidden; }
+  .skribbl__body {
+    grid-template-columns: minmax(100px, 0.35fr) minmax(280px, 1.55fr) minmax(180px, 0.65fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .skribbl__side { max-height: none; }
+  .skribbl__stage {
+    position: relative;
+    display: grid;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+    gap: 0;
+  }
+  .skribbl__paper,
+  .skribbl__tools {
+    grid-area: 1 / 1;
+  }
+  .skribbl__tools {
+    z-index: 2;
+    align-self: end;
+    justify-self: center;
+    width: calc(100% - 12px);
+    margin: 6px;
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+  }
+  .skribbl__watching { display: none; }
+  .skribbl__board {
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+    gap: 4px;
+  }
+  .skribbl__row { width: 100%; gap: 4px; padding: 3px 5px; font-size: 11px; }
+  .skribbl__name { max-width: 48px; }
+  .skribbl__tag { display: none; }
+  .skribbl__tools {
+    flex-wrap: wrap;
+    justify-content: center;
+    overflow: visible;
+  }
+  .skribbl__swatch { width: 36px; height: 36px; }
+  .skribbl__acts {
+    width: 100%;
+    justify-content: center;
+    margin-inline-start: 0;
+  }
+  .skribbl__log { padding: 6px; font-size: 12px; }
+  .skribbl__guessbar { padding: 6px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

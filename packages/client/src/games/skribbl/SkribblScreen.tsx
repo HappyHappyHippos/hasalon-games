@@ -7,6 +7,7 @@ import { sfx } from '../../audio';
 import { InkSurface } from './InkSurface';
 import { attachDrawInput, type DrawInput } from './input';
 import { drainInk, resetInk } from './inkBus';
+import { shouldApplyInkEcho } from './inkEcho';
 import { Chat } from './Chat';
 import { Scoreboard } from './Scoreboard';
 import { Toolbar } from './Toolbar';
@@ -82,7 +83,7 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
     let raf = 0;
     const pump = (): void => {
       const ops = drainInk();
-      if (ops.length > 0 && !isDrawerRef.current) ink.apply(ops);
+      if (shouldApplyInkEcho(ops, isDrawerRef.current)) ink.apply(ops);
       raf = requestAnimationFrame(pump);
     };
     raf = requestAnimationFrame(pump);

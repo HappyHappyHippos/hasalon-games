@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import {
+  boxesForCaptionCount,
+  MAX_CAPTION_BOXES,
   MAX_CAPTION_CHARS,
   templateById,
   type MemeBoxPosition,
@@ -30,8 +32,15 @@ export function Composer({ view }: { view: MemesPrivate }): JSX.Element {
   useEffect(() => {
     if (!view.templateId || hydratedRef.current === view.templateId) return;
     hydratedRef.current = view.templateId;
-    setTexts(Array.from({ length: view.slots }, (_, index) => view.draft[index] ?? ''));
-    setPositions(view.positions.map((position) => ({ ...position })));
+    const count = Math.max(view.slots, view.draft.length);
+    const boxes = boxesForCaptionCount(templateById(view.templateId), count);
+    setTexts(Array.from({ length: count }, (_, index) => view.draft[index] ?? ''));
+    setPositions(boxes.map((box, index) => ({
+      x: view.positions[index]?.x ?? box.x,
+      y: view.positions[index]?.y ?? box.y,
+      w: view.positions[index]?.w ?? box.w,
+      h: view.positions[index]?.h ?? box.h,
+    })));
   }, [view.draft, view.positions, view.slots, view.templateId]);
   useEffect(() => () => senderRef.current?.destroy(), []);
 
@@ -46,12 +55,39 @@ export function Composer({ view }: { view: MemesPrivate }): JSX.Element {
     const next = [...texts];
     next[index] = value;
     setTexts(next);
-    senderRef.current?.update(next[0] ?? '', next[1], positions);
+    senderRef.current?.update(next, positions);
   };
 
   const move = (next: MemeBoxPosition[]): void => {
     setPositions(next);
-    senderRef.current?.update(texts[0] ?? '', texts[1], next);
+    senderRef.current?.update(texts, next);
+  };
+
+  const addBox = (): void => {
+    if (!template || texts.length >= MAX_CAPTION_BOXES) return;
+    const nextTexts = [...texts, ''];
+    const boxes = boxesForCaptionCount(template, nextTexts.length);
+    const nextPositions = [
+      ...positions,
+      {
+        x: boxes[nextTexts.length - 1]!.x,
+        y: boxes[nextTexts.length - 1]!.y,
+        w: boxes[nextTexts.length - 1]!.w,
+        h: boxes[nextTexts.length - 1]!.h,
+      },
+    ];
+    setTexts(nextTexts);
+    setPositions(nextPositions);
+    senderRef.current?.update(nextTexts, nextPositions);
+  };
+
+  const removeBox = (index: number): void => {
+    if (index < view.slots) return;
+    const nextTexts = texts.filter((_, candidate) => candidate !== index);
+    const nextPositions = positions.filter((_, candidate) => candidate !== index);
+    setTexts(nextTexts);
+    setPositions(nextPositions);
+    senderRef.current?.update(nextTexts, nextPositions);
   };
 
   return (
@@ -69,13 +105,22 @@ export function Composer({ view }: { view: MemesPrivate }): JSX.Element {
       <div className="memes__fields">
         <h2>{view.submitted ? t.memesSubmitted : t.memesWrite}</h2>
         {nudge && <p className="memes__nudge">{nudge}</p>}
-        {!view.submitted && Array.from({ length: view.slots }, (_, index) => {
+        {!view.submitted && texts.map((text, index) => {
+          const inputId = `meme-caption-${index}`;
           const counterId = `meme-caption-${index}-counter`;
           return (
-            <label className="memes__field" key={index}>
-              <span>{t.memesCaption(index + 1)}</span>
+            <div className="memes__field" key={index}>
+              <div className="memes__field-head">
+                <label htmlFor={inputId}>{t.memesCaption(index + 1)}</label>
+                {index >= view.slots && (
+                  <Button variant="ghost" size="sm" onClick={() => removeBox(index)}>
+                    {t.memesRemoveCaption}
+                  </Button>
+                )}
+              </div>
               <textarea
-                value={texts[index] ?? ''}
+                id={inputId}
+                value={text}
                 maxLength={MAX_CAPTION_CHARS}
                 rows={view.slots === 1 ? 3 : 2}
                 enterKeyHint="done"
@@ -84,17 +129,22 @@ export function Composer({ view }: { view: MemesPrivate }): JSX.Element {
                 onChange={(event) => update(index, event.currentTarget.value)}
                 onBlur={() => senderRef.current?.flush()}
               />
-              <small id={counterId}>{t.memesCharacters((texts[index] ?? '').length, MAX_CAPTION_CHARS)}</small>
-            </label>
+              <small id={counterId}>{t.memesCharacters(text.length, MAX_CAPTION_CHARS)}</small>
+            </div>
           );
         })}
         {!view.submitted && (
-          <Button variant="primary" size="lg" full disabled={!usable} onClick={() => {
-            senderRef.current?.flush();
-            sendSubmit(texts[0] ?? '', texts[1], positions);
-          }}>
-            {t.memesSubmit}
-          </Button>
+          <div className="memes__field-actions">
+            {texts.length < MAX_CAPTION_BOXES && (
+              <Button full onClick={addBox}>{t.memesAddCaption}</Button>
+            )}
+            <Button variant="primary" size="lg" full disabled={!usable} onClick={() => {
+              senderRef.current?.flush();
+              sendSubmit(texts, positions);
+            }}>
+              {t.memesSubmit}
+            </Button>
+          </div>
         )}
       </div>
     </section>

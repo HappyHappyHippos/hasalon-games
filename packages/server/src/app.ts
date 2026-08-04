@@ -49,7 +49,6 @@ export interface AppOptions {
   /** Directory of the built client. Missing in dev, where Vite serves it. */
   clientDist: string;
 }
-
 export interface App {
   httpServer: Server;
   rooms: RoomManager;
@@ -86,6 +85,17 @@ export function createApp(options: AppOptions): App {
     // Voice chat's ICE servers, including TURN credentials that must not be
     // baked into the client bundle. Never fails — see `ice.ts`.
     if (url.pathname === '/ice') {
+      const roomCode = singleHeader(req.headers['x-room-code']);
+      const playerId = singleHeader(req.headers['x-player-id']);
+      const authorization = singleHeader(req.headers.authorization);
+      const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : '';
+      const room = roomCode ? rooms.get(roomCode) : undefined;
+      const player = room?.players.find((candidate) => candidate.id === playerId && candidate.token === token);
+      if (!player) {
+        res.writeHead(401, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ error: 'unauthorized' }));
+        return;
+      }
       const config = await getIceConfig();
       res.writeHead(200, {
         'Content-Type': 'application/json',
@@ -464,6 +474,10 @@ export function createApp(options: AppOptions): App {
       return new Promise((resolve) => httpServer.close(() => resolve()));
     },
   };
+}
+
+function singleHeader(value: string | string[] | undefined): string {
+  return typeof value === 'string' ? value : '';
 }
 
 function checkVersion(client: Client, version: number): boolean {

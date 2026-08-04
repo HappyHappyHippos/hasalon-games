@@ -8,6 +8,9 @@ import {
   type PointerEvent,
 } from 'react';
 import {
+  MIN_CAPTION_BOX_HEIGHT,
+  MIN_CAPTION_BOX_WIDTH,
+  boxesForCaptionCount,
   templateById,
   type MemeBoxPosition,
   type MemeTextBox,
@@ -33,7 +36,16 @@ interface CaptionProps {
   compact: boolean;
   editable: boolean;
   moveLabel: string;
-  onMove?: (position: MemeBoxPosition) => void;
+  resizeLabel: string;
+  onChange?: (position: MemeBoxPosition) => void;
+}
+
+interface CaptionDrag {
+  kind: 'move' | 'resize';
+  pointerId: number;
+  clientX: number;
+  clientY: number;
+  geometry: MemeBoxPosition;
 }
 
 function Caption({
@@ -43,14 +55,16 @@ function Caption({
   compact,
   editable,
   moveLabel,
-  onMove,
+  resizeLabel,
+  onChange,
 }: CaptionProps): JSX.Element {
-  const ref = useRef<HTMLDivElement>(null);
-  const drag = useRef<{ pointerId: number; clientX: number; clientY: number; x: number; y: number } | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const textRef = useRef<HTMLSpanElement>(null);
+  const drag = useRef<CaptionDrag | null>(null);
   const [fontSize, setFontSize] = useState(compact ? 12 : 18);
 
   useEffect(() => {
-    const element = ref.current;
+    const element = textRef.current;
     if (!element) return;
     const measure = (): void => {
       const rect = element.getBoundingClientRect();
@@ -82,34 +96,58 @@ function Caption({
     return () => observer?.disconnect();
   }, [compact, text]);
 
-  const clamp = (x: number, y: number): MemeBoxPosition => ({
-    x: Math.min(1 - box.w, Math.max(0, x)),
-    y: Math.min(1 - box.h, Math.max(0, y)),
+  const clampMove = (x: number, y: number): MemeBoxPosition => ({
+    ...position,
+    x: Math.min(1 - position.w, Math.max(0, x)),
+    y: Math.min(1 - position.h, Math.max(0, y)),
   });
   const beginDrag = (event: PointerEvent<HTMLDivElement>): void => {
     if (!editable) return;
+    if ((event.target as Element).closest('.meme-card__resize')) return;
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = {
+      kind: 'move',
       pointerId: event.pointerId,
       clientX: event.clientX,
       clientY: event.clientY,
-      x: position.x,
-      y: position.y,
+      geometry: { ...position },
     };
   };
-  const moveDrag = (event: PointerEvent<HTMLDivElement>): void => {
+  const beginResize = (event: PointerEvent<HTMLSpanElement>): void => {
+    if (!editable) return;
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    drag.current = {
+      kind: 'resize',
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      geometry: { ...position },
+    };
+  };
+  const updateDrag = (event: PointerEvent<HTMLElement>): void => {
     const active = drag.current;
-    const card = ref.current?.parentElement;
+    const card = rootRef.current?.parentElement;
     if (!active || active.pointerId !== event.pointerId || !card) return;
     const rect = card.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return;
-    onMove?.(clamp(
-      active.x + (event.clientX - active.clientX) / rect.width,
-      active.y + (event.clientY - active.clientY) / rect.height,
-    ));
+    const dx = (event.clientX - active.clientX) / rect.width;
+    const dy = (event.clientY - active.clientY) / rect.height;
+    if (active.kind === 'move') {
+      onChange?.(clampMove(active.geometry.x + dx, active.geometry.y + dy));
+      return;
+    }
+    const minWidth = Math.min(box.w, MIN_CAPTION_BOX_WIDTH);
+    const minHeight = Math.min(box.h, MIN_CAPTION_BOX_HEIGHT);
+    onChange?.({
+      ...position,
+      w: Math.min(1 - position.x, Math.max(minWidth, active.geometry.w + dx)),
+      h: Math.min(1 - position.y, Math.max(minHeight, active.geometry.h + dy)),
+    });
   };
-  const endDrag = (event: PointerEvent<HTMLDivElement>): void => {
+  const endDrag = (event: PointerEvent<HTMLElement>): void => {
     if (drag.current?.pointerId === event.pointerId) drag.current = null;
   };
   const moveWithKeyboard = (event: KeyboardEvent<HTMLDivElement>): void => {
@@ -123,7 +161,27 @@ function Caption({
     }[event.key];
     if (!delta) return;
     event.preventDefault();
-    onMove?.(clamp(position.x + delta[0], position.y + delta[1]));
+    onChange?.(clampMove(position.x + delta[0], position.y + delta[1]));
+  };
+  const resizeWithKeyboard = (event: KeyboardEvent<HTMLSpanElement>): void => {
+    if (!editable) return;
+    const step = event.shiftKey ? 0.05 : 0.01;
+    const delta = {
+      ArrowLeft: [-step, 0],
+      ArrowRight: [step, 0],
+      ArrowUp: [0, -step],
+      ArrowDown: [0, step],
+    }[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const minWidth = Math.min(box.w, MIN_CAPTION_BOX_WIDTH);
+    const minHeight = Math.min(box.h, MIN_CAPTION_BOX_HEIGHT);
+    onChange?.({
+      ...position,
+      w: Math.min(1 - position.x, Math.max(minWidth, position.w + delta[0])),
+      h: Math.min(1 - position.y, Math.max(minHeight, position.h + delta[1])),
+    });
   };
 
   const style: CSSProperties = {
@@ -132,15 +190,15 @@ function Caption({
     // his face instead of on the white panels.
     left: `${position.x * 100}%`,
     top: `${position.y * 100}%`,
-    width: `${box.w * 100}%`,
-    height: `${box.h * 100}%`,
+    width: `${position.w * 100}%`,
+    height: `${position.h * 100}%`,
     fontSize,
     textAlign: box.align,
   };
   const hasHebrew = /[\u0590-\u05ff]/u.test(text);
   return (
     <div
-      ref={ref}
+      ref={rootRef}
       className={`meme-card__caption meme-card__caption--${box.style}${hasHebrew ? '' : ' meme-card__caption--latin'}${editable ? ' meme-card__caption--editable' : ''}`}
       style={style}
       dir="auto"
@@ -149,13 +207,29 @@ function Caption({
       aria-label={editable ? moveLabel : undefined}
       title={editable ? moveLabel : undefined}
       onPointerDown={beginDrag}
-      onPointerMove={moveDrag}
+      onPointerMove={updateDrag}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}
       onKeyDown={moveWithKeyboard}
     >
-      {text}
+      <span ref={textRef} className="meme-card__text">{text}</span>
       {editable && <span className="meme-card__move" aria-hidden="true">✥</span>}
+      {editable && (
+        <span
+          className="meme-card__resize"
+          role="button"
+          tabIndex={0}
+          aria-label={resizeLabel}
+          title={resizeLabel}
+          onPointerDown={beginResize}
+          onPointerMove={updateDrag}
+          onPointerUp={endDrag}
+          onPointerCancel={endDrag}
+          onKeyDown={resizeWithKeyboard}
+        >
+          ↘
+        </span>
+      )}
     </div>
   );
 }
@@ -175,10 +249,15 @@ export function MemeCard({
   useEffect(() => setBroken(false), [templateId]);
 
   const aspect = template?.aspect ?? 4 / 3;
-  const boxes = template?.boxes ?? [];
-  const resolvedPositions = boxes.map((box, index) => positions?.[index] ?? box);
+  const boxes = boxesForCaptionCount(template, Math.max(texts.length, positions?.length ?? 0));
+  const resolvedPositions = boxes.map((box, index) => ({
+    x: positions?.[index]?.x ?? box.x,
+    y: positions?.[index]?.y ?? box.y,
+    w: positions?.[index]?.w ?? box.w,
+    h: positions?.[index]?.h ?? box.h,
+  }));
   const move = (index: number, position: MemeBoxPosition): void => {
-    const next = resolvedPositions.map((current) => ({ x: current.x, y: current.y }));
+    const next = resolvedPositions.map((current) => ({ ...current }));
     next[index] = position;
     onPositionsChange?.(next);
   };
@@ -214,7 +293,8 @@ export function MemeCard({
           compact={size === 'thumb'}
           editable={editable}
           moveLabel={t.memesMoveCaption(index + 1)}
-          onMove={(position) => move(index, position)}
+          resizeLabel={t.memesResizeCaption(index + 1)}
+          onChange={(position) => move(index, position)}
         />
       ))}
     </figure>

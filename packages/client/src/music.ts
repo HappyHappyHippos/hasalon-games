@@ -15,6 +15,8 @@ import type { GameId } from '@mg/shared';
 import { sfx } from './audio';
 
 const SETTINGS_KEY = 'mg.music';
+/** Quiet enough to sit under a roomful of conversation on first launch. */
+export const DEFAULT_MUSIC_VOLUME = 0.16;
 
 export type MusicTrack = 'lobby' | GameId;
 
@@ -45,15 +47,15 @@ const TRACKS: Record<MusicTrack, string> = {
   lobby: '/music/lobby.mp3',
   gunmayhem: '/music/gunmayhem.mp3',
   achtung: '/music/achtung.mp3',
-  memes: '/music/lobby.mp3',
-  // Placeholders until tracks are sourced. Silence would read as the codec bug
-  // above all over again, so both point at something that definitely plays.
+  memes: '/music/memes.mp3',
+  // Placeholders until real tracks are sourced, and deliberately not silence:
+  // a missing file would read as the codec bug above all over again. Tank
+  // Trouble borrows the fighter's bed and Gravity Guy the curve game's, both of
+  // which suit the pace closely enough to ship on.
   tanks: '/music/gunmayhem.mp3',
   gravity: '/music/achtung.mp3',
-  // Deliberately the same file as the lobby. The swing bed is exactly right
-  // under a drawing game — unhurried, and it does not fight a room full of
-  // people talking. `play` notices the url is unchanged and lets it keep
-  // running rather than restarting the same track from the top.
+  // Skribbl deliberately shares the quiet lo-fi lobby bed. `play` notices the
+  // URL is unchanged and lets it continue rather than restarting on match start.
   skribbl: '/music/lobby.mp3',
 };
 
@@ -331,7 +333,7 @@ function release(player: HTMLAudioElement): void {
 }
 
 function loadSettings(): MusicSettings {
-  const fallback: MusicSettings = { muted: false, volume: 0.4 };
+  const fallback: MusicSettings = { muted: false, volume: DEFAULT_MUSIC_VOLUME };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return fallback;

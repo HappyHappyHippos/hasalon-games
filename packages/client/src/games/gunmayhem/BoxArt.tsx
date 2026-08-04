@@ -6,7 +6,7 @@ import type { JSX } from 'react';
  */
 export function GunMayhemBoxArt(): JSX.Element {
   return (
-    <svg className="boxart" viewBox="0 0 200 130" role="img" aria-label="Gun Mayhem">
+    <svg className="boxart boxart--gunmayhem" viewBox="0 0 200 130" role="img" aria-label="Gun Mayhem">
       <rect x="0" y="0" width="200" height="130" fill="#2d1f3d" />
       <circle cx="158" cy="26" r="30" fill="#3d2a52" />
 

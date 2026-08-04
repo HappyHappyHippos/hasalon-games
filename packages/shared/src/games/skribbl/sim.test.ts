@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { seconds } from '../../engine';
 import {
   MAX_REVEAL_FRACTION,
+  OP_CLEAR,
+  OP_FILL,
   PICK_TICKS,
   REVEAL_TICKS,
 } from './constants';
@@ -417,6 +419,23 @@ describe('ink', () => {
     expect(snap.ink[0]).toBe(2);
     expect(snap.ink.slice(1)).toEqual(state.strokes);
     expect(state.strokeStarts.length).toBe(1);
+  });
+
+  it('fills the sheet as one undoable operation', () => {
+    const state = makeState(3);
+    intoDrawing(state);
+    const drawer = state.players.find((p) => p.seat === state.drawerSeat)!;
+
+    applyInput(state, drawer.id, { k: 'begin', c: 0, s: 1, x: 1, y: 1 });
+    makeSnapshot(state, 0);
+    applyInput(state, drawer.id, { k: 'fill', c: 4 });
+    expect(makeSnapshot(state, 1).ink).toEqual([OP_FILL, 4]);
+
+    applyInput(state, drawer.id, { k: 'undo' });
+    const replay = makeSnapshot(state, 2).ink;
+    expect(replay[0]).toBe(OP_CLEAR);
+    expect(replay.slice(1)).toEqual(state.strokes);
+    expect(state.strokeStarts).toHaveLength(1);
   });
 
   it('drains ink so a snapshot never resends what it already sent', () => {

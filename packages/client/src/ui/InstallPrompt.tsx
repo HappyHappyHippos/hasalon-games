@@ -6,17 +6,8 @@ import { Button } from './Button';
 const STORAGE_KEY = 'mg.installPromptDismissed';
 
 /**
- * `beforeinstallprompt` never fires on iOS Safari — there is no native
- * install prompt there at all, only the Share sheet's own "Add to Home
- * Screen" entry, which no page can trigger. This is the substitute: a
- * full-screen, unmissable overlay on first visit that walks a new iPhone
- * player through the manual steps, since a small text hint under the
- * maximize button (`FullscreenButton`'s `fullscreenInstallHint`) turned out to
- * be too easy to miss entirely for someone who never taps that button.
- *
- * Shown once ever, not once per session — a returning player who dismissed it
- * should never see it again. `isStandalone()` also stops it outright for
- * anyone who already followed the instructions.
+ * iOS Safari has no native install prompt a site can open. This first-visit
+ * overlay shows the exact Safari share glyph and the two manual steps instead.
  */
 function shouldOffer(): boolean {
   if (typeof window === 'undefined') return false;
@@ -30,10 +21,7 @@ function shouldOffer(): boolean {
   return true;
 }
 
-/**
- * Best-effort iOS detection — see the twin of this in `OptionsMenu.tsx` for
- * why `navigator.platform` is still needed for iPadOS.
- */
+/** Best-effort iOS detection, including iPadOS devices reporting as a Mac. */
 function isIOS(): boolean {
   if (typeof navigator === 'undefined') return false;
   if (/iPad|iPhone|iPod/.test(navigator.userAgent)) return true;
@@ -58,15 +46,47 @@ export function InstallPrompt(): JSX.Element | null {
   return (
     <div className="overlay overlay--solid installprompt" role="dialog" aria-modal="true">
       <div className="sticker overlay__card installprompt__card">
-        <p className="installprompt__icon" aria-hidden="true">
-          ⎋
-        </p>
         <h2 className="overlay__title">{t.installTitle}</h2>
-        <p className="installprompt__body">{t.installBody}</p>
+        <p className="installprompt__benefit">{t.installBenefit}</p>
+        <ol className="installprompt__steps">
+          <li>
+            <span className="installprompt__step-number">1</span>
+            <span>{t.installStepShare}</span>
+            <span className="installprompt__share-demo" aria-hidden="true">
+              <ShareIcon />
+            </span>
+          </li>
+          <li>
+            <span className="installprompt__step-number">2</span>
+            <span>{t.installStepHome}</span>
+            <span className="installprompt__home-demo" aria-hidden="true">
+              <PlusSquareIcon />
+            </span>
+          </li>
+        </ol>
         <Button variant="primary" size="lg" full onClick={dismiss}>
           {t.installDismiss}
         </Button>
       </div>
     </div>
+  );
+}
+
+/** Safari's real share symbol: a square with an arrow leaving its top edge. */
+function ShareIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 32 32" focusable="false">
+      <path d="M16 3v17M10 9l6-6 6 6" />
+      <path d="M9 13H6v15h20V13h-3" />
+    </svg>
+  );
+}
+
+function PlusSquareIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 32 32" focusable="false">
+      <rect x="4" y="4" width="24" height="24" rx="5" />
+      <path d="M16 10v12M10 16h12" />
+    </svg>
   );
 }

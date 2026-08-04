@@ -5,6 +5,36 @@ export function isIOSDevice(): boolean {
   return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
 }
 
+interface VirtualKeyboardControl {
+  overlaysContent: boolean;
+}
+
+/**
+ * Ask supporting mobile Chromium browsers to place the keyboard over the app
+ * instead of shrinking and reflowing the entire game shell upward. Safari does
+ * not expose this API, so its existing fixed Skribbl word header remains the
+ * fallback there.
+ */
+export function enableKeyboardOverlay(): () => void {
+  const keyboard = (navigator as Navigator & { virtualKeyboard?: VirtualKeyboardControl })
+    .virtualKeyboard;
+  if (!keyboard) return () => undefined;
+
+  const previous = keyboard.overlaysContent;
+  try {
+    keyboard.overlaysContent = true;
+  } catch {
+    return () => undefined;
+  }
+  return () => {
+    try {
+      keyboard.overlaysContent = previous;
+    } catch {
+      // The browser can revoke the experimental surface during page teardown.
+    }
+  };
+}
+
 /**
  * Clear focus zoom carried from the home form into the lobby on iOS.
  *

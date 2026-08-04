@@ -45,6 +45,11 @@ const he = {
   copyInvite: 'העתקת הזמנה',
   copied: 'הועתק!',
   copyThisLink: 'העתיקו את הקישור:',
+  inviteShareText: (code: string) => `בואו לשחק איתי בהסלון. קוד החדר: ${code}`,
+  inviteAppTitle: 'כבר התקנתם את האפליקציה?',
+  inviteAppBody: (code: string) =>
+    `Safari לא יכול להעביר את הקישור לאפליקציה. העתיקו את הקוד ${code}, פתחו את הסלון ממסך הבית והצטרפו איתו.`,
+  copyRoomCode: 'העתיקו את קוד החדר',
   whosHere: 'מי כאן',
   outOf: (n: number, max: number) => `(${n}/${max})`,
   suffixYou: ' (זה אתם)',
@@ -112,10 +117,12 @@ const he = {
   fullscreenInstallHint: 'כדי שתוכלו להגדיל את המסך. ב־iPhone: שתפו ← «הוסף למסך הבית», ופתחו משם למסך מלא.',
 
   // First-visit iPhone install prompt.
-  installTitle: 'תוסיפו את הסלון למסך הבית, זה בשבילכם',
-  installBody:
-    'כדי לשחק במסך מלא בלי סרגלי ספארי — הקישו על כפתור השיתוף ⎋ בסרגל, ואז «הוסף למסך הבית».',
-  installDismiss: 'הבנתי די להפריע לי',
+  installTitle: 'יותר מקום למשחק באייפון',
+  installBenefit:
+    'הוסיפו את הסלון למסך הבית ותקבלו מסך משחק גדול יותר בלי סרגלי Safari, כפתורים נוחים יותר וכניסה מהירה בפעם הבאה.',
+  installStepShare: 'בסרגל של Safari, לחצו על כפתור השיתוף שנראה בדיוק כך:',
+  installStepHome: 'בתפריט שנפתח בחרו „הוספה למסך הבית”, ואז פתחו את הסלון מהסמל החדש.',
+  installDismiss: 'הבנתי — אוסיף למסך הבית',
 
   // Touch controls. Short on purpose — they are printed inside the buttons.
   padFire: 'ירי',
@@ -136,6 +143,9 @@ const he = {
   voiceUnsupported: 'הדפדפן הזה לא תומך בשיחות קוליות.',
   voiceConnecting: 'מתחברים…',
   voiceConnected: 'מחובר',
+  voiceRetry: 'נסו לחבר שוב',
+  voiceTapToHear: 'הקישו פעם אחת כדי לשמוע את החדר.',
+  voiceRelayUnavailable: 'החיבור הקולי מוגבל כרגע — רשת סלולרית עלולה לא לעבוד.',
   /** Per-person, next to a name. `voiceFailed` is the room-wide summary. */
   voicePeerFailed: 'אין חיבור',
   voiceIosNote: 'באייפון: בדקו שהטלפון לא על שקט (המתג בצד), שהווליום מוגבר, ושהרשיתם לספארי להשתמש במיקרופון.',
@@ -322,6 +332,7 @@ const he = {
   skribblEraser: 'מחק',
   skribblUndo: 'בטלו',
   skribblClear: 'נקו הכל',
+  skribblFill: 'מילוי',
   // Settings
   skribblWordLanguage: 'שפת המילים',
   skribblDrawTime: 'זמן ציור',
@@ -344,6 +355,9 @@ const he = {
   memesCaptionPlaceholder: 'מה קורה כאן?',
   memesCharacters: (n: number, max: number) => `${n}/${max}`,
   memesMoveCaption: (n: number) => `הזיזו את כיתוב ${n}`,
+  memesResizeCaption: (n: number) => `שנו את גודל כיתוב ${n}`,
+  memesAddCaption: 'הוסיפו תיבת טקסט',
+  memesRemoveCaption: 'הסירו',
   memesSubmit: 'סיימתי',
   memesSubmitted: 'הכיתוב בפנים!',
   memesWaitingWriters: 'מי כבר סיים',
@@ -410,6 +424,11 @@ const en: Dict = {
   copyInvite: 'Copy invite',
   copied: 'Copied!',
   copyThisLink: 'Copy this link:',
+  inviteShareText: (code: string) => `Come play with me in הסלון. Room code: ${code}`,
+  inviteAppTitle: 'Already installed the app?',
+  inviteAppBody: (code: string) =>
+    `Safari cannot hand this link to the app. Copy code ${code}, open הסלון from your Home Screen, and join with it.`,
+  copyRoomCode: 'Copy room code',
   whosHere: "Who's here",
   outOf: (n: number, max: number) => `(${n}/${max})`,
   suffixYou: ' (you)',
@@ -473,10 +492,12 @@ const en: Dict = {
   fullscreenInstallHint: 'On iPhone: Share → "Add to Home Screen", then open it from there.',
 
   // First-visit iPhone install prompt.
-  installTitle: 'Add הסלון to your Home Screen',
-  installBody:
-    'To play fullscreen with no Safari bars in the way: tap the Share button ⎋ in the toolbar, then "Add to Home Screen".',
-  installDismiss: 'Got it',
+  installTitle: 'Give the game more room on iPhone',
+  installBenefit:
+    'Add הסלון to your Home Screen for a larger game area without Safari bars, easier controls, and one-tap access next time.',
+  installStepShare: 'In Safari’s toolbar, tap the Share button that looks exactly like this:',
+  installStepHome: 'Choose “Add to Home Screen”, then open הסלון from its new icon.',
+  installDismiss: 'Got it — I’ll add it',
 
   padFire: 'FIRE',
   padBomb: 'BOMB',
@@ -495,6 +516,9 @@ const en: Dict = {
   voiceUnsupported: 'This browser does not support voice chat.',
   voiceConnecting: 'Connecting…',
   voiceConnected: 'Connected',
+  voiceRetry: 'Retry voice',
+  voiceTapToHear: 'Tap once to hear the room.',
+  voiceRelayUnavailable: 'Voice relay is unavailable; cellular networks may not connect.',
   voicePeerFailed: 'No connection',
   voiceIosNote: 'On iPhone: make sure the physical silent switch is off, volume is up, and Safari has microphone permission.',
   voiceFailed: (n: number) =>
@@ -667,6 +691,7 @@ const en: Dict = {
   skribblEraser: 'Eraser',
   skribblUndo: 'Undo',
   skribblClear: 'Clear',
+  skribblFill: 'Fill',
   // Settings
   skribblWordLanguage: 'Word language',
   skribblDrawTime: 'Drawing time',
@@ -689,6 +714,9 @@ const en: Dict = {
   memesCaptionPlaceholder: 'What is happening here?',
   memesCharacters: (n: number, max: number) => `${n}/${max}`,
   memesMoveCaption: (n: number) => `Move caption ${n}`,
+  memesResizeCaption: (n: number) => `Resize caption ${n}`,
+  memesAddCaption: 'Add text box',
+  memesRemoveCaption: 'Remove',
   memesSubmit: 'Submit',
   memesSubmitted: 'Caption locked in!',
   memesWaitingWriters: 'Who is finished',

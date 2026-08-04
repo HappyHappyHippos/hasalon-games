@@ -50,7 +50,6 @@ function socketUrl(): string {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${location.host}${WS_PATH}`;
 }
-
 class GameSocket {
   private ws: WebSocket | null = null;
   private queue: ClientMessage[] = [];
@@ -301,6 +300,12 @@ class GameSocket {
     switch (message.t) {
       case 'welcome': {
         saveSession({ code: message.room.code, playerId: message.playerId, token: message.token });
+        voice.setIceAuth({ code: message.room.code, playerId: message.playerId, token: message.token });
+        // Prepare synchronously before store.onWelcome schedules React work.
+        // An existing listener can answer the room broadcast with an RTC offer
+        // immediately; waiting for the voice hook would leave a small window in
+        // which the new socket has no self id and must discard that offer.
+        voice.prepare(message.playerId);
         store.onWelcome(message.room, message.playerId);
         setHashCode(message.room.code);
         this.confirmMembership(message.playerId);

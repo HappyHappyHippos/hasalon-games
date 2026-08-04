@@ -12,6 +12,8 @@ import {
   MAX_ROUNDS,
   MAX_VOTE_SECONDS,
   MAX_WRITE_SECONDS,
+  MIN_CAPTION_BOX_HEIGHT,
+  MIN_CAPTION_BOX_WIDTH,
   MIN_ROUNDS,
   MIN_VOTE_SECONDS,
   MIN_WRITE_SECONDS,
@@ -24,7 +26,7 @@ import {
   VOTE_POINTS,
 } from './constants';
 import { makeRng, shuffle } from './rng';
-import { pickTemplates, templateById } from './templates';
+import { boxesForCaptionCount, pickTemplates, templateById } from './templates';
 import type {
   MemesConfig,
   MemesEntry,
@@ -124,7 +126,7 @@ function dealRound(state: MemesState): void {
     player.roundScore = 0;
     player.templateId = template?.id ?? '';
     player.draft = Array.from({ length: template?.slots ?? 1 }, () => '');
-    player.draftPositions = (template?.boxes ?? []).map(({ x, y }) => ({ x, y }));
+    player.draftPositions = (template?.boxes ?? []).map(({ x, y, w, h }) => ({ x, y, w, h }));
     player.submitted = false;
     player.draftBudget = MAX_DRAFTS_PER_SECOND;
     if (template) state.usedTemplates.add(template.id);
@@ -141,6 +143,12 @@ function clampPosition(value: unknown, fallback: number, max: number): number {
     : fallback;
 }
 
+function clampSize(value: unknown, fallback: number, min: number): number {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(1, Math.max(min, value))
+    : fallback;
+}
+
 function normalizePositions(
   raw: unknown,
   boxes: readonly MemeTextBox[],
@@ -153,18 +161,26 @@ function normalizePositions(
       ? candidate as Record<string, unknown>
       : null;
     const fallback = current[index] ?? box;
+    // Some curated template boxes are intentionally shallow strips. Do not
+    // enlarge those on first load; the shared minimum only limits how far a
+    // player can shrink a box that started larger.
+    const width = clampSize(value?.w, fallback.w ?? box.w, Math.min(box.w, MIN_CAPTION_BOX_WIDTH));
+    const height = clampSize(value?.h, fallback.h ?? box.h, Math.min(box.h, MIN_CAPTION_BOX_HEIGHT));
     return {
-      x: clampPosition(value?.x, fallback.x, 1 - box.w),
-      y: clampPosition(value?.y, fallback.y, 1 - box.h),
+      x: clampPosition(value?.x, fallback.x, 1 - width),
+      y: clampPosition(value?.y, fallback.y, 1 - height),
+      w: width,
+      h: height,
     };
   });
 }
 
-function storeDraft(player: MemesPlayer, a: unknown, b: unknown, positions?: unknown): string[] {
-  const draft = normalizeCaption([a, b], playerSlots(player));
+function storeDraft(player: MemesPlayer, raw: unknown, positions?: unknown): string[] {
+  const draft = normalizeCaption(raw, playerSlots(player));
   player.draft = draft;
   const template = templateById(player.templateId);
-  player.draftPositions = normalizePositions(positions, template?.boxes ?? [], player.draftPositions);
+  const boxes = boxesForCaptionCount(template, draft.length);
+  player.draftPositions = normalizePositions(positions, boxes, player.draftPositions);
   return draft;
 }
 
@@ -175,7 +191,7 @@ function submitPlayer(
   positions?: unknown,
 ): boolean {
   if (player.submitted || !player.templateId) return false;
-  const texts = storeDraft(player, raw[0], raw[1], positions);
+  const texts = storeDraft(player, raw, positions);
   if (!isUsableCaption(texts, playerSlots(player))) return false;
 
   player.submitted = true;
@@ -334,13 +350,13 @@ export function applyInput(state: MemesState, playerId: string, raw: unknown): v
   if (raw.k === 'draft') {
     if (state.phase !== 'writing' || player.submitted || player.draftBudget <= 0) return;
     player.draftBudget -= 1;
-    storeDraft(player, raw.a, raw.b, raw.p);
+    storeDraft(player, raw.texts, raw.p);
     return;
   }
 
   if (raw.k === 'submit') {
     if (state.phase !== 'writing' || player.submitted) return;
-    submitPlayer(state, player, [raw.a, raw.b], raw.p);
+    submitPlayer(state, player, raw.texts, raw.p);
     if (connectedWritersDone(state)) finishWriting(state);
     return;
   }

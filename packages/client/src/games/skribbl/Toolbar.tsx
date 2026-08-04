@@ -67,6 +67,17 @@ export function Toolbar({ color, size, onColor, onSize }: Props): JSX.Element {
       <div className="skribbl__acts">
         <button
           type="button"
+          className="skribbl__act skribbl__act--fill"
+          style={{ '--fill-color': INK_COLORS[color] } as CSSProperties}
+          onClick={() => {
+            sfx.click();
+            socket.sendInputReliable({ k: 'fill', c: color });
+          }}
+        >
+          {t.skribblFill}
+        </button>
+        <button
+          type="button"
           className="skribbl__act"
           onClick={() => {
             sfx.click();

@@ -3,6 +3,7 @@ import { SPEED_PRESETS, suggestedTargetScore, type AchtungConfig } from '@mg/sha
 import type { GameConfig } from '@mg/shared';
 import { Segmented } from '../../ui/Segmented';
 import { Toggle } from '../../ui/Toggle';
+import { NumberStepper } from '../../ui/NumberStepper';
 import { useT } from '../../strings';
 
 interface Props {
@@ -38,18 +39,8 @@ export function AchtungSettings({ settings, isHost, playerCount, onChange }: Pro
         options={SPEED_PRESETS.map((value, i) => ({ value, label: t.speedLabels[i]! }))}
         onChange={(speedScale) => onChange({ speedScale })}
       />
-      <label className="setting">
-        <span>{t.setPlayTo}</span>
-        <input
-          className="input input--number"
-          type="number"
-          min={1}
-          max={200}
-          disabled={!isHost}
-          value={config.targetScore}
-          onChange={(event) => onChange({ targetScore: Number(event.target.value) })}
-        />
-      </label>
+      <NumberStepper label={t.setPlayTo} value={config.targetScore} min={1} max={200}
+        disabled={!isHost} onChange={(targetScore) => onChange({ targetScore })} />
       {isHost && (
         <p className="muted small">
           {t.suggestedFor(playerCount, suggestedTargetScore(playerCount))}

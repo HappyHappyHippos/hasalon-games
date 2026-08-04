@@ -48,7 +48,11 @@ export function LobbyScreen(): JSX.Element {
     const link = `${location.origin}${location.pathname}#/room/${room.code}`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: document.title, text: t.copyInvite, url: link });
+        await navigator.share({
+          title: document.title,
+          text: t.inviteShareText(room.code),
+          url: link,
+        });
         return;
       } catch (error) {
         // Cancelling the native sheet is a complete action, not a clipboard failure.
@@ -90,7 +94,9 @@ export function LobbyScreen(): JSX.Element {
                   key={player.id}
                   className={`person${player.ready ? ' person--ready' : ''}${
                     player.connected ? '' : ' person--away'
-                  }${speaking.has(player.id) ? ' person--speaking' : ''}`}
+                  }${speaking.has(player.id) ? ' person--speaking' : ''}${
+                    player.id === playerId ? ' person--self' : ''
+                  }`}
                 >
                   {player.id === playerId ? (
                     <div style={{ marginLeft: '-0.5rem', marginRight: '0.25rem' }}>
@@ -172,7 +178,6 @@ export function LobbyScreen(): JSX.Element {
           </section>
 
           <section className="lobby__choice">
-            <h2 className="eyebrow">{isHost ? t.pickAGame : t.hostIsPicking}</h2>
             <GamePicker
               selected={room.gameId}
               canChoose={isHost}
@@ -187,7 +192,6 @@ export function LobbyScreen(): JSX.Element {
                 playerCount={room.players.length}
                 onChange={(patch) => socket.setSettings(patch)}
               />
-              <p className="muted small controls-hint">{t.games[room.gameId].controls}</p>
             </div>
           </section>
         </div>

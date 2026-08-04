@@ -3,7 +3,7 @@ import type { JSX } from 'react';
 /** A tiny reveal-stage scene, using the same paper, ink and hard-shadow vocabulary as the game. */
 export function MemesBoxArt(): JSX.Element {
   return (
-    <svg className="boxart" viewBox="0 0 200 130" role="img" aria-label="A colorful meme reveal with voting cards">
+    <svg className="boxart boxart--memes" viewBox="0 0 200 130" role="img" aria-label="A colorful meme reveal with voting cards">
       <rect width="200" height="130" fill="#f58a3a" />
       <circle cx="21" cy="22" r="14" fill="#ffd23f" stroke="#14110f" strokeWidth="3" />
       <path d="M17 22h8M21 18v8" stroke="#14110f" strokeWidth="3" strokeLinecap="round" />

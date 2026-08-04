@@ -31,7 +31,7 @@ export const JUMP_OFF = 0.3;
 /** Downward deflection that drops through a one-way platform. */
 export const DROP_Y = 0.55;
 
-export const HOLD_REJUMP_MS = 500;
+export const HOLD_REJUMP_MS = 400;
 export const REARM_RELEASE_MS = 50;
 
 export interface StickState {

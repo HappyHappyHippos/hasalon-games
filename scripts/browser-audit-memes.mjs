@@ -84,7 +84,7 @@ try {
     platform: 'iPhone',
   });
   await call('Page.addScriptToEvaluateOnNewDocument', {
-    source: `Object.defineProperty(navigator, 'standalone', { configurable: true, get: () => true });`,
+    source: `Object.defineProperty(navigator, 'virtualKeyboard', { configurable: true, value: { overlaysContent: false } });`,
   });
   await call('Page.reload', { ignoreCache: true });
   await call('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
@@ -93,6 +93,23 @@ try {
     if (await evaluate(`typeof window.mgStore !== 'undefined'`)) break;
     await sleep(100);
   }
+  const install = await screenshot('install-iphone-portrait');
+  const installAudit = await evaluate(`(() => {
+    const dialog = document.querySelector('.installprompt');
+    const share = document.querySelector('.installprompt__share-demo svg');
+    const home = document.querySelector('.installprompt__home-demo svg');
+    return {
+      present: !!dialog,
+      steps: document.querySelectorAll('.installprompt__steps li').length,
+      sharePaths: share?.querySelectorAll('path').length ?? 0,
+      homeIcon: !!home?.querySelector('rect'),
+      benefitsFullscreen: dialog?.textContent.includes('Safari') ?? false,
+      keyboardOverlays: navigator.virtualKeyboard?.overlaysContent ?? false,
+      appFixed: getComputedStyle(document.querySelector('.app')).position,
+    };
+  })()`);
+  await evaluate(`document.querySelector('.installprompt .btn')?.click()`);
+  await sleep(100);
   await evaluate(`localStorage.setItem('mg.lang','en'); window.mgStore.setState({ lang: 'en' })`);
 
   const room = {
@@ -104,8 +121,27 @@ try {
       totalScore: 0, voice: false, listening: true,
     })),
   };
+  const landscapeLobbyRoom = {
+    ...room,
+    phase: 'lobby',
+    players: Array.from({ length: 8 }, (_, seat) => ({
+      id: `p${seat}`,
+      name: ['Maya', 'Noam', 'Ari', 'Lior', 'Dana', 'Gal', 'Roni', 'Tal'][seat],
+      colorIndex: seat,
+      hat: seat,
+      face: seat,
+      ready: true,
+      connected: true,
+      isHost: seat === 0,
+      seat,
+      score: 0,
+      totalScore: 0,
+      voice: false,
+      listening: true,
+    })),
+  };
   const players = [0, 1, 2].map((seat) => ({ seat, score: 0, alive: true, roundScore: 0, submitted: seat === 1, voted: false }));
-  const privateView = { templateId: 'drake-hotline-bling', slots: 2, nudge: 'on', draft: ['When the family says one quick game', 'When it is suddenly 2 AM'], positions: [{ x: 0.5102, y: 0.0102 }, { x: 0.5102, y: 0.5102 }], submitted: false, myVote: null, isAuthor: false };
+  const privateView = { templateId: 'drake-hotline-bling', slots: 2, nudge: 'on', draft: ['When the family says one quick game', 'When it is suddenly 2 AM'], positions: [{ x: 0.5102, y: 0.0102, w: 0.4796, h: 0.4796 }, { x: 0.5102, y: 0.5102, w: 0.4796, h: 0.4796 }], submitted: false, myVote: null, isAuthor: false };
   const writingHud = { phase: 'writing', round: 1, countdown: 0, players, memes: { phaseTicks: 2700, phaseTotal: 3600, phaseSeq: 2, rounds: 3, entryIndex: -1, entryCount: 0, stage: null } };
   const homeInputFont = await evaluate(`(() => { const input = document.querySelector('input'); input?.focus(); return input ? parseFloat(getComputedStyle(input).fontSize) : 0; })()`);
   await evaluate(`window.mgStore.setState(${JSON.stringify({ room: { ...room, phase: 'lobby' }, playerId: 'p0' })})`);
@@ -151,12 +187,12 @@ try {
     caption.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
     return new Promise((resolve) => requestAnimationFrame(() => resolve({ before, after: parseFloat(caption.style.left) })));
   })()`);
-  const animatedPrivate = { ...privateView, templateId: 'gif-222516354-disappearing-kid-gif', positions: [{ x: 0.04, y: 0.03 }, { x: 0.04, y: 0.73 }] };
+  const animatedPrivate = { ...privateView, templateId: 'gif-222516354-disappearing-kid-gif', positions: [{ x: 0.04, y: 0.03, w: 0.92, h: 0.18 }, { x: 0.04, y: 0.73, w: 0.92, h: 0.18 }] };
   await evaluate(`window.mgStore.setState(${JSON.stringify({ memesPrivate: animatedPrivate })})`);
   await sleep(900);
   const animatedAudit = await evaluate(`(() => { const card = document.querySelector('.meme-card'); const video = card?.querySelector('video'); return { present: !!video, paused: video?.paused, readyState: video?.readyState, objectFit: video ? getComputedStyle(video).objectFit : '', cardClass: card?.className, fallback: card?.querySelector('.meme-card__fallback')?.textContent, mediaRequests: performance.getEntriesByType('resource').map((entry) => entry.name).filter((name) => name.includes('gif-222516354')) }; })()`);
 
-  const stage = { templateId: 'distracted-boyfriend', texts: ['Me opening one message', 'The game night group chat'], positions: [{ x: 0.0975, y: 0.6275 }, { x: 0.755, y: 0.50125 }], authorSeat: -1, ballots: 1, eligible: 2, tally: null, award: 0, top: 0, reactions: [2, 0, 0] };
+  const stage = { templateId: 'distracted-boyfriend', texts: ['Me opening one message', 'The game night group chat'], positions: [{ x: 0.0975, y: 0.6275, w: 0.3592, h: 0.205 }, { x: 0.7, y: 0.50125, w: 0.2667, h: 0.1988 }], authorSeat: -1, ballots: 1, eligible: 2, tally: null, award: 0, top: 0, reactions: [2, 0, 0] };
   const votingHud = { phase: 'voting', round: 1, countdown: 0, players, memes: { phaseTicks: 600, phaseTotal: 720, phaseSeq: 4, rounds: 3, entryIndex: 0, entryCount: 3, stage } };
   await evaluate(`window.mgStore.setState(${JSON.stringify({ hud: votingHud, memesPrivate: { ...privateView, templateId: 'drake-hotline-bling' } })})`);
   await sleep(500);
@@ -194,10 +230,136 @@ try {
   const skribblAudit = await evaluate(`(() => { const rect = document.querySelector('.skribbl__top').getBoundingClientRect(); return { focused: document.activeElement?.classList.contains('skribbl__guess'), top: rect.top, bottom: rect.bottom, fixed: getComputedStyle(document.querySelector('.skribbl__top')).position, visible: rect.top >= 0 && rect.bottom <= innerHeight }; })()`);
 
   await call('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 2, mobile: true });
-  await evaluate(`window.mgStore.setState(${JSON.stringify({ room, hud: writingHud, memesPrivate: privateView })})`);
+  await evaluate(`window.mgStore.setState(${JSON.stringify({ room: landscapeLobbyRoom, playerId: 'p0' })})`);
+  await sleep(300);
+  await evaluate(`window.mgStore.setState({ error: null })`);
+  const lobbyLandscape = await screenshot('lobby-landscape');
+  const lobbyLandscapeAudit = await evaluate(`(() => {
+    const sameRow = (selector) => {
+      const tops = [...document.querySelectorAll(selector)].map((el) => Math.round(el.getBoundingClientRect().top));
+      return tops.length ? Math.max(...Object.values(Object.groupBy(tops, (top) => top)).map((row) => row.length)) : 0;
+    };
+    const picker = document.querySelector('.picker');
+    const people = document.querySelector('.people');
+    return {
+      overflowX: document.documentElement.scrollWidth > innerWidth,
+      pickerColumns: getComputedStyle(picker).gridTemplateColumns.split(' ').length,
+      peopleColumns: getComputedStyle(people).gridTemplateColumns.split(' ').length,
+      gamesOnOneRow: sameRow('.gamecard'),
+      peopleOnOneRow: sameRow('.person'),
+      playersOnOneRow: sameRow('.person:not(.person--self)'),
+      gameArtWidths: [...document.querySelectorAll('.gamecard__art')].map((el) => Math.round(el.getBoundingClientRect().width)),
+      boxArtBackgrounds: [...document.querySelectorAll('.boxart')].map((el) => getComputedStyle(el).backgroundColor),
+      selfWidth: Math.round(document.querySelector('.person--self').getBoundingClientRect().width),
+      playerWidth: Math.round(document.querySelector('.person:not(.person--self)').getBoundingClientRect().width),
+      arrowDirection: getComputedStyle(document.querySelector('.person--self .appearance__arrows')).flexDirection,
+      gameExplanationPresent: !!document.querySelector('.controls-hint'),
+      pickerHeadingPresent: !!document.querySelector('.lobby__choice > .eyebrow'),
+      micNotes: [...document.querySelectorAll('.voicebar p')].map((element) => element.textContent),
+    };
+  })()`);
+
+  const gunLobbyRoom = {
+    ...landscapeLobbyRoom,
+    gameId: 'gunmayhem',
+    settings: { game: 'gunmayhem', levelId: 'salon', stocks: 4, targetWins: 3, weaponsEnabled: true, bombsEnabled: true, powerupsEnabled: true },
+  };
+  await evaluate(`window.mgStore.setState(${JSON.stringify({ room: gunLobbyRoom, playerId: 'p0' })})`);
+  await sleep(200);
+  await evaluate(`document.querySelector('.lobby__settings')?.scrollIntoView({ block: 'start' }); window.mgStore.setState({ error: null })`);
+  await sleep(100);
+  const settingsLandscape = await screenshot('settings-landscape');
+  const settingsLandscapeAudit = await evaluate(`(() => {
+    const settings = document.querySelector('.lobby__settings .settings');
+    const buttons = [...document.querySelectorAll('.number-stepper__button')];
+    return {
+      columns: getComputedStyle(settings).gridTemplateColumns.split(' ').length,
+      stepperCount: document.querySelectorAll('.number-stepper').length,
+      targets: buttons.map((button) => ({ width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height })),
+      gameExplanationPresent: !!document.querySelector('.controls-hint'),
+    };
+  })()`);
+
+  const gunPlayRoom = { ...gunLobbyRoom, phase: 'playing' };
+  const gunHud = {
+    phase: 'playing', round: 1, countdown: 0,
+    players: [0, 1].map((seat) => ({ seat, score: 0, alive: true, stocks: 4, damage: seat * 12, weapon: 'pistol', ammo: 8, bombs: 2 })),
+  };
+  await evaluate(`window.mgStore.setState(${JSON.stringify({ room: gunPlayRoom, playerId: 'p0', hud: gunHud, net: { rtt: 54, jitter: 11, delay: 72 }, error: null })})`);
+  await sleep(300);
+  const pingLandscape = await screenshot('ping-landscape');
+  const pingAudit = await evaluate(`(() => {
+    const badge = document.querySelector('.netbadge');
+    const rect = badge?.getBoundingClientRect();
+    return {
+      text: badge?.textContent,
+      display: badge ? getComputedStyle(badge).display : 'missing',
+      fontSize: badge ? parseFloat(getComputedStyle(badge).fontSize) : 0,
+      insideViewport: !!rect && rect.left >= 0 && rect.right <= innerWidth && rect.bottom <= innerHeight,
+      bottomGap: rect ? innerHeight - rect.bottom : null,
+    };
+  })()`);
+
+  const musicAudit = await evaluate(`Promise.all(['/music/lobby.mp3', '/music/gunmayhem.mp3', '/music/achtung.mp3', '/music/memes.mp3'].map((url) => new Promise((resolve) => {
+    const audio = new Audio(url);
+    const finish = (ok) => resolve({ url, ok, duration: Number.isFinite(audio.duration) ? audio.duration : null });
+    audio.addEventListener('loadedmetadata', () => finish(true), { once: true });
+    audio.addEventListener('error', () => finish(false), { once: true });
+    setTimeout(() => finish(false), 8000);
+    audio.load();
+  })))`);
+
+  await evaluate(`window.mgStore.setState(${JSON.stringify({ room, hud: writingHud, memesPrivate: privateView, error: null })})`);
   await sleep(500);
   const landscape = await screenshot('writing-landscape');
-  const landscapeAudit = await evaluate(`({ overflowX: document.documentElement.scrollWidth > innerWidth, overflowY: document.documentElement.scrollHeight > innerHeight })`);
+  const landscapeAudit = await evaluate(`(() => {
+    const caption = document.querySelector('.meme-card__caption--editable');
+    const handle = caption?.querySelector('.meme-card__resize');
+    const fields = document.querySelector('.memes__fields');
+    const preview = document.querySelector('.memes__preview');
+    const card = document.querySelector('.memes__preview .meme-card');
+    const before = parseFloat(caption?.style.width ?? '0');
+    handle?.focus();
+    handle?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true }));
+    const handleRect = handle?.getBoundingClientRect();
+    const previewRect = preview?.getBoundingClientRect();
+    const cardRect = card?.getBoundingClientRect();
+    return new Promise((resolve) => requestAnimationFrame(() => resolve({
+      overflowX: document.documentElement.scrollWidth > innerWidth,
+      overflowY: document.documentElement.scrollHeight > innerHeight,
+      fieldsScrollable: !!fields && fields.scrollHeight > fields.clientHeight,
+      fieldsPaddingBlock: fields ? [getComputedStyle(fields).paddingTop, getComputedStyle(fields).paddingBottom] : [],
+      cardFitsPreview: !!previewRect && !!cardRect && cardRect.top >= previewRect.top && cardRect.bottom <= previewRect.bottom,
+      cardHeight: cardRect?.height ?? 0,
+      previewHeight: previewRect?.height ?? 0,
+      resizeTarget: handleRect ? { width: handleRect.width, height: handleRect.height } : null,
+      resized: { before, after: parseFloat(caption?.style.width ?? '0') },
+    })));
+  })()`);
+
+  await evaluate(`window.mgStore.setState(${JSON.stringify({ room: skribblRoom, playerId: 'p1', hud: skribblHud, secret: { word: 'boat', choices: [] }, matchWinnerSeat: null, error: null })})`);
+  await sleep(300);
+  const skribblLandscape = await screenshot('skribbl-landscape');
+  const skribblLandscapeAudit = await evaluate(`(() => {
+    const selectors = ['.skribbl__side', '.skribbl__stage', '.skribbl__chat'];
+    const rects = selectors.map((selector) => {
+      const rect = document.querySelector(selector).getBoundingClientRect();
+      return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
+    });
+    return {
+      overflowX: document.documentElement.scrollWidth > innerWidth,
+      overflowY: document.documentElement.scrollHeight > innerHeight,
+      columns: getComputedStyle(document.querySelector('.skribbl__body')).gridTemplateColumns.split(' ').length,
+      aligned: rects.every((rect) => Math.abs(rect.top - rects[0].top) < 1 && Math.abs(rect.bottom - rects[0].bottom) < 1),
+      paperAligned: (() => {
+        const paper = document.querySelector('.skribbl__paper').getBoundingClientRect();
+        return Math.abs(paper.top - rects[0].top) < 1 && Math.abs(paper.bottom - rects[0].bottom) < 1;
+      })(),
+      fillPresent: [...document.querySelectorAll('.skribbl__act')].some((button) => button.textContent.trim() === 'Fill'),
+      actionTargets: [...document.querySelectorAll('.skribbl__act')].map((button) => ({ width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height })),
+      rects,
+    };
+  })()`);
 
   await evaluate(`document.querySelector('.options')?.click()`);
   await sleep(100);
@@ -215,7 +377,7 @@ try {
     };
   })()`);
 
-  console.log(JSON.stringify({ output, screenshots: { lobby, boxArt, skribblArt, memesArt, writing, voting, result, matchOver, skribbl, landscape, options }, lobbyAudit, writingAudit, dragAudit, animatedAudit, votingAudit, downloadAudit, matchOverAudit, skribblAudit, landscapeAudit, optionsAudit, browserErrors }, null, 2));
+  console.log(JSON.stringify({ output, screenshots: { install, lobby, boxArt, skribblArt, memesArt, writing, voting, result, matchOver, skribbl, lobbyLandscape, settingsLandscape, pingLandscape, landscape, skribblLandscape, options }, installAudit, lobbyAudit, writingAudit, dragAudit, animatedAudit, votingAudit, downloadAudit, matchOverAudit, skribblAudit, lobbyLandscapeAudit, settingsLandscapeAudit, pingAudit, musicAudit, landscapeAudit, skribblLandscapeAudit, optionsAudit, browserErrors }, null, 2));
 } finally {
   cdp?.close();
   edge.kill();

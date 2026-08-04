@@ -22,6 +22,7 @@ import {
   MAX_REVEAL_FRACTION,
   OP_BEGIN,
   OP_CLEAR,
+  OP_FILL,
   OP_TO,
   PICK_TICKS,
   PLACE_BONUS,
@@ -283,6 +284,7 @@ type DrawMessage =
   | { k: 'to'; p: number[] }
   | { k: 'clear' }
   | { k: 'undo' }
+  | { k: 'fill'; c: number }
   | { k: 'pick'; w: string }
   | { k: 'guess'; g: string };
 
@@ -306,6 +308,7 @@ export function applyInput(state: SkribblState, playerId: string, raw: unknown):
     case 'to':
     case 'clear':
     case 'undo':
+    case 'fill':
       draw(state, player, message);
       return;
     default:
@@ -357,6 +360,16 @@ function draw(state: SkribblState, player: SkribblPlayer, message: DrawMessage):
     case 'clear':
       clearInk(state);
       return;
+    case 'fill': {
+      const requested = Number(message.c);
+      const color = Number.isFinite(requested)
+        ? Math.max(0, Math.min(INK_COLORS.length - 1, Math.round(requested)))
+        : 0;
+      state.strokeStarts.push(state.strokes.length);
+      state.strokes.push(OP_FILL, color);
+      state.inkPending.push(OP_FILL, color);
+      return;
+    }
     case 'undo': {
       const start = state.strokeStarts.pop();
       if (start === undefined) return;
