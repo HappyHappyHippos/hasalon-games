@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { makeRng } from './rng';
-import { isKnownTemplate, MEME_TEMPLATES, pickTemplates } from './templates';
+import {
+  boxesForCaptionCount,
+  isKnownTemplate,
+  MEME_TEMPLATES,
+  pickTemplates,
+} from './templates';
 
 /** The manifest is data the sim trusts, so malformed geometry must fail in CI. */
 describe('Meme Machine template manifest', () => {
@@ -43,5 +48,14 @@ describe('Meme Machine template manifest', () => {
   it('recognises every manifest id and rejects invented ones', () => {
     for (const template of MEME_TEMPLATES) expect(isKnownTemplate(template.id)).toBe(true);
     expect(isKnownTemplate('definitely-not-a-template')).toBe(false);
+  });
+
+  it('adds bounded shared geometry without changing the template boxes', () => {
+    const template = MEME_TEMPLATES[0]!;
+    const boxes = boxesForCaptionCount(template, 99);
+    expect(boxes).toHaveLength(4);
+    expect(boxes[0]).toEqual(template.boxes[0]);
+    expect(boxes.slice(template.boxes.length).every((box) => box.style === 'impact')).toBe(true);
+    expect(template.boxes).toHaveLength(template.slots);
   });
 });

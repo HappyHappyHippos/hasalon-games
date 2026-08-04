@@ -48,7 +48,7 @@ function intoWriting(state: MemesState): void {
 
 function submitAll(state: MemesState): void {
   for (const player of state.players) {
-    applyInput(state, player.id, { k: 'submit', a: `caption-${player.id}` });
+    applyInput(state, player.id, { k: 'submit', texts: [`caption-${player.id}`] });
   }
   expect(state.phase).toBe('reveal');
 }
@@ -70,12 +70,16 @@ describe('Meme Machine secrecy', () => {
     const state = makeState(4);
     intoWriting(state);
     for (const player of state.players) {
-      applyInput(state, player.id, { k: 'draft', a: `very-secret-${player.id}` });
+      applyInput(state, player.id, {
+        k: 'draft',
+        texts: [`very-secret-${player.id}`, '', `extra-secret-${player.id}`],
+      });
     }
     const encoded = JSON.stringify(makeSnapshot(state));
     for (const player of state.players) {
       expect(encoded).not.toContain(player.templateId);
       expect(encoded).not.toContain(`very-secret-${player.id}`);
+      expect(encoded).not.toContain(`extra-secret-${player.id}`);
     }
   });
 
@@ -108,7 +112,7 @@ describe('Meme Machine secrecy', () => {
     const state = makeState(4);
     intoWriting(state);
     for (const player of state.players) {
-      applyInput(state, player.id, { k: 'draft', a: `private-${player.id}` });
+      applyInput(state, player.id, { k: 'draft', texts: [`private-${player.id}`] });
     }
     for (const player of state.players) {
       const own = JSON.stringify(privateFor(state, player.id));
@@ -130,7 +134,7 @@ describe('Meme Machine secrecy', () => {
     const movedX = Math.min(0.123456, (1 - template.boxes[0]!.w) / 2);
     applyInput(state, player.id, {
       k: 'draft',
-      a: 'move me',
+      texts: ['move me'],
       p: [{ x: movedX, y: 0.234567 }],
     });
     expect(JSON.stringify(makeSnapshot(state))).not.toContain(String(movedX));
@@ -139,7 +143,7 @@ describe('Meme Machine secrecy', () => {
     for (const candidate of state.players) {
       applyInput(state, candidate.id, {
         k: 'submit',
-        a: `caption-${candidate.id}`,
+        texts: [`caption-${candidate.id}`],
         p: candidate === player ? [{ x: movedX, y: 0.234567 }] : undefined,
       });
     }
@@ -155,13 +159,29 @@ describe('Meme Machine secrecy', () => {
     const template = templateById(player.templateId)!;
     applyInput(state, player.id, {
       k: 'draft',
-      a: 'bounded',
+      texts: ['bounded'],
       p: [{ x: -20, y: 20 }, { x: Number.NaN, y: Number.POSITIVE_INFINITY }],
     });
     const positions = privateFor(state, player.id)!.positions;
     expect(positions[0]?.x).toBe(0);
     expect(positions[0]?.y).toBe(1 - template.boxes[0]!.h);
     expect(positions.every(({ x, y }) => Number.isFinite(x) && Number.isFinite(y))).toBe(true);
+  });
+
+  it('accepts at most four captions and restores added boxes privately', () => {
+    const state = makeState();
+    intoWriting(state);
+    const player = state.players[0]!;
+    applyInput(state, player.id, {
+      k: 'draft',
+      texts: ['one', 'two', 'three', 'four', 'ignored'],
+      p: Array.from({ length: 5 }, (_, index) => ({ x: index / 20, y: index / 20 })),
+    });
+
+    const own = privateFor(state, player.id)!;
+    expect(own.draft).toEqual(['one', 'two', 'three', 'four']);
+    expect(own.positions).toHaveLength(4);
+    expect(JSON.stringify(makeSnapshot(state))).not.toContain('three');
   });
 });
 
@@ -292,7 +312,7 @@ describe('Meme Machine determinism', () => {
       const state = makeState(4, { rounds: 1 }, 0xdecafbad);
       intoWriting(state);
       state.players.forEach((player, index) => {
-        applyInput(state, player.id, { k: 'submit', a: `joke-${index}` });
+        applyInput(state, player.id, { k: 'submit', texts: [`joke-${index}`] });
       });
       while (state.phase !== 'standings') {
         if (state.phase === 'voting') {

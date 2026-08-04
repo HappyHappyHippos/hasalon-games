@@ -6,7 +6,6 @@ import { MatchOver, Paused } from './MatchOverlays';
 import { VoiceBar } from './VoiceBar';
 import { useHasTouch } from './useTouchControls';
 import {
-  enterFullscreen,
   fullscreenNeedsInstall,
   isStandalone,
   useIsFullscreen,
@@ -73,14 +72,7 @@ export function Screen({
       */}
       {hasTouch && !isStandalone() && <FullscreenButton />}
 
-      <div
-        className={`screenbox${paperArena ? ' screenbox--paper' : ''}`}
-        // The first touch of the arena is the gesture fullscreen needs, and it
-        // is one the player was making anyway. Capture phase so it still fires
-        // when the pad swallows the event, and it is a no-op everywhere the API
-        // is missing or already satisfied.
-        onPointerDownCapture={hasTouch ? () => void enterFullscreen() : undefined}
-      >
+      <div className={`screenbox${paperArena ? ' screenbox--paper' : ''}`}>
         <canvas ref={canvasRef} className="screenbox__canvas" />
 
         {controls}

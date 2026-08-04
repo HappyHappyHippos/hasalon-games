@@ -20,7 +20,9 @@ describe('Meme Machine caption validation', () => {
     expect(sanitize(`  cafe\u0301    ${'x'.repeat(100)}  `)).toBe(
       `café ${'x'.repeat(MAX_CAPTION_CHARS - 5)}`,
     );
-    expect(normalizeCaption([' one ', ' two ', 'ignored'], 2)).toEqual(['one', 'two']);
+    expect(normalizeCaption([' one ', ' two ', ' three ', ' four ', 'ignored'], 2))
+      .toEqual(['one', 'two', 'three', 'four']);
+    expect(normalizeCaption([], 2)).toEqual(['', '']);
   });
 
   it('strips every unsafe control and bidi range represented by the sanitizer', () => {

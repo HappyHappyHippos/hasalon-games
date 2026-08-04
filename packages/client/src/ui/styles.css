@@ -500,6 +500,22 @@ strong,
   gap: 10px;
 }
 
+.invite-app-hint {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: var(--yellow);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  text-align: start;
+}
+.invite-app-hint p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .home__games {
   display: flex;
   flex-direction: column;
@@ -1142,8 +1158,8 @@ strong,
 }
 
 .fullscreenbtn {
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   flex: none;
   border: 2px solid var(--ink);
   border-radius: 999px;
@@ -2256,6 +2272,40 @@ strong,
   }
 }
 
+/* Every major room card sits on one mobile measure. Keeping the gutter on the
+   outer scroller leaves room for hard shadows without letting any child make
+   the page pan sideways. The height arm covers phones held in landscape. */
+@media (max-width: 760px), (max-height: 560px) {
+  .lobby {
+    padding: calc(16px + env(safe-area-inset-top)) 0 calc(32px + env(safe-area-inset-bottom));
+    overflow-x: hidden;
+    overflow-x: clip;
+    overscroll-behavior-inline: none;
+    touch-action: pan-y pinch-zoom;
+  }
+  .lobby__inner {
+    width: calc(100% - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
+    max-width: calc(100% - 32px - env(safe-area-inset-left) - env(safe-area-inset-right));
+    margin-inline: auto;
+  }
+  .lobby__grid,
+  .lobby__choice,
+  .picker,
+  .lobby__head,
+  .lobby__people,
+  .lobby__settings,
+  .lobby__foot,
+  .gamecard {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+  .lobby__grid,
+  .picker {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 /* Landscape is strongly preferred: the arenas are wide.
 
    The text used to be a CSS `content` string, which cannot be translated and
@@ -2963,6 +3013,16 @@ strong,
 .memes__fields p { margin: 0; }
 .memes__nudge { color: var(--ink-soft); font-family: var(--font-display); }
 .memes__field { display: grid; gap: 5px; font-weight: 800; }
+.memes__field-head {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.memes__field-head .btn {
+  min-height: 44px;
+}
 .memes__field textarea {
   width: 100%;
   min-height: 70px;
@@ -3158,6 +3218,7 @@ strong,
   .memes { padding: calc(6px + env(safe-area-inset-top)) calc(6px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left)); gap: 6px; }
   .memes__top { min-height: 50px; padding: 4px 8px; padding-inline-end: calc(150px + env(safe-area-inset-right)); }
   .memes__clock { width: 39px; height: 39px; flex-basis: 39px; }
+  .memes__phase { align-content: start; }
   .memes__composer { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 9px; }
   .memes__preview .meme-card { width: min(100%, calc(45dvh * var(--meme-aspect))); }
   .memes__fields { padding: 10px; gap: 8px; }

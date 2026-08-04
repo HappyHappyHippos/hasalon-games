@@ -8,6 +8,7 @@ import {
   type PointerEvent,
 } from 'react';
 import {
+  boxesForCaptionCount,
   templateById,
   type MemeBoxPosition,
   type MemeTextBox,
@@ -175,7 +176,7 @@ export function MemeCard({
   useEffect(() => setBroken(false), [templateId]);
 
   const aspect = template?.aspect ?? 4 / 3;
-  const boxes = template?.boxes ?? [];
+  const boxes = boxesForCaptionCount(template, Math.max(texts.length, positions?.length ?? 0));
   const resolvedPositions = boxes.map((box, index) => positions?.[index] ?? box);
   const move = (index: number, position: MemeBoxPosition): void => {
     const next = resolvedPositions.map((current) => ({ x: current.x, y: current.y }));

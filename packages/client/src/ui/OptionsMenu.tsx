@@ -9,7 +9,7 @@ import { Button } from './Button';
 import { Toggle } from './Toggle';
 import { useHasTouch } from './useTouchControls';
 import { useVoice } from './useVoice';
-import { isStandalone } from './useFullscreen';
+import { exitFullscreen, isStandalone, useIsFullscreen } from './useFullscreen';
 import type { TouchControlsMode } from '../store';
 import { LANGS, type Dict, type Lang } from '../i18n';
 import { isIOSDevice } from './mobileViewport';
@@ -52,6 +52,7 @@ export function OptionsMenu(): JSX.Element {
   const setLang = useStore((s) => s.setLang);
   const hasTouch = useHasTouch();
   const voice = useVoice();
+  const fullscreen = useIsFullscreen();
   const t = useT();
 
   // Escape is the reflex for "get this off my screen", and it should also be
@@ -207,6 +208,17 @@ export function OptionsMenu(): JSX.Element {
 
         <section className="options__section">
           <h3 className="eyebrow">{t.sectionControls}</h3>
+          {fullscreen && (
+            <Button
+              full
+              onClick={() => {
+                void exitFullscreen();
+                close();
+              }}
+            >
+              {t.exitFullscreen}
+            </Button>
+          )}
           <div className="options__choice">
             <span className="toggle__label">{t.onScreenControls}</span>
             <div className="options__segmented">

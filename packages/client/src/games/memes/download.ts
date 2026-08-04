@@ -1,4 +1,9 @@
-import { templateById, type MemeTextBox, type MemesStageEntry } from '@mg/shared/memes';
+import {
+  boxesForCaptionCount,
+  templateById,
+  type MemeTextBox,
+  type MemesStageEntry,
+} from '@mg/shared/memes';
 import { memeUrl } from './preload';
 
 type Drawable = HTMLImageElement | HTMLVideoElement;
@@ -122,7 +127,7 @@ export async function downloadMeme(stage: MemesStageEntry): Promise<void> {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Canvas is unavailable');
   ctx.drawImage(source, 0, 0, canvas.width, canvas.height);
-  template.boxes.forEach((box, index) => {
+  boxesForCaptionCount(template, stage.texts.length).forEach((box, index) => {
     const position = stage.positions[index] ?? box;
     drawCaption(ctx, stage.texts[index] ?? '', box, position.x, position.y, canvas.width, canvas.height);
   });

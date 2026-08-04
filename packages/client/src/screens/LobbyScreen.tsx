@@ -48,7 +48,11 @@ export function LobbyScreen(): JSX.Element {
     const link = `${location.origin}${location.pathname}#/room/${room.code}`;
     if (navigator.share) {
       try {
-        await navigator.share({ title: document.title, text: t.copyInvite, url: link });
+        await navigator.share({
+          title: document.title,
+          text: t.inviteShareText(room.code),
+          url: link,
+        });
         return;
       } catch (error) {
         // Cancelling the native sheet is a complete action, not a clipboard failure.

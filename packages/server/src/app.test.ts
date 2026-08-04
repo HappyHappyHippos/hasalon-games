@@ -568,7 +568,11 @@ describe('match', () => {
         m.t === 'snapshot' && m.snap.game === 'memes' && m.snap.phase === 'writing',
     );
     const captions = clients.map((_, index) => `socket-secret-${index}`);
-    clients.forEach((client, index) => client.send({ t: 'input', i: { k: 'submit', a: captions[index]! } }));
+    const extras = clients.map((_, index) => `private-extra-${index}`);
+    clients.forEach((client, index) => client.send({
+      t: 'input',
+      i: { k: 'submit', texts: [captions[index]!, extras[index]!] },
+    }));
 
     const reveal = await guest!.waitFor(
       (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
@@ -577,12 +581,18 @@ describe('match', () => {
     if (reveal.snap.game !== 'memes' || !reveal.snap.stage) throw new Error('wrong game');
     expect(reveal.snap.stage.authorSeat).toBe(-1);
     const visibleCaption = reveal.snap.stage.texts[0];
+    const visibleTexts = new Set(reveal.snap.stage.texts);
 
     // This guest may know their own caption privately, and the current stage is
     // public. No other submitted text may occur anywhere in their received log.
     const seenByGuest = JSON.stringify(guest!.received);
     captions.forEach((caption, index) => {
       if (index !== 1 && caption !== visibleCaption) expect(seenByGuest).not.toContain(caption);
+    });
+    extras.forEach((caption, index) => {
+      if (index !== 1 && !visibleTexts.has(caption)) {
+        expect(seenByGuest).not.toContain(caption);
+      }
     });
   }, 15_000);
 
@@ -618,7 +628,10 @@ describe('match', () => {
       (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
         m.t === 'snapshot' && m.snap.game === 'memes' && m.snap.phase === 'writing',
     );
-    clients.forEach((client, index) => client.send({ t: 'input', i: { k: 'submit', a: `scored-caption-${index}` } }));
+    clients.forEach((client, index) => client.send({
+      t: 'input',
+      i: { k: 'submit', texts: [`scored-caption-${index}`] },
+    }));
 
     for (let entryIndex = 0; entryIndex < clients.length; entryIndex += 1) {
       const voting = await host!.waitFor(

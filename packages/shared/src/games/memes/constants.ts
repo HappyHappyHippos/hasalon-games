@@ -25,6 +25,7 @@ export const MIN_ROUNDS = 1;
 export const MAX_ROUNDS = 8;
 
 export const MAX_CAPTION_CHARS = 60;
+export const MAX_CAPTION_BOXES = 4;
 export const MIN_USABLE_CHARS = 2;
 export const MAX_DRAFTS_PER_SECOND = 6;
 export const DRAFT_BUDGET_REFILL_TICKS = TICK_RATE;

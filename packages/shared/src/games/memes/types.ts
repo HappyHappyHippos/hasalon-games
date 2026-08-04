@@ -34,8 +34,8 @@ export interface MemeBoxPosition {
 }
 
 export type MemesInput =
-  | { k: 'draft'; a: string; b?: string; p?: MemeBoxPosition[] }
-  | { k: 'submit'; a: string; b?: string; p?: MemeBoxPosition[] }
+  | { k: 'draft'; texts: string[]; p?: MemeBoxPosition[] }
+  | { k: 'submit'; texts: string[]; p?: MemeBoxPosition[] }
   | { k: 'vote'; v: MemesVote }
   | { k: 'react'; r: number };
 

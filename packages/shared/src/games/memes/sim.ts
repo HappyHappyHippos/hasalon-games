@@ -24,7 +24,7 @@ import {
   VOTE_POINTS,
 } from './constants';
 import { makeRng, shuffle } from './rng';
-import { pickTemplates, templateById } from './templates';
+import { boxesForCaptionCount, pickTemplates, templateById } from './templates';
 import type {
   MemesConfig,
   MemesEntry,
@@ -160,11 +160,12 @@ function normalizePositions(
   });
 }
 
-function storeDraft(player: MemesPlayer, a: unknown, b: unknown, positions?: unknown): string[] {
-  const draft = normalizeCaption([a, b], playerSlots(player));
+function storeDraft(player: MemesPlayer, raw: unknown, positions?: unknown): string[] {
+  const draft = normalizeCaption(raw, playerSlots(player));
   player.draft = draft;
   const template = templateById(player.templateId);
-  player.draftPositions = normalizePositions(positions, template?.boxes ?? [], player.draftPositions);
+  const boxes = boxesForCaptionCount(template, draft.length);
+  player.draftPositions = normalizePositions(positions, boxes, player.draftPositions);
   return draft;
 }
 
@@ -175,7 +176,7 @@ function submitPlayer(
   positions?: unknown,
 ): boolean {
   if (player.submitted || !player.templateId) return false;
-  const texts = storeDraft(player, raw[0], raw[1], positions);
+  const texts = storeDraft(player, raw, positions);
   if (!isUsableCaption(texts, playerSlots(player))) return false;
 
   player.submitted = true;
@@ -334,13 +335,13 @@ export function applyInput(state: MemesState, playerId: string, raw: unknown): v
   if (raw.k === 'draft') {
     if (state.phase !== 'writing' || player.submitted || player.draftBudget <= 0) return;
     player.draftBudget -= 1;
-    storeDraft(player, raw.a, raw.b, raw.p);
+    storeDraft(player, raw.texts, raw.p);
     return;
   }
 
   if (raw.k === 'submit') {
     if (state.phase !== 'writing' || player.submitted) return;
-    submitPlayer(state, player, [raw.a, raw.b], raw.p);
+    submitPlayer(state, player, raw.texts, raw.p);
     if (connectedWritersDone(state)) finishWriting(state);
     return;
   }
