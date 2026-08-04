@@ -83,8 +83,6 @@ export function VoiceBar({ compact = false }: Props): JSX.Element | null {
           error={state.error}
           failed={failed}
           connecting={connecting}
-          listening={state.listening}
-          active={state.active}
           relay={state.relay}
           playbackBlocked={state.playbackBlocked}
         />
@@ -102,16 +100,12 @@ function VoiceNote({
   error,
   failed,
   connecting,
-  listening,
-  active,
   relay,
   playbackBlocked,
 }: {
   error: ReturnType<typeof useVoice>['error'];
   failed: number;
   connecting: number;
-  listening: boolean;
-  active: boolean;
   relay: ReturnType<typeof useVoice>['relay'];
   playbackBlocked: boolean;
 }): JSX.Element | null {
@@ -125,20 +119,5 @@ function VoiceNote({
   else if (connecting > 0) note = t.voiceConnecting;
   else if (playbackBlocked) note = t.voiceTapToHear;
   else if (relay === 'stun-only') note = t.voiceRelayUnavailable;
-  else if (listening && !active) note = t.voiceListening;
-
-  const iosNote = (listening || active) && isIOS() ? t.voiceIosNote : null;
-  if (!note && !iosNote) return null;
-  return (
-    <>
-      {note && <p className="muted small">{note}</p>}
-      {iosNote && <p className="muted small">{iosNote}</p>}
-    </>
-  );
-}
-
-function isIOS(): boolean {
-  if (typeof navigator === 'undefined') return false;
-  if (/iPad|iPhone|iPod/.test(navigator.userAgent)) return true;
-  return navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  return note ? <p className="muted small">{note}</p> : null;
 }

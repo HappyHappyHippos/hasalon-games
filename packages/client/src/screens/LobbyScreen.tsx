@@ -193,7 +193,6 @@ export function LobbyScreen(): JSX.Element {
                 playerCount={room.players.length}
                 onChange={(patch) => socket.setSettings(patch)}
               />
-              <p className="muted small controls-hint">{t.games[room.gameId].controls}</p>
             </div>
           </section>
         </div>

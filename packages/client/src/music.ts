@@ -47,11 +47,9 @@ const TRACKS: Record<MusicTrack, string> = {
   lobby: '/music/lobby.mp3',
   gunmayhem: '/music/gunmayhem.mp3',
   achtung: '/music/achtung.mp3',
-  memes: '/music/lobby.mp3',
-  // Deliberately the same file as the lobby. The swing bed is exactly right
-  // under a drawing game — unhurried, and it does not fight a room full of
-  // people talking. `play` notices the url is unchanged and lets it keep
-  // running rather than restarting the same track from the top.
+  memes: '/music/memes.mp3',
+  // Skribbl deliberately shares the quiet lo-fi lobby bed. `play` notices the
+  // URL is unchanged and lets it continue rather than restarting on match start.
   skribbl: '/music/lobby.mp3',
 };
 

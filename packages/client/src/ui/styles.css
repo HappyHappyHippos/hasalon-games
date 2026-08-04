@@ -236,17 +236,12 @@ strong,
   text-indent: 0.35em;
 }
 
-.input--number {
-  width: 84px;
-  padding: 8px 10px;
-  text-align: end;
-}
-
 .setting {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-height: 44px;
   font-weight: 600;
   font-size: 15px;
 }
@@ -258,9 +253,53 @@ strong,
 }
 
 .settings {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  align-items: end;
   gap: 14px;
+}
+.settings > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* Native number spinners are tiny and inconsistent on phones. */
+.number-stepper {
+  display: grid;
+  grid-template-columns: 44px minmax(42px, auto) 44px;
+  align-items: stretch;
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  background: var(--surface);
+}
+
+.number-stepper__button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 25px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+}
+.number-stepper__button:first-child { border-inline-end: 2.5px solid var(--ink); }
+.number-stepper__button:last-child { border-inline-start: 2.5px solid var(--ink); }
+.number-stepper__button:disabled { opacity: 0.35; cursor: not-allowed; }
+.number-stepper__value {
+  display: grid;
+  place-items: center;
+  min-width: 42px;
+  padding-inline: 6px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
 }
 
 /* Toggle */
@@ -270,6 +309,7 @@ strong,
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  min-height: 44px;
   font-weight: 600;
   font-size: 15px;
 }
@@ -733,12 +773,6 @@ strong,
   flex-direction: column;
 }
 
-.controls-hint {
-  margin: 14px 0 0;
-  padding-top: 12px;
-  border-top: 2px dashed var(--paper-2);
-}
-
 .lobby__foot {
   display: flex;
   gap: 12px;
@@ -811,7 +845,11 @@ strong,
   aspect-ratio: 200 / 130;
   border: 3px solid var(--ink);
   border-radius: 10px;
+  overflow: hidden;
 }
+.boxart--gunmayhem { background: #2d1f3d; }
+.boxart--memes { background: #f58a3a; }
+.boxart--skribbl { background: #8d63d6; }
 
 .gamecard__body {
   display: flex;
@@ -1894,16 +1932,6 @@ strong,
 .options__slider input:disabled {
   opacity: 0.35;
   cursor: not-allowed;
-}
-
-/* Licence credit for the lobby track. Small, but it is a CC BY condition, not
-   decoration — see public/music/ATTRIBUTION.md. */
-.options__credit {
-  margin: 0;
-  opacity: 0.7;
-}
-.options__credit a {
-  color: inherit;
 }
 
 /* Who your microphone actually reached. */
@@ -3317,14 +3345,14 @@ strong,
     gap: 5px;
     padding: 4px 6px;
   }
-  .person--self { grid-column: 1 / -1; }
+  .person--self { grid-column: span 2; }
   .person > .avatar { width: 38px; height: 38px; }
   .person__meta { font-size: 10px; }
   .person__tick { width: 24px; height: 24px; }
   .person--self .appearance { gap: 4px; }
   .person--self .appearance__preview { width: 52px; height: 52px; }
   .person--self .appearance__preview .avatar { width: 48px; height: 48px; }
-  .person--self .appearance__arrows { flex-direction: row; gap: 2px; }
+  .person--self .appearance__arrows { gap: 2px; }
   .person--self .appearance__arrow.btn { width: 44px; min-width: 44px; }
   .lobby__ready { padding: 9px; }
   .picker {
@@ -3348,6 +3376,25 @@ strong,
     grid-template-rows: minmax(0, 1fr);
   }
   .skribbl__side { max-height: none; }
+  .skribbl__stage {
+    position: relative;
+    display: grid;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+    gap: 0;
+  }
+  .skribbl__paper,
+  .skribbl__tools {
+    grid-area: 1 / 1;
+  }
+  .skribbl__tools {
+    z-index: 2;
+    align-self: end;
+    justify-self: center;
+    width: calc(100% - 12px);
+    margin: 6px;
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+  }
+  .skribbl__watching { display: none; }
   .skribbl__board {
     flex-direction: column;
     overflow-x: hidden;

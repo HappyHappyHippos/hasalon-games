@@ -3,7 +3,7 @@ import type { JSX } from 'react';
 /** A lively miniature of the actual paper, palette, masked word and drawing action. */
 export function SkribblBoxArt(): JSX.Element {
   return (
-    <svg className="boxart" viewBox="0 0 200 130" role="img" aria-label="A colorful drawing board with a pencil and hidden word">
+    <svg className="boxart boxart--skribbl" viewBox="0 0 200 130" role="img" aria-label="A colorful drawing board with a pencil and hidden word">
       <rect width="200" height="130" fill="#8d63d6" />
       <path d="M11 18h178v91H11z" fill="#14110f" transform="translate(6 7)" />
       <rect x="11" y="18" width="178" height="91" rx="7" fill="#fffdf7" stroke="#14110f" strokeWidth="4" />

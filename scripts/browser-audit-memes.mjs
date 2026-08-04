@@ -215,6 +215,7 @@ try {
   await call('Emulation.setDeviceMetricsOverride', { width: 844, height: 390, deviceScaleFactor: 2, mobile: true });
   await evaluate(`window.mgStore.setState(${JSON.stringify({ room: landscapeLobbyRoom, playerId: 'p0' })})`);
   await sleep(300);
+  await evaluate(`window.mgStore.setState({ error: null })`);
   const lobbyLandscape = await screenshot('lobby-landscape');
   const lobbyLandscapeAudit = await evaluate(`(() => {
     const sameRow = (selector) => {
@@ -228,10 +229,47 @@ try {
       pickerColumns: getComputedStyle(picker).gridTemplateColumns.split(' ').length,
       peopleColumns: getComputedStyle(people).gridTemplateColumns.split(' ').length,
       gamesOnOneRow: sameRow('.gamecard'),
+      peopleOnOneRow: sameRow('.person'),
       playersOnOneRow: sameRow('.person:not(.person--self)'),
       gameArtWidths: [...document.querySelectorAll('.gamecard__art')].map((el) => Math.round(el.getBoundingClientRect().width)),
+      boxArtBackgrounds: [...document.querySelectorAll('.boxart')].map((el) => getComputedStyle(el).backgroundColor),
+      selfWidth: Math.round(document.querySelector('.person--self').getBoundingClientRect().width),
+      playerWidth: Math.round(document.querySelector('.person:not(.person--self)').getBoundingClientRect().width),
+      arrowDirection: getComputedStyle(document.querySelector('.person--self .appearance__arrows')).flexDirection,
+      gameExplanationPresent: !!document.querySelector('.controls-hint'),
+      micNotes: [...document.querySelectorAll('.voicebar p')].map((element) => element.textContent),
     };
   })()`);
+
+  const gunLobbyRoom = {
+    ...landscapeLobbyRoom,
+    gameId: 'gunmayhem',
+    settings: { game: 'gunmayhem', levelId: 'salon', stocks: 4, targetWins: 3, weaponsEnabled: true, bombsEnabled: true, powerupsEnabled: true },
+  };
+  await evaluate(`window.mgStore.setState(${JSON.stringify({ room: gunLobbyRoom, playerId: 'p0' })})`);
+  await sleep(200);
+  await evaluate(`document.querySelector('.lobby__settings')?.scrollIntoView({ block: 'start' }); window.mgStore.setState({ error: null })`);
+  await sleep(100);
+  const settingsLandscape = await screenshot('settings-landscape');
+  const settingsLandscapeAudit = await evaluate(`(() => {
+    const settings = document.querySelector('.lobby__settings .settings');
+    const buttons = [...document.querySelectorAll('.number-stepper__button')];
+    return {
+      columns: getComputedStyle(settings).gridTemplateColumns.split(' ').length,
+      stepperCount: document.querySelectorAll('.number-stepper').length,
+      targets: buttons.map((button) => ({ width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height })),
+      gameExplanationPresent: !!document.querySelector('.controls-hint'),
+    };
+  })()`);
+
+  const musicAudit = await evaluate(`Promise.all(['/music/lobby.mp3', '/music/gunmayhem.mp3', '/music/achtung.mp3', '/music/memes.mp3'].map((url) => new Promise((resolve) => {
+    const audio = new Audio(url);
+    const finish = (ok) => resolve({ url, ok, duration: Number.isFinite(audio.duration) ? audio.duration : null });
+    audio.addEventListener('loadedmetadata', () => finish(true), { once: true });
+    audio.addEventListener('error', () => finish(false), { once: true });
+    setTimeout(() => finish(false), 8000);
+    audio.load();
+  })))`);
 
   await evaluate(`window.mgStore.setState(${JSON.stringify({ room, hud: writingHud, memesPrivate: privateView })})`);
   await sleep(500);
@@ -253,7 +291,7 @@ try {
     })));
   })()`);
 
-  await evaluate(`window.mgStore.setState(${JSON.stringify({ room: skribblRoom, hud: skribblHud, secret: null, matchWinnerSeat: null })})`);
+  await evaluate(`window.mgStore.setState(${JSON.stringify({ room: skribblRoom, playerId: 'p1', hud: skribblHud, secret: { word: 'boat', choices: [] }, matchWinnerSeat: null, error: null })})`);
   await sleep(300);
   const skribblLandscape = await screenshot('skribbl-landscape');
   const skribblLandscapeAudit = await evaluate(`(() => {
@@ -267,6 +305,10 @@ try {
       overflowY: document.documentElement.scrollHeight > innerHeight,
       columns: getComputedStyle(document.querySelector('.skribbl__body')).gridTemplateColumns.split(' ').length,
       aligned: rects.every((rect) => Math.abs(rect.top - rects[0].top) < 1 && Math.abs(rect.bottom - rects[0].bottom) < 1),
+      paperAligned: (() => {
+        const paper = document.querySelector('.skribbl__paper').getBoundingClientRect();
+        return Math.abs(paper.top - rects[0].top) < 1 && Math.abs(paper.bottom - rects[0].bottom) < 1;
+      })(),
       rects,
     };
   })()`);
@@ -287,7 +329,7 @@ try {
     };
   })()`);
 
-  console.log(JSON.stringify({ output, screenshots: { lobby, boxArt, skribblArt, memesArt, writing, voting, result, matchOver, skribbl, lobbyLandscape, landscape, skribblLandscape, options }, lobbyAudit, writingAudit, dragAudit, animatedAudit, votingAudit, downloadAudit, matchOverAudit, skribblAudit, lobbyLandscapeAudit, landscapeAudit, skribblLandscapeAudit, optionsAudit, browserErrors }, null, 2));
+  console.log(JSON.stringify({ output, screenshots: { lobby, boxArt, skribblArt, memesArt, writing, voting, result, matchOver, skribbl, lobbyLandscape, settingsLandscape, landscape, skribblLandscape, options }, lobbyAudit, writingAudit, dragAudit, animatedAudit, votingAudit, downloadAudit, matchOverAudit, skribblAudit, lobbyLandscapeAudit, settingsLandscapeAudit, musicAudit, landscapeAudit, skribblLandscapeAudit, optionsAudit, browserErrors }, null, 2));
 } finally {
   cdp?.close();
   edge.kill();

@@ -3,6 +3,7 @@ import { LEVEL_IDS, type GunMayhemConfig, type LevelId } from '@mg/shared/gunmay
 import type { GameConfig } from '@mg/shared';
 import { Segmented } from '../../ui/Segmented';
 import { Toggle } from '../../ui/Toggle';
+import { NumberStepper } from '../../ui/NumberStepper';
 import { useT } from '../../strings';
 
 interface Props {
@@ -51,30 +52,10 @@ export function GunMayhemSettings({ settings, isHost, onChange }: Props): JSX.El
         disabled={!isHost}
         onChange={(powerupsEnabled) => onChange({ powerupsEnabled })}
       />
-      <label className="setting">
-        <span>{t.setLivesEach}</span>
-        <input
-          className="input input--number"
-          type="number"
-          min={1}
-          max={9}
-          disabled={!isHost}
-          value={config.stocks}
-          onChange={(event) => onChange({ stocks: Number(event.target.value) })}
-        />
-      </label>
-      <label className="setting">
-        <span>{t.setRoundsToWin}</span>
-        <input
-          className="input input--number"
-          type="number"
-          min={1}
-          max={15}
-          disabled={!isHost}
-          value={config.targetWins}
-          onChange={(event) => onChange({ targetWins: Number(event.target.value) })}
-        />
-      </label>
+      <NumberStepper label={t.setLivesEach} value={config.stocks} min={1} max={9}
+        disabled={!isHost} onChange={(stocks) => onChange({ stocks })} />
+      <NumberStepper label={t.setRoundsToWin} value={config.targetWins} min={1} max={15}
+        disabled={!isHost} onChange={(targetWins) => onChange({ targetWins })} />
     </div>
   );
 }
