@@ -10,18 +10,22 @@
 import { DT } from '../../engine';
 import type { GameSeat } from '../../gameModule';
 import {
+  ACCEL_DIST,
+  ACCEL_GAIN,
   BASE_SPEED,
   COUNTDOWN_TICKS,
   DEFAULT_TARGET_WINS,
   PACE_MUL,
   RAMP_DIST,
   ROUND_OVER_TICKS,
+  RUN_HALF_H,
   RUN_HALF_W,
   SPEED_GAIN,
   START_COL,
   TILE,
+  TRACK_HEIGHT,
 } from './constants';
-import { settleOnFloor, stepRunner } from './physics';
+import { pushOut, settleOnFloor, stepRunner } from './physics';
 import { makeRng, mixSeed } from './rng';
 import { buildTrack } from './track';
 import {
@@ -130,7 +134,8 @@ export function resetInput(state: GravityState, playerId: string): void {
 /** Shared by everyone, and a pure function of distance so the client can derive it. */
 export function speedAt(distance: number, pace: GravityConfig['pace']): number {
   const ramp = Math.min(1, distance / RAMP_DIST);
-  return (BASE_SPEED + SPEED_GAIN * ramp) * PACE_MUL[pace];
+  const extra = Math.max(0, distance - RAMP_DIST) / ACCEL_DIST;
+  return (BASE_SPEED + SPEED_GAIN * ramp + ACCEL_GAIN * extra) * PACE_MUL[pace];
 }
 
 export function stepTick(state: GravityState): GravityEvent[] {
@@ -200,6 +205,7 @@ function stepPlaying(state: GravityState): void {
     }
   }
 
+  resolveBumps(state);
   checkRoundOver(state);
 }
 
@@ -220,6 +226,34 @@ function checkRoundOver(state: GravityState): void {
   state.phase = 'roundOver';
   state.phaseTicks = ROUND_OVER_TICKS;
   state.events.push({ t: 'roundOver', winnerSeat: winner ? winner.seat : null });
+}
+
+function resolveBumps(state: GravityState): void {
+  const alive = state.players.filter((p) => p.alive && !p.finished);
+  for (let i = 0; i < alive.length; i += 1) {
+    for (let j = i + 1; j < alive.length; j += 1) {
+      const a = alive[i]!;
+      const b = alive[j]!;
+      const dx = Math.abs(a.x - b.x);
+      const dy = Math.abs(a.y - b.y);
+      if (dx < RUN_HALF_W * 2 && dy < RUN_HALF_H * 2) {
+        const overlapY = RUN_HALF_H * 2 - dy;
+        const sign = a.y < b.y ? -1 : 1;
+        a.y += sign * overlapY * 0.5;
+        b.y -= sign * overlapY * 0.5;
+        pushOut(a, state.track);
+        pushOut(b, state.track);
+        if (a.y - RUN_HALF_H < 0 || a.y + RUN_HALF_H > TRACK_HEIGHT) {
+          a.alive = false;
+          state.events.push({ t: 'out', seat: a.seat, how: 'crushed' });
+        }
+        if (b.y - RUN_HALF_H < 0 || b.y + RUN_HALF_H > TRACK_HEIGHT) {
+          b.alive = false;
+          state.events.push({ t: 'out', seat: b.seat, how: 'crushed' });
+        }
+      }
+    }
+  }
 }
 
 export function matchWinner(state: GravityState): number | null {

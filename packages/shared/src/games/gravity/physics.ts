@@ -140,3 +140,17 @@ export function settleOnFloor(body: RunnerBody, track: Track): void {
   body.grounded = true;
   body.y = (track.rows - 1) * TILE - RUN_HALF_H - SURFACE_EPS;
 }
+
+/**
+ * After a bump pushes a body, re-snap it so it does not sit inside a wall.
+ * Unlike stepRunner this is a one-shot correction, not a full tick.
+ */
+export function pushOut(body: RunnerBody, track: Track): void {
+  if (!hits(track, body.x, body.y)) return;
+  // Try snapping to the nearest surface in the direction of gravity.
+  snapToSurface(body, track, body.g);
+  if (hits(track, body.x, body.y)) {
+    // Still stuck — try the other direction.
+    snapToSurface(body, track, -body.g as 1 | -1);
+  }
+}

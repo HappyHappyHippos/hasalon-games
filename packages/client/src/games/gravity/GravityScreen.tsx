@@ -28,6 +28,8 @@ export function GravityScreen({ room, mySeat }: Props): JSX.Element {
       mySeat,
       colorBySeat: {},
       nameBySeat: {},
+      hatBySeat: {},
+      faceBySeat: {},
       paused: false,
     });
     rendererRef.current = renderer;
@@ -47,12 +49,16 @@ export function GravityScreen({ room, mySeat }: Props): JSX.Element {
   useEffect(() => {
     const colorBySeat: Record<number, number> = {};
     const nameBySeat: Record<number, string> = {};
+    const hatBySeat: Record<number, number> = {};
+    const faceBySeat: Record<number, number> = {};
     for (const player of room.players) {
       if (player.seat < 0) continue;
       colorBySeat[player.seat] = player.colorIndex;
       nameBySeat[player.seat] = player.name;
+      hatBySeat[player.seat] = player.hat;
+      faceBySeat[player.seat] = player.face;
     }
-    rendererRef.current?.setContext({ mySeat, colorBySeat, nameBySeat, paused: room.paused });
+    rendererRef.current?.setContext({ mySeat, colorBySeat, nameBySeat, hatBySeat, faceBySeat, paused: room.paused });
   }, [room.players, room.paused, mySeat]);
 
   return (

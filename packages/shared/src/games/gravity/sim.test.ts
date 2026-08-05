@@ -111,10 +111,11 @@ describe('determinism', () => {
 });
 
 describe('speedAt', () => {
-  it('ramps from the base speed to base plus gain, then holds', () => {
+  it('ramps from the base speed, then keeps accelerating', () => {
     expect(speedAt(0, 'normal')).toBeCloseTo(BASE_SPEED, 6);
     expect(speedAt(RAMP_DIST, 'normal')).toBeCloseTo(BASE_SPEED + SPEED_GAIN, 6);
-    expect(speedAt(RAMP_DIST * 10, 'normal')).toBeCloseTo(BASE_SPEED + SPEED_GAIN, 6);
+    // Past the initial ramp, speed keeps climbing rather than holding.
+    expect(speedAt(RAMP_DIST * 10, 'normal')).toBeGreaterThan(BASE_SPEED + SPEED_GAIN);
   });
 
   it('scales with the host pace, and never goes backwards', () => {
@@ -123,7 +124,7 @@ describe('speedAt', () => {
     expect(speedAt(0, 'fast')).toBeCloseTo(BASE_SPEED * PACE_MUL.fast, 6);
 
     let previous = 0;
-    for (let d = 0; d <= RAMP_DIST * 2; d += RAMP_DIST / 20) {
+    for (let d = 0; d <= RAMP_DIST * 5; d += RAMP_DIST / 20) {
       const speed = speedAt(d, 'normal');
       expect(speed).toBeGreaterThanOrEqual(previous);
       previous = speed;

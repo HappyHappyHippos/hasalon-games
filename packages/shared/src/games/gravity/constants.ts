@@ -52,14 +52,19 @@ export const SURFACE_EPS = 0.01;
  * full-height crossing takes ~0.29 s — a tile and a half at the opening speed,
  * three and a half at the fastest.
  */
-export const GRAVITY = 9000;
-export const TERMINAL_VY = 2000;
+export const GRAVITY = 6500;
+export const TERMINAL_VY = 1600;
 
 export const BASE_SPEED = 300;
 /** Added on top of `BASE_SPEED` once the ramp is complete. */
 export const SPEED_GAIN = 260;
 /** Distance over which the speed ramps from base to base + gain. */
 export const RAMP_DIST = 18000;
+
+/** Additional speed gained beyond the initial ramp — no plateau. */
+export const ACCEL_GAIN = 180;
+/** Distance over which the extra acceleration plays out (uncapped). */
+export const ACCEL_DIST = 40000;
 
 export const PACE_MUL: Record<'chill' | 'normal' | 'fast', number> = {
   chill: 0.8,
