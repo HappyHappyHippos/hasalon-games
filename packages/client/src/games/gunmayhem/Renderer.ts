@@ -342,15 +342,26 @@ export class GunMayhemRenderer {
    * and the local trigger press for your own — and they must be
    * indistinguishable, or your gun would read differently from everyone else's.
    */
-  private playShot(seat: number, kind: WeaponKind, x: number, y: number, dir: 1 | -1): void {
+  private playShot(
+    seat: number,
+    kind: WeaponKind,
+    x: number,
+    y: number,
+    dir: 1 | -1,
+    showFlash = true,
+  ): void {
     sfx.shoot(kind);
     const strength = recoilStrength(kind);
     this.swings.set(seat, { amount: 1, kind, hit: false });
 
-    // Muzzle flash and smoke, both scaled by how big the gun is.
-    const flashX = x + dir * (muzzleX(kind) - PLAYER_HALF_W);
-    this.spawnParticles(flashX, y, 4 + Math.round(strength * 8), '#fff3c4', dir * 260, 120 + strength * 220);
-    this.spawnParticles(flashX, y, 3, '#b9b3a6', dir * 90, 60);
+    // Muzzle flash and smoke, both scaled by how big the gun is. Skipped for a
+    // remote invisible shooter — a flash at their exact position would give
+    // them away just as badly as drawing the body would.
+    if (showFlash) {
+      const flashX = x + dir * (muzzleX(kind) - PLAYER_HALF_W);
+      this.spawnParticles(flashX, y, 4 + Math.round(strength * 8), '#fff3c4', dir * 260, 120 + strength * 220);
+      this.spawnParticles(flashX, y, 3, '#b9b3a6', dir * 90, 60);
+    }
 
     // The heavy weapons thump the camera. The pistol and SMG do not, or
     // full-auto fire would shake the screen continuously.
@@ -542,9 +553,13 @@ export class GunMayhemRenderer {
       this.drawnBySeat.set(player.s, { x: body.x, y: body.y });
 
       // Ground effects run whether or not the character is drawn this frame,
-      // otherwise the invulnerability blink would strobe the dust too.
-      this.updateGroundEffects(player, body);
-      if (player.jp > 0 && body.vy < -40) this.emitJetpackFlame(body);
+      // otherwise the invulnerability blink would strobe the dust too. Fx are
+      // suppressed for a remote invisible player — landing dust and jetpack
+      // flame at their feet would otherwise pinpoint them just as badly as
+      // drawing the body would.
+      const remoteHidden = !isLocal && (player.bf?.invis ?? 0) > 0;
+      this.updateGroundEffects(player, body, !remoteHidden);
+      if (player.jp > 0 && body.vy < -40 && !remoteHidden) this.emitJetpackFlame(body);
 
       // Blink while invulnerable so it reads as "cannot be hit".
       if (player.iv > 0 && Math.floor(now / 70) % 2 === 0) continue;
@@ -564,7 +579,7 @@ export class GunMayhemRenderer {
    * from events, because the server does not send a "you are skidding" message
    * and does not need to — the client can see it.
    */
-  private updateGroundEffects(player: GmSnapshotPlayer, body: DrawnPlayer): void {
+  private updateGroundEffects(player: GmSnapshotPlayer, body: DrawnPlayer, spawnFx: boolean): void {
     const airborne = !body.onGround;
     const wasAirborne = this.wasAirborne.get(player.s) ?? false;
     this.wasAirborne.set(player.s, airborne);
@@ -572,8 +587,10 @@ export class GunMayhemRenderer {
     const current = this.squash.get(player.s) ?? 0;
     if (wasAirborne && !airborne) {
       this.squash.set(player.s, 1);
-      this.spawnParticles(body.x, body.y + PLAYER_HALF_H, 6, '#e6e0d4', 0, 130);
-      sfx.land();
+      if (spawnFx) {
+        this.spawnParticles(body.x, body.y + PLAYER_HALF_H, 6, '#e6e0d4', 0, 130);
+        sfx.land();
+      }
     } else if (current > 0) {
       this.squash.set(player.s, Math.max(0, current - 0.09));
     }
@@ -581,7 +598,7 @@ export class GunMayhemRenderer {
     // Skid: on the ground, moving fast, and being asked to go the other way.
     // Only the local player's intent is known, so this reads velocity sign
     // changes instead — good enough, and it works for everyone.
-    if (!airborne && Math.abs(body.vx) > RUN_SPEED * 0.55 && Math.random() < 0.25) {
+    if (spawnFx && !airborne && Math.abs(body.vx) > RUN_SPEED * 0.55 && Math.random() < 0.25) {
       this.particles.push({
         x: body.x - Math.sign(body.vx) * 6,
         y: body.y + PLAYER_HALF_H - 1,
@@ -627,11 +644,14 @@ export class GunMayhemRenderer {
     const recoil = swing ? swing.amount : 0;
     const invisible = (player.bf?.invis ?? 0) > 0;
 
+    // Invisible remote players are hidden outright — the whole point of the
+    // buff is that opponents cannot see you. Only the local player still gets
+    // a faint ghost of themselves, so they know the buff is active.
+    const remoteHidden = invisible && !isLocal;
+
     ctx.save();
 
-    // Invisible players are drawn faintly rather than not at all: you still
-    // need to see yourself, and a ghost is more readable than a hole.
-    if (invisible) ctx.globalAlpha = isLocal ? 0.55 : 0.12;
+    if (invisible) ctx.globalAlpha = isLocal ? 0.55 : 0;
 
     ctx.translate(body.x, body.y);
 
@@ -695,9 +715,15 @@ export class GunMayhemRenderer {
 
     ctx.restore();
 
-    if ((player.bf?.shield ?? 0) > 0) this.drawShieldBubble(body, now);
-    this.drawBuffGlyphs(player, body, lift, now);
-    this.drawNameplate(player, body, lift);
+    // These are drawn outside the alpha scope above (they have their own
+    // save/restore), so a remote-hidden player needs them skipped explicitly
+    // or the shield glow, buff row (which would show the invis glyph itself)
+    // and damage readout would each give away exactly where they are.
+    if (!remoteHidden) {
+      if ((player.bf?.shield ?? 0) > 0) this.drawShieldBubble(body, now);
+      this.drawBuffGlyphs(player, body, lift, now);
+      this.drawNameplate(player, body, lift);
+    }
   }
 
   /** Bobbing triangle over your own character, so you can always find yourself. */
@@ -1044,7 +1070,17 @@ export class GunMayhemRenderer {
           // server resolved the shot — see `drawnBySeat`. Falls back to the
           // event's own position for anyone not currently on screen.
           const at = this.drawnBySeat.get(event.seat);
-          this.playShot(event.seat, event.kind, at?.x ?? event.x, at?.y ?? event.y, event.dir);
+          const shooter = snap.players.find((p) => p.s === event.seat);
+          const shooterHidden =
+            event.seat !== this.context.mySeat && (shooter?.bf?.invis ?? 0) > 0;
+          this.playShot(
+            event.seat,
+            event.kind,
+            at?.x ?? event.x,
+            at?.y ?? event.y,
+            event.dir,
+            !shooterHidden,
+          );
           break;
         }
         case 'stab': {
@@ -1052,14 +1088,21 @@ export class GunMayhemRenderer {
           this.swings.set(event.seat, { amount: 1, kind: 'knife', hit: event.hit });
           // Same reasoning as `shot`: a knife lands at arm's length from where
           // the attacker is drawn, not from where the server last reported them.
-          const from = this.drawnBySeat.get(event.seat);
-          const sx = (from?.x ?? event.x) + event.dir * 20;
-          const sy = from?.y ?? event.y;
-          if (event.hit) {
-            this.spawnParticles(sx, sy, 10, '#fff3c4', event.dir * 220, 200);
-            this.shake = Math.max(this.shake, 6);
-          } else {
-            this.spawnParticles(sx, sy, 3, '#e8ecf5', event.dir * 140, 70);
+          // An invisible remote attacker skips the spark too, or it would land
+          // exactly where they are and undo the whole point of the buff.
+          const attacker = snap.players.find((p) => p.s === event.seat);
+          const attackerHidden =
+            event.seat !== this.context.mySeat && (attacker?.bf?.invis ?? 0) > 0;
+          if (!attackerHidden) {
+            const from = this.drawnBySeat.get(event.seat);
+            const sx = (from?.x ?? event.x) + event.dir * 20;
+            const sy = from?.y ?? event.y;
+            if (event.hit) {
+              this.spawnParticles(sx, sy, 10, '#fff3c4', event.dir * 220, 200);
+              this.shake = Math.max(this.shake, 6);
+            } else {
+              this.spawnParticles(sx, sy, 3, '#e8ecf5', event.dir * 140, 70);
+            }
           }
           break;
         }

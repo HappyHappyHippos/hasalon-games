@@ -111,3 +111,17 @@ export const BUMP_ITERATIONS = 3;
  * of the faster one jostling past.
  */
 export const BUMP_MAX_PUSH = 1;
+
+// ---------------------------------------------------------------------------
+// Catch-up
+// ---------------------------------------------------------------------------
+
+/**
+ * Whoever is behind the leader (or the pack, see `sim.ts:catchUpMul`) runs a
+ * little faster, so a wall clip costs ground rather than being unrecoverable.
+ * Gentle on purpose: this closes a gap over several seconds, not instantly —
+ * a hard catch-up would make clipping a wall free.
+ */
+export const CATCHUP_PER_UNIT = 0.0005;
+/** Hard cap: even maximally behind, a runner is never faster than this. */
+export const CATCHUP_MAX_MUL = 1.25;

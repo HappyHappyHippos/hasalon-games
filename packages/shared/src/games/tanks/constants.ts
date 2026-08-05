@@ -76,13 +76,24 @@ export const TURN_RATE = 3.2;
 // ---------------------------------------------------------------------------
 
 /**
- * Slowed from 520 so a shell reads on screen instead of just flashing by.
- * `ARM_TICKS` and `BULLET_LIFE` were re-checked against this value (see their
- * comments): arming is still comfortably outside the tank's own hit radius,
- * and life is a tick countdown independent of speed, so neither needed to
- * change.
+ * Slowed from 520, then from 400 — still too fast to read at 520, and 400 was
+ * "reads, but still flashes by" per playtest. `ARM_TICKS` and `BULLET_LIFE`
+ * were re-checked against this value:
+ *
+ * - `ARM_TICKS` (8) covers `BULLET_SPEED * ARM_TICKS * DT` ≈ 40 units before a
+ *   shell can hurt its owner, plus the `MUZZLE` offset (28) it was born at —
+ *   68 units clear of the tank centre by the time it arms, well outside
+ *   `TANK_R + BULLET_R` (26). Slowing the shell only shrinks that margin, it
+ *   doesn't remove it, so `ARM_TICKS` didn't need to grow.
+ * - `MAX_BOUNCES` (6) is what actually kills a shell trapped in a sealed
+ *   pocket — at this speed a bounce off a `CELL`-sized loop costs roughly
+ *   `CELL * TICK_RATE / BULLET_SPEED` ≈ 19 ticks, so six bounces (≈115 ticks)
+ *   land nowhere near `BULLET_LIFE` (540 ticks). Slower shells reach the
+ *   bounce cap in *more* wall-clock time, not less, so the pocket guarantee
+ *   only gets more comfortable as speed drops — neither constant needed to
+ *   change.
  */
-export const BULLET_SPEED = 400;
+export const BULLET_SPEED = 300;
 export const BULLET_R = 6;
 export const MAX_BOUNCES = 6;
 /** A shell that has found a loop to live in still expires. */
@@ -120,6 +131,22 @@ export const HEAVY_CHARGES = 3;
 export const HEAVY_SPEED_MUL = 1.4;
 export const HEAVY_R = 10;
 export const HEAVY_BOUNCES = 10;
+
+/** Faster reload, timed rather than per-charge — a barrage feels bad shot to shot. */
+export const RAPID_TICKS = seconds(7);
+export const RAPID_COOLDOWN_MUL = 0.45;
+
+/** Extra wall bounces, spent per shot like `triple`/`heavy`. */
+export const BOUNCE_CHARGES = 4;
+export const BOUNCE_BONUS = 4;
+
+/** Brief pass-through-tanks — still stopped by walls. */
+export const GHOST_TICKS = seconds(4);
+
+/** Smaller hull: harder to hit and a little quicker. */
+export const MINI_TICKS = seconds(8);
+export const MINI_HIT_R = TANK_R * 0.65;
+export const MINI_SPEED_MUL = 1.2;
 
 // ---------------------------------------------------------------------------
 // Round flow

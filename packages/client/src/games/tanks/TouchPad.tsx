@@ -1,15 +1,30 @@
 import { useCallback, useEffect, useRef, type JSX, type PointerEvent } from 'react';
-import { IN_BACK, IN_FIRE, IN_FWD, IN_TLEFT, IN_TRIGHT } from '@mg/shared/tanks';
+import { IN_FIRE, IN_FWD, IN_TLEFT, IN_TRIGHT } from '@mg/shared/tanks';
+import { feed } from '../../net/feed';
 import { Thumbstick, type StickVector } from '../../ui/Thumbstick';
 import { useT } from '../../strings';
 import { newStickState, stickToTankBits } from './stickBits';
 
 interface Props {
+  mySeat: number;
   onButton: (bit: number, down: boolean) => void;
 }
 
+/**
+ * The tank's current heading, read straight off the latest snapshot rather
+ * than threaded through as a prop that changes 30x/sec — the stick only needs
+ * it at the instant of each move event, not as something to re-render on.
+ * Falls back to 0 (facing +x) before the first snapshot arrives, which only
+ * matters for the handful of frames before any snapshot exists at all.
+ */
+function currentAngle(mySeat: number): number {
+  const snap = feed.latest?.snap;
+  if (!snap || snap.game !== 'tanks') return 0;
+  return snap.players.find((p) => p.s === mySeat)?.a ?? 0;
+}
+
 /** Every bit the stick owns, so releasing it can clear them in one pass. */
-const STICK_BITS = [IN_FWD, IN_BACK, IN_TLEFT, IN_TRIGHT];
+const STICK_BITS = [IN_FWD, IN_TLEFT, IN_TRIGHT];
 
 /**
  * On-screen controls: thumbstick to drive, one big trigger to fire.
@@ -20,7 +35,7 @@ const STICK_BITS = [IN_FWD, IN_BACK, IN_TLEFT, IN_TRIGHT];
  * The trigger captures its pointer, so a thumb drifting a few millimetres mid
  * firefight does not cut the shot.
  */
-export function TanksTouchPad({ onButton }: Props): JSX.Element {
+export function TanksTouchPad({ mySeat, onButton }: Props): JSX.Element {
   const held = useRef(new Map<number, number>());
   const stick = useRef(newStickState());
   const stickBits = useRef(0);
@@ -36,7 +51,7 @@ export function TanksTouchPad({ onButton }: Props): JSX.Element {
 
   const applyVector = useCallback(
     (vector: StickVector) => {
-      const next = stickToTankBits(vector, stick.current);
+      const next = stickToTankBits(vector, currentAngle(mySeat), stick.current);
       const previous = stickBits.current;
       if (next === previous) return;
       stickBits.current = next;
@@ -48,7 +63,7 @@ export function TanksTouchPad({ onButton }: Props): JSX.Element {
         if (was !== is) onButton(bit, is);
       }
     },
-    [onButton],
+    [mySeat, onButton],
   );
 
   const press = (event: PointerEvent<HTMLButtonElement>, bit: number): void => {

@@ -1,15 +1,19 @@
 /**
  * The authoritative Gravity Guy match.
  *
- * Everyone runs right at the *same* speed, and that one decision removes most
- * of the difficulty: a single shared camera, nobody off screen, no falling
- * behind, and a run speed the client can extrapolate exactly because it is a
- * function of distance rather than of anyone's input.
+ * Everyone runs right at the *same base* speed — `speedAt(distance, pace)` is
+ * one shared ramp, a pure function of distance, which is what buys a single
+ * shared camera and a run speed the client can extrapolate exactly. On top of
+ * that base, `catchUpMul` gives whoever fell behind (a wall clip, a bad bump)
+ * a small, capped speed bonus purely as a function of their own x versus the
+ * leader's — still deterministic, still no ambient input, just no longer
+ * identical for everyone every tick.
  *
- * That one shared x is also what makes `resolveBumps` below tractable: every
- * alive runner's x is bit-identical (same speed, same dt, added the same
- * number of times), so the only axis two bodies can ever actually separate
- * along is y.
+ * That means `resolveBumps` below can no longer assume every alive runner's x
+ * is bit-identical — a runner clipping a wall or catching up can differ from
+ * their neighbours. Its separation math never actually depended on that
+ * (`dx` is checked generically), only its rationale comment did; see the
+ * function for the corrected note.
  */
 
 import { DT } from '../../engine';
@@ -20,6 +24,8 @@ import {
   BASE_SPEED,
   BUMP_ITERATIONS,
   BUMP_MAX_PUSH,
+  CATCHUP_MAX_MUL,
+  CATCHUP_PER_UNIT,
   COUNTDOWN_TICKS,
   DEFAULT_TARGET_WINS,
   PACE_MUL,
@@ -152,6 +158,26 @@ export function speedAt(distance: number, pace: GravityConfig['pace']): number {
   return (BASE_SPEED + SPEED_GAIN * ramp + ACCEL_GAIN * extra) * PACE_MUL[pace];
 }
 
+/**
+ * Speed multiplier for a runner who has fallen behind the leader's x. Pure
+ * function of the two positions — deterministic, and cheap enough to call
+ * for a snapshot as well as for the tick itself. Gentle (a fraction of a
+ * percent per unit of lag) and hard-capped, so clipping a wall costs real
+ * ground rather than being erased for free.
+ */
+export function catchUpMul(playerX: number, leaderX: number): number {
+  const lag = leaderX - playerX;
+  if (lag <= 0) return 1;
+  return Math.min(CATCHUP_MAX_MUL, 1 + lag * CATCHUP_PER_UNIT);
+}
+
+/** Furthest-along alive runner, the anchor `catchUpMul` measures everyone else against. */
+function leaderX(players: readonly RunnerState[]): number {
+  let leader = -Infinity;
+  for (const p of players) if (p.alive && p.x > leader) leader = p.x;
+  return leader === -Infinity ? 0 : leader;
+}
+
 export function stepTick(state: GravityState): GravityEvent[] {
   state.tick += 1;
 
@@ -193,12 +219,14 @@ function stepPlaying(state: GravityState): void {
   state.distance += state.runSpeed * DT;
 
   const finishX = state.track.width - TILE;
+  const leader = leaderX(state.players);
 
   for (const player of state.players) {
     if (!player.alive || player.finished) continue;
 
+    const speed = state.runSpeed * catchUpMul(player.x, leader);
     const flip = (player.pendingPress & IN_FLIP) !== 0;
-    const result = stepRunner(player, { flip, controllable: true }, state.track, DT, state.runSpeed);
+    const result = stepRunner(player, { flip, controllable: true }, state.track, DT, speed);
 
     if (result.flipped) state.events.push({ t: 'flip', seat: player.seat });
     if (result.landed) state.events.push({ t: 'land', seat: player.seat });
@@ -249,10 +277,11 @@ function checkRoundOver(state: GravityState): void {
  * relative position, fall back to a fixed axis only on an exact tie (broken by
  * seat order, so it stays deterministic), and give each body half the overlap.
  * The one adaptation is the axis itself — a box, not a circle, and one that in
- * practice only ever separates on y, because every alive runner shares x (see
- * the module comment). Deriving the sign from the real dy rather than
- * hardcoding "always push seat A up" is what keeps this correct if that ever
- * changes.
+ * practice separates almost entirely on y, because alive runners' x usually
+ * stays close together (same base ramp; `catchUpMul` only nudges someone who
+ * has actually fallen behind). The `dx` early-out and the sign derived from
+ * the real dy are both fully general regardless — nothing here assumes x is
+ * ever exactly equal, that was only ever true in the common case.
  *
  * Two things keep a bump from reading as a launch: the per-pass push is capped
  * at `BUMP_MAX_PUSH`, and a handful of passes let a pair resolved early get
@@ -311,6 +340,7 @@ export function matchWinner(state: GravityState): number | null {
 // ---------------------------------------------------------------------------
 
 export function makeSnapshot(state: GravityState, events: GravityEvent[]): GravitySnapshot {
+  const leader = leaderX(state.players);
   return {
     game: 'gravity',
     tick: state.tick,
@@ -330,6 +360,7 @@ export function makeSnapshot(state: GravityState, events: GravityEvent[]): Gravi
       gr: p.grounded ? 1 : 0,
       ib: p.heldBits,
       ack: p.ackSeq,
+      sp: round1(state.runSpeed * catchUpMul(p.x, leader)),
     })),
     events,
   };

@@ -214,6 +214,81 @@ export const CHUNKS: Chunk[] = [
       '#.###.##',
     ],
   },
+  {
+    id: 'staircase',
+    tier: 'hard',
+    // Three floor gaps climbing in from the right, each one column closer to
+    // the last, so the flips needed to clear them come faster and faster.
+    art: [
+      '########',
+      '........',
+      '........',
+      '........',
+      '........',
+      '........',
+      '##.#.#.#',
+    ],
+  },
+  {
+    id: 'staircaseCeil',
+    tier: 'hard',
+    // Same climbing rhythm, mirrored onto the ceiling — a ceiling-runner gets
+    // the same accelerating cadence of flips.
+    art: [
+      '#.#.#.##',
+      '........',
+      '........',
+      '........',
+      '........',
+      '........',
+      '########',
+    ],
+  },
+  {
+    id: 'tightZigzag',
+    tier: 'hard',
+    // Two floor nicks in a row, then one ceiling nick: a flip up to clear the
+    // pair, then a flip back down before the ceiling closes.
+    art: [
+      '######.#',
+      '........',
+      '........',
+      '........',
+      '........',
+      '........',
+      '##.#.###',
+    ],
+  },
+  {
+    id: 'longAlternatingCorridor',
+    tier: 'hard',
+    // A steady back-and-forth spanning the whole chunk: floor nick, ceiling
+    // nick, floor nick, ceiling nick, each offset from the last.
+    art: [
+      '##.##.##',
+      '........',
+      '........',
+      '........',
+      '........',
+      '........',
+      '#.##.###',
+    ],
+  },
+  {
+    id: 'pinchPair',
+    tier: 'hard',
+    // Two narrow blocks in sequence, one hanging from the ceiling and one
+    // rising from the floor, each requiring its own flip to clear.
+    art: [
+      '########',
+      '..##....',
+      '........',
+      '........',
+      '........',
+      '.....##.',
+      '########',
+    ],
+  },
 ];
 
 export const CHUNKS_BY_TIER: Record<ChunkTier, Chunk[]> = {

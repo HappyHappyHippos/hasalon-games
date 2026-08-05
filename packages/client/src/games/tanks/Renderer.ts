@@ -2,6 +2,7 @@ import { colorFor } from '@mg/shared';
 import {
   CELL,
   PICKUP_R,
+  POWERUPS,
   TANK_R,
   WALL_HALF,
   arenaHeight,
@@ -44,12 +45,123 @@ const SHADOW_PALETTE: TankPalette = { hull: '#000000', track: '#000000', turret:
 /** How far a wreck's turret is knocked off-centre, so it reads as destroyed, not just faded. */
 const WRECK_TURRET_SKEW = 0.6;
 
-const PICKUP_GLYPH: Record<TankPowerup, string> = {
-  shield: '⛊',
-  triple: '⋔',
-  speed: '»',
-  heavy: '●',
-};
+/**
+ * Glyphs are drawn as vector paths, not text/emoji — emoji rendering varies
+ * by platform and reads as a UI icon, not part of the game world.
+ *
+ * Every glyph is drawn inside a unit circle of radius 1 in local space; the
+ * caller scales by the pickup's actual radius, so a glyph never needs its own
+ * pixel numbers.
+ */
+const PICKUP_INK = '#1c1a24';
+
+function drawPickupGlyph(ctx: CanvasRenderingContext2D, kind: TankPowerup, r: number): void {
+  ctx.save();
+  ctx.strokeStyle = PICKUP_INK;
+  ctx.fillStyle = PICKUP_INK;
+  ctx.lineWidth = r * 0.16;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  switch (kind) {
+    case 'shield': {
+      ctx.beginPath();
+      ctx.moveTo(0, -r * 0.75);
+      ctx.quadraticCurveTo(r * 0.7, -r * 0.55, r * 0.6, 0);
+      ctx.quadraticCurveTo(r * 0.5, r * 0.55, 0, r * 0.8);
+      ctx.quadraticCurveTo(-r * 0.5, r * 0.55, -r * 0.6, 0);
+      ctx.quadraticCurveTo(-r * 0.7, -r * 0.55, 0, -r * 0.75);
+      ctx.closePath();
+      ctx.stroke();
+      break;
+    }
+    case 'speed': {
+      for (const dx of [-r * 0.3, r * 0.25]) {
+        ctx.beginPath();
+        ctx.moveTo(dx - r * 0.35, -r * 0.5);
+        ctx.lineTo(dx + r * 0.2, 0);
+        ctx.lineTo(dx - r * 0.35, r * 0.5);
+        ctx.stroke();
+      }
+      break;
+    }
+    case 'triple': {
+      for (const dx of [-r * 0.5, 0, r * 0.5]) {
+        ctx.beginPath();
+        ctx.moveTo(dx, -r * 0.7);
+        ctx.lineTo(dx, r * 0.15);
+        ctx.stroke();
+        circle(ctx, dx, r * 0.5, r * 0.13);
+      }
+      break;
+    }
+    case 'heavy': {
+      circle(ctx, 0, 0, r * 0.55);
+      ctx.strokeStyle = '#1c1a24aa';
+      ctx.beginPath();
+      ctx.arc(0, 0, r * 0.55, -Math.PI * 0.75, -Math.PI * 0.25);
+      ctx.stroke();
+      break;
+    }
+    case 'rapid': {
+      ctx.beginPath();
+      ctx.moveTo(r * 0.15, -r * 0.75);
+      ctx.lineTo(-r * 0.35, r * 0.05);
+      ctx.lineTo(r * 0.05, r * 0.05);
+      ctx.lineTo(-r * 0.15, r * 0.75);
+      ctx.lineTo(r * 0.45, -r * 0.15);
+      ctx.lineTo(r * 0.05, -r * 0.15);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    }
+    case 'bounce': {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.6, r * 0.6);
+      ctx.lineTo(-r * 0.15, -r * 0.5);
+      ctx.lineTo(r * 0.15, r * 0.15);
+      ctx.lineTo(r * 0.6, -r * 0.6);
+      ctx.stroke();
+      circle(ctx, -r * 0.6, r * 0.6, r * 0.1);
+      circle(ctx, r * 0.6, -r * 0.6, r * 0.1);
+      break;
+    }
+    case 'ghost': {
+      ctx.beginPath();
+      ctx.arc(0, -r * 0.05, r * 0.55, Math.PI, 0);
+      ctx.lineTo(r * 0.55, r * 0.6);
+      ctx.lineTo(r * 0.28, r * 0.35);
+      ctx.lineTo(0, r * 0.6);
+      ctx.lineTo(-r * 0.28, r * 0.35);
+      ctx.lineTo(-r * 0.55, r * 0.6);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      circle(ctx, -r * 0.2, -r * 0.1, r * 0.09);
+      circle(ctx, r * 0.2, -r * 0.1, r * 0.09);
+      break;
+    }
+    case 'mini': {
+      ctx.strokeRect(-r * 0.32, -r * 0.32, r * 0.64, r * 0.64);
+      for (const [sx, sy] of [
+        [-1, -1],
+        [1, -1],
+        [-1, 1],
+        [1, 1],
+      ] as const) {
+        ctx.beginPath();
+        ctx.moveTo(sx * r * 0.55, sy * r * 0.55);
+        ctx.lineTo(sx * r * 0.28, sy * r * 0.28);
+        ctx.stroke();
+      }
+      break;
+    }
+    default:
+      break;
+  }
+
+  ctx.restore();
+}
 
 export interface TanksRenderContext {
   mySeat: number;
@@ -136,7 +248,7 @@ export class TanksRenderer {
 
     this.drawFloor(ctx, maze);
     this.drawWalls(ctx, maze);
-    this.drawPickups(ctx, snap);
+    this.drawPickups(ctx, snap, now);
     this.drawBullets(ctx, snap, now, entry.serverAt);
     this.drawTanks(ctx, snap, maze, now, entry.serverAt);
   }
@@ -197,18 +309,46 @@ export class TanksRenderer {
     }
   }
 
-  private drawPickups(ctx: CanvasRenderingContext2D, snap: TanksSnapshot): void {
+  /**
+   * A rounded crate rather than a plain disc: a hard offset shadow (never a
+   * blur — see the note at the top of `tokens.css`), the spec's own colour as
+   * fill, a drawn glyph instead of an emoji, and a gentle idle bob so the
+   * floor doesn't read as static once the ink and walls are.
+   *
+   * The bob/pulse phase is keyed on the pickup's id so a handful spawned at
+   * once don't all bounce in lockstep.
+   */
+  private drawPickups(ctx: CanvasRenderingContext2D, snap: TanksSnapshot, now: number): void {
     for (const pickup of snap.pickups) {
-      ctx.fillStyle = '#000000';
-      circle(ctx, pickup.x + SHADOW_OFFSET, pickup.y + SHADOW_OFFSET, PICKUP_R);
-      ctx.fillStyle = '#ffd447';
-      circle(ctx, pickup.x, pickup.y, PICKUP_R);
+      const spec = POWERUPS[pickup.k];
+      const phase = (pickup.x * 7 + pickup.y * 13) % (Math.PI * 2);
+      const bob = this.reduced ? 0 : Math.sin(now / 420 + phase) * PICKUP_R * 0.16;
+      const pulse = this.reduced ? 1 : 1 + Math.sin(now / 260 + phase) * 0.045;
+      const r = PICKUP_R * pulse;
+      const cx = pickup.x;
+      const cy = pickup.y + bob;
+      const w = r * 1.9;
+      const h = r * 1.6;
+      const corner = r * 0.5;
 
-      ctx.fillStyle = '#1c1a24';
-      ctx.font = '700 22px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(PICKUP_GLYPH[pickup.k], pickup.x, pickup.y + 1);
+      ctx.fillStyle = '#000000';
+      roundedRect(ctx, cx - w / 2 + SHADOW_OFFSET, cy - h / 2 + SHADOW_OFFSET, w, h, corner);
+      ctx.fill();
+
+      ctx.fillStyle = spec.color;
+      roundedRect(ctx, cx - w / 2, cy - h / 2, w, h, corner);
+      ctx.fill();
+
+      // A thin darker rim reads as a capsule seam rather than a flat sticker.
+      ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
+      ctx.lineWidth = Math.max(1, r * 0.08);
+      roundedRect(ctx, cx - w / 2, cy - h / 2, w, h, corner);
+      ctx.stroke();
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      drawPickupGlyph(ctx, pickup.k, r * 0.85);
+      ctx.restore();
     }
   }
 

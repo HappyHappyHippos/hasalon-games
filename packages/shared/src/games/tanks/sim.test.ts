@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { GameSeat } from '../../gameModule';
 import { ARM_TICKS, COUNTDOWN_TICKS, MAX_SHELLS, SHOT_COOLDOWN, TANK_R } from './constants';
 import { applyInput, createState, defaultConfig, matchWinner, resetInput, stepTick } from './sim';
-import { IN_FIRE, IN_FWD, IN_TRIGHT, type TanksConfig, type TanksState } from './types';
+import { IN_BACK, IN_FIRE, IN_FWD, IN_TRIGHT, type TanksConfig, type TanksState } from './types';
 
 function seats(count: number): GameSeat[] {
   return Array.from({ length: count }, (_, i) => ({
@@ -181,7 +181,13 @@ describe('shooting', () => {
   it('caps a tank at six shells in the air', () => {
     const state = makeState(2, { powerupsEnabled: false });
     skipCountdown(state);
-    hold(state, 0, IN_FIRE);
+    // Backing away as it fires, not holding still: at this seed's spawn a
+    // stationary tank's very first shot corners off a nearby wall and comes
+    // straight back within a single cooldown, which caps `peak` at 1 before
+    // there's been time to prove the six-shell cap. Reversing clears it out of
+    // the return path the same way any player would drift off the spot they
+    // fired from.
+    hold(state, 0, IN_FIRE | IN_BACK);
 
     // The peak, tick by tick, rather than the count at the end: a tank holding
     // fire from a standstill is eventually killed by its own ricochet — which is
@@ -199,7 +205,9 @@ describe('shooting', () => {
   it('holds fire for the cooldown between shots', () => {
     const state = makeState(2, { powerupsEnabled: false });
     skipCountdown(state);
-    hold(state, 0, IN_FIRE);
+    // See the six-shell-cap test above: backing away keeps this seed's own
+    // ricochet from returning inside the window this test measures.
+    hold(state, 0, IN_FIRE | IN_BACK);
     run(state, 1);
     expect(state.bullets).toHaveLength(1);
 

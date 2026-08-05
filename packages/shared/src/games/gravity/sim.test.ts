@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { GameSeat } from '../../gameModule';
 import {
   BASE_SPEED,
+  CATCHUP_MAX_MUL,
   COUNTDOWN_TICKS,
   PACE_MUL,
   RAMP_DIST,
@@ -11,6 +12,7 @@ import {
 } from './constants';
 import {
   applyInput,
+  catchUpMul,
   createState,
   defaultConfig,
   matchWinner,
@@ -147,6 +149,26 @@ describe('speedAt', () => {
     run(state, 120);
     const xs = state.players.filter((p) => p.alive).map((p) => p.x);
     for (const x of xs) expect(x).toBeCloseTo(xs[0]!, 6);
+  });
+});
+
+describe('catchUpMul', () => {
+  it('is 1 for the leader and for anyone ahead', () => {
+    expect(catchUpMul(100, 100)).toBe(1);
+    expect(catchUpMul(150, 100)).toBe(1);
+  });
+
+  it('grows with lag but never past the cap', () => {
+    const near = catchUpMul(0, 100);
+    const far = catchUpMul(0, 2000);
+    expect(near).toBeGreaterThan(1);
+    expect(far).toBeGreaterThan(near);
+    expect(far).toBeLessThanOrEqual(CATCHUP_MAX_MUL);
+    expect(catchUpMul(0, 1_000_000)).toBe(CATCHUP_MAX_MUL);
+  });
+
+  it('is a pure function of the two positions', () => {
+    expect(catchUpMul(10, 50)).toBe(catchUpMul(10, 50));
   });
 });
 

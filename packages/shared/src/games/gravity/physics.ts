@@ -45,6 +45,8 @@ export interface RunnerResult {
   landed: boolean;
   crushed: boolean;
   fell: boolean;
+  /** Ran into a wall ahead and slid to a stop at its face — survivable, unlike `crushed`. */
+  bumped: boolean;
 }
 
 export function stepRunner(
@@ -54,7 +56,7 @@ export function stepRunner(
   dt: number,
   runSpeed: number,
 ): RunnerResult {
-  const result: RunnerResult = { flipped: false, landed: false, crushed: false, fell: false };
+  const result: RunnerResult = { flipped: false, landed: false, crushed: false, fell: false, bumped: false };
 
   if (input.controllable && input.flip) {
     // Flipping while stuck to a surface is what launches you off it. There is
@@ -98,10 +100,18 @@ export function stepRunner(
 
   // ---- horizontal --------------------------------------------------------
   if (input.controllable) {
-    body.x += runSpeed * dt;
-    if (hits(track, body.x, body.y)) {
-      result.crushed = true;
-      return result;
+    const targetX = body.x + runSpeed * dt;
+    if (hits(track, targetX, body.y)) {
+      // A wall ahead is a nudge, not a death sentence: slide up to its face
+      // and lose this tick's forward progress, rather than dying on contact.
+      // Chunk walls (`floorBlock`/`ceilBlock`/...) never span the full track
+      // height, so a well-timed flip carries the runner over or under it and
+      // they are moving again — meanwhile `sim.ts:catchUpMul` is already
+      // giving a runner who fell behind a speed bump to help them rejoin.
+      body.x = Math.max(body.x, maxAdvanceX(track, body.x, targetX, body.y));
+      result.bumped = true;
+    } else {
+      body.x = targetX;
     }
   }
 
@@ -113,6 +123,26 @@ export function stepRunner(
 
 function hits(track: Track, x: number, y: number): boolean {
   return boxHitsSolid(track, x - RUN_HALF_W, y - RUN_HALF_H, x + RUN_HALF_W, y + RUN_HALF_H);
+}
+
+/**
+ * How far a body can advance from `fromX` toward `toX` (both known to be
+ * grid-aligned collision, `toX` known to hit) before its leading edge meets a
+ * wall face. The grid is tile-aligned, so the blocking column's left edge is
+ * exact — no search needed, just find the first solid cell in the columns the
+ * box's right edge sweeps through, at the rows the box already occupies.
+ */
+function maxAdvanceX(track: Track, fromX: number, toX: number, y: number): number {
+  const r0 = Math.floor((y - RUN_HALF_H) / TILE);
+  const r1 = Math.floor((y + RUN_HALF_H) / TILE);
+  const startCol = Math.floor((fromX + RUN_HALF_W) / TILE);
+  const endCol = Math.floor((toX + RUN_HALF_W) / TILE);
+  for (let c = startCol; c <= endCol; c += 1) {
+    for (let r = r0; r <= r1; r += 1) {
+      if (isSolid(track, c, r)) return c * TILE - RUN_HALF_W - SURFACE_EPS;
+    }
+  }
+  return toX;
 }
 
 /**

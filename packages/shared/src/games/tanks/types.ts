@@ -41,7 +41,7 @@ export interface TanksConfig {
 // Powerups
 // ---------------------------------------------------------------------------
 
-export type TankPowerup = 'shield' | 'triple' | 'speed' | 'heavy';
+export type TankPowerup = 'shield' | 'triple' | 'speed' | 'heavy' | 'rapid' | 'bounce' | 'ghost' | 'mini';
 
 /**
  * Remaining ticks for timed buffs, remaining shots for charge buffs. Absent

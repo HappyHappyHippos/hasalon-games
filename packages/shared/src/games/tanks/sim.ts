@@ -10,6 +10,7 @@ import { DT, TICK_RATE } from '../../engine';
 import type { GameSeat } from '../../gameModule';
 import {
   ARM_TICKS,
+  BOUNCE_BONUS,
   BULLET_LIFE,
   BULLET_R,
   BULLET_SPEED,
@@ -23,9 +24,11 @@ import {
   MAX_BOUNCES,
   MAX_POWERUPS,
   MAX_SHELLS,
+  MINI_HIT_R,
   MUZZLE,
   PICKUP_R,
   POWERUP_EVERY,
+  RAPID_COOLDOWN_MUL,
   RECOIL,
   ROUND_OVER_TICKS,
   SHOT_COOLDOWN,
@@ -237,6 +240,9 @@ function stepPlaying(state: TanksState): void {
 
 function stepBodies(state: TanksState, controllable: boolean): void {
   const moving: TankBody[] = [];
+  // `ghost` tanks are only insubstantial to *other tanks* — walls still stop
+  // them — so they're excluded from `separateTanks` but kept in the wall pass.
+  const solid: TankBody[] = [];
   for (const player of state.players) {
     if (!player.alive) continue;
     stepTank(
@@ -253,6 +259,7 @@ function stepBodies(state: TanksState, controllable: boolean): void {
       movementMods(player.buffs),
     );
     moving.push(player);
+    if (!has(player.buffs, 'ghost')) solid.push(player);
   }
 
   // Shove apart, then re-resolve walls, and repeat: a single pass pushes a
@@ -262,7 +269,7 @@ function stepBodies(state: TanksState, controllable: boolean): void {
   // deterministic — lets the pair (or knot of tanks in a corridor) actually
   // settle instead of fighting forever.
   for (let pass = 0; pass < WALL_SEPARATE_PASSES; pass += 1) {
-    separateTanks(moving, TANK_R);
+    separateTanks(solid, TANK_R);
     for (const body of moving) resolveTankWalls(body, state.maze);
   }
 }
@@ -280,7 +287,9 @@ function stepShooting(state: TanksState): void {
 function fire(state: TanksState, player: TankPlayerState): void {
   const heavy = has(player.buffs, 'heavy');
   const triple = has(player.buffs, 'triple');
+  const bounce = has(player.buffs, 'bounce');
   const speed = BULLET_SPEED * (heavy ? HEAVY_SPEED_MUL : 1);
+  const maxBounces = (heavy ? HEAVY_BOUNCES : MAX_BOUNCES) + (bounce ? BOUNCE_BONUS : 0);
 
   const angles = triple
     ? [player.angle - TRIPLE_SPREAD, player.angle, player.angle + TRIPLE_SPREAD]
@@ -300,7 +309,7 @@ function fire(state: TanksState, player: TankPlayerState): void {
       vy: sin * speed,
       radius: heavy ? HEAVY_R : BULLET_R,
       bounces: 0,
-      maxBounces: heavy ? HEAVY_BOUNCES : MAX_BOUNCES,
+      maxBounces,
       life: BULLET_LIFE,
       arm: ARM_TICKS,
       heavy,
@@ -308,11 +317,12 @@ function fire(state: TanksState, player: TankPlayerState): void {
     state.nextBulletId += 1;
   }
 
-  player.cooldown = SHOT_COOLDOWN;
+  player.cooldown = SHOT_COOLDOWN * (has(player.buffs, 'rapid') ? RAPID_COOLDOWN_MUL : 1);
   // Recoil replaces nothing — it just shoves the hull back along its heading.
   player.speed -= RECOIL;
   if (heavy) spendCharge(player.buffs, 'heavy');
   if (triple) spendCharge(player.buffs, 'triple');
+  if (bounce) spendCharge(player.buffs, 'bounce');
   state.events.push({ t: 'fire', seat: player.seat, heavy });
 }
 
@@ -348,7 +358,8 @@ function hitTanks(state: TanksState, bullet: TankBullet): boolean {
     if (!player.alive) continue;
     // Your own shell is harmless only until it has cleared your hull.
     if (player.seat === bullet.owner && bullet.arm > 0) continue;
-    const reach = TANK_R + bullet.radius;
+    const hullR = has(player.buffs, 'mini') ? MINI_HIT_R : TANK_R;
+    const reach = hullR + bullet.radius;
     const dx = player.x - bullet.x;
     const dy = player.y - bullet.y;
     if (dx * dx + dy * dy > reach * reach) continue;

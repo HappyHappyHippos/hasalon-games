@@ -1,6 +1,7 @@
 import { colorFor } from '@mg/shared';
 import {
   RUN_HALF_H,
+  RUN_HALF_W,
   TILE,
   TRACK_HEIGHT,
   VIEW_WIDTH,
@@ -12,6 +13,7 @@ import {
 } from '@mg/shared/gravity';
 import { CanvasStage } from '../../game/CanvasStage';
 import { drawFace, drawHat } from '../../game/appearance';
+import { PositionSmoother } from '../../game/PositionSmoother';
 import { feed } from '../../net/feed';
 import { sfx } from '../../audio';
 import { prefersReducedMotion } from '../../ui/motion';
@@ -20,6 +22,7 @@ import { GravityPredictor, advanceRunner, ticksBehind } from './predictor';
 const LETTERBOX = '#0a0d14';
 const BAND = '#1d2438';
 const SOLID_EDGE = '#8f8778';
+const INK = '#14110f';
 
 /** Where the camera holds the pack, as a fraction across the view. */
 const CAMERA_ANCHOR = 0.34;
@@ -58,6 +61,15 @@ export class GravityRenderer {
   private trackKey = -1;
 
   private readonly predictor = new GravityPredictor();
+  /**
+   * Absorbs the jump the local player's drawn position would otherwise take on
+   * every resync (see `predictor.ts:RESYNC_DISTANCE`) or on the predicting/not
+   * transition (round start, death, respawn) — same tool Gun Mayhem uses for
+   * the identical problem: two different clocks (predicted vs. server-driven)
+   * feeding the same point on screen.
+   */
+  private readonly smoother = new PositionSmoother();
+  private wasPredicting = false;
   private reduced = false;
 
   constructor(canvas: HTMLCanvasElement, context: GravityRenderContext) {
@@ -75,6 +87,8 @@ export class GravityRenderer {
     this.reduced = prefersReducedMotion();
     this.stage.attach();
     this.predictor.reset();
+    this.smoother.reset();
+    this.wasPredicting = false;
     const loop = (now: number): void => {
       this.frame(now);
       this.raf = requestAnimationFrame(loop);
@@ -86,6 +100,8 @@ export class GravityRenderer {
     cancelAnimationFrame(this.raf);
     this.stage.detach();
     this.predictor.reset();
+    this.smoother.reset();
+    this.wasPredicting = false;
   }
 
   private frame(now: number): void {
@@ -104,14 +120,37 @@ export class GravityRenderer {
 
     // Bodies first, because the camera follows them and drawing the world needs
     // to know where it is looking.
+    //
+    // Each runner's own `sp` (not the top-level `snap.sp`, which is the shared
+    // base ramp before catch-up) is their actual speed this tick — a runner
+    // behind the leader runs faster per `catchUpMul`. Predicting or advancing
+    // with the wrong (shared) speed drifts from the server by however much that
+    // runner's catch-up multiplier differs from 1, and that drift gets yanked
+    // back to the true position on every snapshot — which is exactly what read
+    // as juddering.
     const bodies = new Map<number, RunnerBody | null>();
     for (const player of snap.players) {
       bodies.set(
         player.s,
         player.s === this.context.mySeat
-          ? this.predictor.update(now, track, player, snap.sp, controllable)
-          : advanceRunner(player, track, behind, snap.sp, controllable),
+          ? this.predictor.update(now, track, player, player.sp, controllable)
+          : advanceRunner(player, track, behind, player.sp, controllable),
       );
+    }
+
+    // The local body is predicted from a different clock than everyone else's
+    // (see predictor.ts), and every resync — or the predicting/not transition
+    // at death, respawn or round start — moves it for a reason that is not
+    // motion. Slide instead of snapping, the same fix Gun Mayhem uses.
+    const myBody = bodies.get(this.context.mySeat);
+    if (myBody) {
+      const jumped = !this.wasPredicting || this.predictor.resynced;
+      this.wasPredicting = true;
+      const drawn = this.smoother.apply(myBody.x, myBody.y, now, jumped);
+      bodies.set(this.context.mySeat, { ...myBody, x: drawn.x, y: drawn.y });
+    } else {
+      this.wasPredicting = false;
+      this.smoother.reset();
     }
 
     if (this.predictor.consumeFlip()) {
@@ -178,6 +217,8 @@ export class GravityRenderer {
     this.track = buildTrack(snap.tz);
     this.trackKey = snap.tz;
     this.predictor.reset();
+    this.smoother.reset();
+    this.wasPredicting = false;
     return this.track;
   }
 
@@ -296,7 +337,10 @@ export class GravityRenderer {
   }
 
   // ---------------------------------------------------------------------------
-  // Runner — vector stick figure with animated limbs
+  // Runner — the same body/helmet/face/hat art as Gun Mayhem, so a player
+  // looks like themselves in both games. `RUN_HALF_W`/`RUN_HALF_H` (14/22) are
+  // close enough to Gun Mayhem's own half-extents (15/22) that the proportions
+  // carry over unscaled.
   // ---------------------------------------------------------------------------
 
   private drawRunner(
@@ -312,7 +356,19 @@ export class GravityRenderer {
     if (!this.reduced && !body.grounded) {
       // Flip trail — a faded silhouette at the previous surface.
       ctx.globalAlpha = 0.2;
-      this.drawFigure(ctx, body.x, body.y - body.g * 26, color, 0.5, body.g, hatIndex, faceIndex, false);
+      this.drawFigure(
+        ctx,
+        body.x,
+        body.y - body.g * 26,
+        color,
+        0.5,
+        body.g,
+        hatIndex,
+        faceIndex,
+        false,
+        true,
+        0,
+      );
       ctx.globalAlpha = 1;
     }
 
@@ -322,9 +378,8 @@ export class GravityRenderer {
     // function of position (plus a per-seat offset so seats don't sync up with
     // each other either), so it stays stable across a backgrounded tab where
     // rAF is suspended and never depends on elapsed frames or wall clock.
-    // Airborne runners tuck.
     const phase = body.grounded ? runPhase(body.x, seat) : 0.5;
-    this.drawFigure(ctx, body.x, body.y, color, phase, body.g, hatIndex, faceIndex, mine);
+    this.drawFigure(ctx, body.x, body.y, color, phase, body.g, hatIndex, faceIndex, mine, body.grounded, body.vy);
 
     const name = this.context.nameBySeat[seat];
     if (name) {
@@ -336,12 +391,18 @@ export class GravityRenderer {
   }
 
   /**
-   * A procedural vector stick-figure runner.
+   * A runner drawn with the shared character art (`game/appearance.ts`'s
+   * `drawHat`/`drawFace`), body and legs styled the same way Gun Mayhem's
+   * `drawCharacter` builds its figure — a rounded body block, a helmet arc,
+   * face and hat on top.
    *
-   * The figure is drawn in world space at (cx, cy), oriented by gravity `g`.
-   * `phase` in [0, 1) drives the limb cycle: 0 and 1 are the same pose (right
-   * leg forward), 0.5 is the mirror (left leg forward). When `phase` is exactly
-   * 0.5 the limbs are centred — used for the airborne tuck pose.
+   * The figure is drawn in world space at (cx, cy). `g` orients it: the runner
+   * flips gravity, so for `g === -1` the whole figure is mirrored on the y
+   * axis (feet toward the ceiling) and the head sub-drawing is un-mirrored
+   * again so the face still reads right-side-up. `phase` in [0, 1) drives the
+   * limb cycle the same way the old stick figure did: 0 and 1 are the same
+   * pose (right leg forward), 0.5 is the mirror. `grounded`/`vy` pick the
+   * airborne tuck pose, same idea as Gun Mayhem's jump pose.
    */
   private drawFigure(
     ctx: CanvasRenderingContext2D,
@@ -353,71 +414,87 @@ export class GravityRenderer {
     hatIndex: number,
     faceIndex: number,
     mine: boolean,
+    grounded: boolean,
+    vy: number,
   ): void {
     ctx.save();
     ctx.translate(cx, cy);
     if (g === -1) ctx.scale(1, -1);
 
-    // Proportions relative to RUN_HALF_H (22).
-    const headR = 8;
-    const neckY = -RUN_HALF_H + headR * 2 + 2;
-    const hipY = RUN_HALF_H - 12;
-    const footY = RUN_HALF_H - 1;
-    const shoulderY = neckY + 2;
+    const w = RUN_HALF_W;
+    const h = RUN_HALF_H;
 
-    // Limb swing — sinusoidal, ±1.
-    const swing = Math.sin(phase * Math.PI * 2);
-    const armSwing = swing * 8;
-    const legSwing = swing * 10;
-
-    const lw = 3.5;
+    // --- Legs ---------------------------------------------------------------
+    ctx.strokeStyle = INK;
+    ctx.lineWidth = 4;
     ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.lineWidth = lw;
 
-    // --- Shadow (offset) ---
-    ctx.strokeStyle = '#000000';
+    if (!grounded) {
+      // Tucked while rising away from the surface, reaching while falling
+      // toward it. `g` folds into the sign because `vy` is world-frame but the
+      // pose needs to know direction relative to *this* runner's gravity.
+      const towardSurface = vy * g > 0;
+      const tuck = towardSurface ? 3 : -5;
+      ctx.beginPath();
+      ctx.moveTo(-5, h - 10);
+      ctx.lineTo(-7, h + tuck);
+      ctx.moveTo(5, h - 10);
+      ctx.lineTo(7, h - tuck);
+      ctx.stroke();
+    } else {
+      const swing = Math.sin(phase * Math.PI * 2);
+      const stride = swing * 6;
+      const lift = Math.abs(Math.cos(phase * Math.PI * 2)) * 3;
+      ctx.beginPath();
+      ctx.moveTo(-5, h - 10);
+      ctx.lineTo(-5 + stride, h - (stride > 0 ? lift : 0));
+      ctx.moveTo(5, h - 10);
+      ctx.lineTo(5 - stride, h - (stride < 0 ? lift : 0));
+      ctx.stroke();
+    }
+
+    // --- Body -----------------------------------------------------------
+    // With 8 players staggered vertically and gently bumping, overlap is
+    // still common. A hard offset shadow plus a dark outline under each
+    // figure lets a colour keep reading as itself even when it is crossing
+    // another runner's limbs.
     ctx.save();
     ctx.translate(2, 2);
-    this.strokeFigureLines(ctx, neckY, shoulderY, hipY, footY, armSwing, legSwing);
+    ctx.fillStyle = '#000000';
+    roundRect(ctx, -w, -h + 4, w * 2, h * 2 - 14, 8);
+    ctx.fill();
     ctx.restore();
 
-    // --- Outline (same position, wider, dark) ---
-    // With 8 players staggered vertically and gently bumping, overlap is
-    // still common. A dark silhouette edge under each figure's own colour
-    // lets a colour keep reading as itself even when it's crossing another
-    // runner's limbs, without adding nameplates or anything louder.
-    ctx.strokeStyle = 'rgba(10, 12, 20, 0.6)';
-    ctx.lineWidth = lw + 2.5;
-    this.strokeFigureLines(ctx, neckY, shoulderY, hipY, footY, armSwing, legSwing);
-    ctx.lineWidth = lw;
-
-    // --- Body ---
-    ctx.strokeStyle = color;
-    this.strokeFigureLines(ctx, neckY, shoulderY, hipY, footY, armSwing, legSwing);
-
-    // --- Head ---
-    // Shadow
-    ctx.fillStyle = '#000000';
-    ctx.beginPath();
-    ctx.arc(2, -RUN_HALF_H + headR + 2, headR, 0, Math.PI * 2);
-    ctx.fill();
-    // Head fill
     ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(0, -RUN_HALF_H + headR, headR, 0, Math.PI * 2);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = INK;
+    roundRect(ctx, -w, -h + 4, w * 2, h * 2 - 14, 8);
     ctx.fill();
-    ctx.strokeStyle = '#000000';
-    ctx.lineWidth = 1.5;
     ctx.stroke();
 
-    // --- Hat and face (drawn on the head) ---
+    // --- Helmet ---------------------------------------------------------
+    ctx.fillStyle = shade(color, -0.25);
+    ctx.beginPath();
+    ctx.moveTo(-w, -h + 12);
+    ctx.arc(0, -h + 12, w, Math.PI, 0);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // --- Face and hat -----------------------------------------------------
+    // The context is already flipped for gravity, so both draw as though
+    // upright; a nested un-flip on the hat/face group keeps the drawing calls
+    // themselves identical to Gun Mayhem's.
     ctx.save();
-    ctx.translate(0, -RUN_HALF_H + headR);
-    // Un-flip for face so it reads right-side-up regardless of gravity
+    ctx.translate(0, -h + 17);
     if (g === -1) ctx.scale(1, -1);
-    drawFace(ctx, faceIndex, headR);
-    drawHat(ctx, hatIndex, color, headR, false);
+    drawFace(ctx, faceIndex, w * 0.8);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(0, -h + 12);
+    if (g === -1) ctx.scale(1, -1);
+    drawHat(ctx, hatIndex, color, w);
     ctx.restore();
 
     // --- "Mine" indicator ---
@@ -425,51 +502,11 @@ export class GravityRenderer {
       ctx.strokeStyle = '#ffffff';
       ctx.lineWidth = 1.5;
       ctx.beginPath();
-      ctx.arc(0, -RUN_HALF_H + headR, headR + 2, 0, Math.PI * 2);
+      ctx.arc(0, -h + 12, w + 4, 0, Math.PI * 2);
       ctx.stroke();
     }
 
     ctx.restore();
-  }
-
-  private strokeFigureLines(
-    ctx: CanvasRenderingContext2D,
-    neckY: number,
-    shoulderY: number,
-    hipY: number,
-    footY: number,
-    armSwing: number,
-    legSwing: number,
-  ): void {
-    // Torso
-    ctx.beginPath();
-    ctx.moveTo(0, neckY);
-    ctx.lineTo(0, hipY);
-    ctx.stroke();
-
-    // Right arm
-    ctx.beginPath();
-    ctx.moveTo(0, shoulderY);
-    ctx.lineTo(armSwing, shoulderY + 14);
-    ctx.stroke();
-
-    // Left arm
-    ctx.beginPath();
-    ctx.moveTo(0, shoulderY);
-    ctx.lineTo(-armSwing, shoulderY + 14);
-    ctx.stroke();
-
-    // Right leg
-    ctx.beginPath();
-    ctx.moveTo(0, hipY);
-    ctx.lineTo(legSwing, footY);
-    ctx.stroke();
-
-    // Left leg
-    ctx.beginPath();
-    ctx.moveTo(0, hipY);
-    ctx.lineTo(-legSwing, footY);
-    ctx.stroke();
   }
 
   private drawGhost(ctx: CanvasRenderingContext2D, x: number, y: number, seat: number): void {
@@ -477,8 +514,8 @@ export class GravityRenderer {
     const color = colorFor(this.context.colorBySeat[seat] ?? seat);
     const hatIndex = this.context.hatBySeat[seat] ?? 0;
     const faceIndex = this.context.faceBySeat[seat] ?? 0;
-    // Frozen pose for ghosts
-    this.drawFigure(ctx, x, y, color, 0.25, 1, hatIndex, faceIndex, false);
+    // Frozen standing pose for ghosts.
+    this.drawFigure(ctx, x, y, color, 0.25, 1, hatIndex, faceIndex, false, true, 0);
     ctx.globalAlpha = 1;
   }
 
@@ -509,4 +546,34 @@ export class GravityRenderer {
       }
     }
   }
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  const radius = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+}
+
+/** Darken (negative) or lighten (positive) a hex colour. Mirrors Gun Mayhem's helper. */
+function shade(hex: string, amount: number): string {
+  const value = hex.replace('#', '');
+  const num = Number.parseInt(value, 16);
+  const channel = (shift: number): number => {
+    const base = (num >> shift) & 0xff;
+    const next = amount < 0 ? base * (1 + amount) : base + (255 - base) * amount;
+    return Math.round(Math.min(255, Math.max(0, next)));
+  };
+  return `rgb(${channel(16)}, ${channel(8)}, ${channel(0)})`;
 }

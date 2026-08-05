@@ -1,73 +1,100 @@
 import { describe, expect, it } from 'vitest';
-import { IN_BACK, IN_FWD, IN_TLEFT, IN_TRIGHT } from '@mg/shared/tanks';
+import { IN_FWD, IN_TLEFT, IN_TRIGHT } from '@mg/shared/tanks';
 import { newStickState, stickToTankBits } from './stickBits';
 
 const CENTRE = { x: 0, y: 0 };
 
 describe('stickToTankBits', () => {
-  it('is idle at rest', () => {
-    expect(stickToTankBits(CENTRE, newStickState())).toBe(0);
+  it('is idle at rest, whatever the tank is facing', () => {
+    expect(stickToTankBits(CENTRE, 0, newStickState())).toBe(0);
+    expect(stickToTankBits(CENTRE, Math.PI / 2, newStickState())).toBe(0);
   });
 
-  it('drives forward on up and back on down', () => {
-    // Up is negative y.
-    expect(stickToTankBits({ x: 0, y: -1 }, newStickState())).toBe(IN_FWD);
-    expect(stickToTankBits({ x: 0, y: 1 }, newStickState())).toBe(IN_BACK);
+  it('a small deflection turns but does not drive', () => {
+    // Facing +x (angle 0), pointing straight "up" (screen -y) is 90° away —
+    // well past the turn threshold — but the stick barely left dead centre,
+    // so no drive bit.
+    const bits = stickToTankBits({ x: 0, y: -0.2 }, 0, newStickState());
+    expect(bits & IN_FWD).toBe(0);
+    expect(bits & (IN_TLEFT | IN_TRIGHT)).not.toBe(0);
   });
 
-  it('turns on the horizontal axis', () => {
-    expect(stickToTankBits({ x: 1, y: 0 }, newStickState())).toBe(IN_TRIGHT);
-    expect(stickToTankBits({ x: -1, y: 0 }, newStickState())).toBe(IN_TLEFT);
+  it('a large deflection turns and drives', () => {
+    const bits = stickToTankBits({ x: 0, y: -1 }, 0, newStickState());
+    expect(bits & IN_FWD).toBe(IN_FWD);
+    expect(bits & (IN_TLEFT | IN_TRIGHT)).not.toBe(0);
   });
 
-  it('gives diagonals for free — driving and turning at once', () => {
-    expect(stickToTankBits({ x: 0.8, y: -0.8 }, newStickState())).toBe(IN_FWD | IN_TRIGHT);
-    expect(stickToTankBits({ x: -0.8, y: 0.8 }, newStickState())).toBe(IN_BACK | IN_TLEFT);
+  it('pointing at the tank\'s current heading emits no turn bit', () => {
+    // Facing +x, stick pushed straight along +x: already aligned.
+    const bits = stickToTankBits({ x: 1, y: 0 }, 0, newStickState());
+    expect(bits & (IN_TLEFT | IN_TRIGHT)).toBe(0);
+    expect(bits & IN_FWD).toBe(IN_FWD);
   });
 
-  it('ignores a thumb resting just off centre', () => {
-    expect(stickToTankBits({ x: 0.1, y: -0.1 }, newStickState())).toBe(0);
+  it('pointing 180 degrees away turns and, if large, drives', () => {
+    // Facing +x, stick pushed along -x: fully behind, still no reverse bit —
+    // the stick can only ever ask for a turn plus forward.
+    const bits = stickToTankBits({ x: -1, y: 0 }, 0, newStickState());
+    expect(bits & (IN_TLEFT | IN_TRIGHT)).not.toBe(0);
+    expect(bits & IN_FWD).toBe(IN_FWD);
   });
 
-  it('engages on a small deflection just past the dead zone', () => {
-    // Thumbstick's own dead zone (0.15 as passed by TouchPad) is the single
-    // real "ignore this" gate; the on-thresholds here sit just above it, so a
-    // thumb barely past centre already drives — this is the regression test
-    // for the "does not work well" complaint, where two stacked dead zones
-    // meant travelling ~40% of the way to the rim before anything moved.
-    expect(stickToTankBits({ x: 0, y: -0.2 }, newStickState())).toBe(IN_FWD);
-    expect(stickToTankBits({ x: 0.18, y: 0 }, newStickState())).toBe(IN_TRIGHT);
+  it('turns right when the target heading is clockwise of current', () => {
+    // Facing +x; stick pointing toward +y (screen "down") is a clockwise turn.
+    const bits = stickToTankBits({ x: 0, y: 1 }, 0, newStickState());
+    expect(bits & IN_TRIGHT).toBe(IN_TRIGHT);
+    expect(bits & IN_TLEFT).toBe(0);
   });
 
-  it('does not chatter around the threshold', () => {
-    // A single threshold makes a thumb hovering near it flick on and off several
-    // times a second, which reads as the tank stuttering rather than as input.
+  it('turns left when the target heading is counter-clockwise of current', () => {
+    const bits = stickToTankBits({ x: 0, y: -1 }, 0, newStickState());
+    expect(bits & IN_TLEFT).toBe(IN_TLEFT);
+    expect(bits & IN_TRIGHT).toBe(0);
+  });
+
+  it('picks the correct sign across the +/-pi wrap', () => {
+    // Facing almost due "left-and-slightly-down" (just below +pi), pointing
+    // the stick at just above -pi is a short step further the same way
+    // (clockwise, i.e. right) rather than the long way around through 0.
+    const nearPi = Math.PI - 0.2;
+    const justPastWrap = -Math.PI + 0.2;
+    const bits = stickToTankBits({ x: Math.cos(justPastWrap), y: Math.sin(justPastWrap) }, nearPi, newStickState());
+    expect(bits & IN_TRIGHT).toBe(IN_TRIGHT);
+    expect(bits & IN_TLEFT).toBe(0);
+
+    // And the mirror image turns left.
+    const bits2 = stickToTankBits({ x: Math.cos(nearPi), y: Math.sin(nearPi) }, justPastWrap, newStickState());
+    expect(bits2 & IN_TLEFT).toBe(IN_TLEFT);
+    expect(bits2 & IN_TRIGHT).toBe(0);
+  });
+
+  it('does not chatter around the turn threshold', () => {
     const state = newStickState();
-    expect(stickToTankBits({ x: 0, y: -0.3 }, state)).toBe(IN_FWD);
+    // Facing +x; ~0.3 rad off is comfortably past TURN_ON.
+    expect(stickToTankBits({ x: Math.cos(0.3), y: Math.sin(0.3) }, 0, state).valueOf() & IN_TRIGHT).toBe(IN_TRIGHT);
 
-    // Below the on threshold but above the off threshold: still held.
-    expect(stickToTankBits({ x: 0, y: -0.17 }, state)).toBe(IN_FWD);
-    expect(stickToTankBits({ x: 0, y: -0.15 }, state)).toBe(IN_FWD);
+    // Drift to just above TURN_OFF: still held.
+    let bits = stickToTankBits({ x: Math.cos(0.08), y: Math.sin(0.08) }, 0, state);
+    expect(bits & IN_TRIGHT).toBe(IN_TRIGHT);
 
-    // Past the off threshold: released, and it now takes the full on threshold
-    // to re-engage.
-    expect(stickToTankBits({ x: 0, y: -0.13 }, state)).toBe(0);
-    expect(stickToTankBits({ x: 0, y: -0.17 }, state)).toBe(0);
-    expect(stickToTankBits({ x: 0, y: -0.3 }, state)).toBe(IN_FWD);
+    // Past the off threshold: released, and it now takes the full on threshold to re-engage.
+    bits = stickToTankBits({ x: Math.cos(0.04), y: Math.sin(0.04) }, 0, state);
+    expect(bits & (IN_TLEFT | IN_TRIGHT)).toBe(0);
   });
 
   it('releases everything when the stick returns to centre', () => {
     const state = newStickState();
-    stickToTankBits({ x: -1, y: -1 }, state);
-    expect(stickToTankBits(CENTRE, state)).toBe(0);
+    stickToTankBits({ x: -1, y: -1 }, 0, state);
+    expect(stickToTankBits(CENTRE, 0, state)).toBe(0);
   });
 
-  it('never reports both directions of an axis at once', () => {
+  it('never reports both turn directions at once', () => {
     const state = newStickState();
     for (let i = 0; i <= 40; i += 1) {
       const angle = (i / 40) * Math.PI * 2;
-      const bits = stickToTankBits({ x: Math.cos(angle), y: Math.sin(angle) }, state);
-      expect(bits & IN_FWD && bits & IN_BACK).toBeFalsy();
+      const currentAngle = (i / 7) * Math.PI * 2 - Math.PI;
+      const bits = stickToTankBits({ x: Math.cos(angle), y: Math.sin(angle) }, currentAngle, state);
       expect(bits & IN_TLEFT && bits & IN_TRIGHT).toBeFalsy();
     }
   });

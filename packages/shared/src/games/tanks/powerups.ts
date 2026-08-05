@@ -11,7 +11,12 @@
  */
 
 import {
+  BOUNCE_CHARGES,
+  GHOST_TICKS,
   HEAVY_CHARGES,
+  MINI_SPEED_MUL,
+  MINI_TICKS,
+  RAPID_TICKS,
   SHIELD_TICKS,
   SPEED_MUL,
   SPEED_TICKS,
@@ -27,16 +32,33 @@ export interface PowerupSpec {
   duration?: number;
   /** Charge buffs count down per shot fired. */
   charges?: number;
+  /** Short name for the HUD/pickup label. */
+  label: string;
+  /** Pickup fill colour — the renderer draws the glyph itself, no emoji. */
+  color: string;
 }
 
 export const POWERUPS: Record<TankPowerup, PowerupSpec> = {
-  shield: { kind: 'shield', duration: SHIELD_TICKS },
-  speed: { kind: 'speed', duration: SPEED_TICKS },
-  triple: { kind: 'triple', charges: TRIPLE_CHARGES },
-  heavy: { kind: 'heavy', charges: HEAVY_CHARGES },
+  shield: { kind: 'shield', duration: SHIELD_TICKS, label: 'Shield', color: '#8be9fd' },
+  speed: { kind: 'speed', duration: SPEED_TICKS, label: 'Speed', color: '#7cff6b' },
+  triple: { kind: 'triple', charges: TRIPLE_CHARGES, label: 'Triple', color: '#c792ff' },
+  heavy: { kind: 'heavy', charges: HEAVY_CHARGES, label: 'Heavy', color: '#ff6b6b' },
+  rapid: { kind: 'rapid', duration: RAPID_TICKS, label: 'Rapid', color: '#ffd447' },
+  bounce: { kind: 'bounce', charges: BOUNCE_CHARGES, label: 'Bounce+', color: '#39d9c0' },
+  ghost: { kind: 'ghost', duration: GHOST_TICKS, label: 'Ghost', color: '#d8d4ea' },
+  mini: { kind: 'mini', duration: MINI_TICKS, label: 'Mini', color: '#ff8fd6' },
 };
 
-export const POWERUP_KINDS: TankPowerup[] = ['shield', 'speed', 'triple', 'heavy'];
+export const POWERUP_KINDS: TankPowerup[] = [
+  'shield',
+  'speed',
+  'triple',
+  'heavy',
+  'rapid',
+  'bounce',
+  'ghost',
+  'mini',
+];
 
 export function emptyBuffs(): TankBuffs {
   return {};
@@ -72,10 +94,23 @@ export function tickBuffs(buffs: TankBuffs): void {
   }
 }
 
-/** The movement half, shared with the client predictor. */
+/**
+ * The movement half, shared with the client predictor.
+ *
+ * `speed` and `mini` are independent buffs and can be held together, so their
+ * multipliers combine rather than one overriding the other.
+ */
 export function movementMods(buffs: TankBuffs): TankMods {
-  if (!has(buffs, 'speed')) return { speedMul: 1, turnMul: 1 };
-  return { speedMul: SPEED_MUL, turnMul: SPEED_TURN_MUL };
+  let speedMul = 1;
+  let turnMul = 1;
+  if (has(buffs, 'speed')) {
+    speedMul *= SPEED_MUL;
+    turnMul *= SPEED_TURN_MUL;
+  }
+  if (has(buffs, 'mini')) {
+    speedMul *= MINI_SPEED_MUL;
+  }
+  return { speedMul, turnMul };
 }
 
 /** Empty maps are omitted from the snapshot rather than sent as `{}`. */

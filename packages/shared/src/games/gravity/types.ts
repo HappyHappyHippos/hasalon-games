@@ -123,4 +123,10 @@ export interface RunnerSnapshot {
   ib: number;
   /** Last input sequence consumed, for the predictor. */
   ack: number;
+  /**
+   * This runner's actual speed this tick — the shared `runSpeed` times their
+   * own `catchUpMul`. The top-level snapshot `sp` stays the shared base ramp
+   * value; this is per-runner because catch-up means it no longer is.
+   */
+  sp: number;
 }

@@ -132,14 +132,19 @@ describe('stepRunner — tight corridor', () => {
 });
 
 describe('stepRunner — crushing and falling', () => {
-  it('crushes a runner that hits solid while moving forward', () => {
+  it('slides to a stop at a wall instead of dying on contact', () => {
     // Column 3 of row 2 is solid; the runner starts clear of it in column 1
-    // and a single large horizontal step drives it straight in.
+    // and a single large horizontal step would, without the wall-face clamp,
+    // drive it straight through. A wall bump now bleeds forward speed rather
+    // than being fatal — recoverable with a well-timed flip.
     const track = trackFrom(['########', '........', '...#....', '........', '........', '........', '########']);
     const b = body({ x: TILE * 1.5, y: TILE * 2 + RUN_HALF_H, g: 1, grounded: true, vy: 0 });
-    // A one-tick step that lands the box squarely inside column 3's solid tile.
     const result = stepRunner(b, CONTROLLABLE, track, 1 / 60, 7200);
-    expect(result.crushed).toBe(true);
+    expect(result.crushed).toBe(false);
+    expect(result.bumped).toBe(true);
+    // Stopped right at column 3's wall face, not carried through it.
+    expect(b.x).toBeLessThan(3 * TILE - RUN_HALF_W);
+    expect(b.x).toBeGreaterThan(TILE * 1.5);
   });
 
   it('falls out of the world through a ceiling gap', () => {

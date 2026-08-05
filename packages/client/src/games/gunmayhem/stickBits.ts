@@ -31,7 +31,16 @@ export const JUMP_OFF = 0.3;
 /** Downward deflection that drops through a one-way platform. */
 export const DROP_Y = 0.55;
 
-export const HOLD_REJUMP_MS = 400;
+/**
+ * How long the stick can sit pushed up before the latch re-arms itself and
+ * fires another rising edge. In practice this is what triggers the *second*
+ * (air) jump for a thumb that flicks up and stays there rather than
+ * returning to centre — the ground jump consumes the first press, so this
+ * timer is the delay before the double jump comes out. Kept short rather
+ * than instant so a thumb resting on the stick does not auto-bhop forever;
+ * `jumpsLeft` running out after the air jump is what actually stops it.
+ */
+export const HOLD_REJUMP_MS = 160;
 export const REARM_RELEASE_MS = 50;
 
 export interface StickState {

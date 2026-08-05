@@ -690,6 +690,25 @@ strong,
   background: var(--teal);
 }
 
+/* The ready button and its count share a narrow grid column (240–320px), and
+   the count is a whole sentence carrying the game's name. A flex item's default
+   `min-width: auto` refuses to shrink below its content, so both the button
+   label and the sentence used to push straight out of the sticker on a laptop.
+   Let them wrap instead of overflow. */
+.lobby__ready > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.lobby__ready .btn {
+  white-space: normal;
+  text-wrap: balance;
+}
+.lobby__ready p {
+  /* Latin game names sit inside Hebrew copy, so a long one has no break
+     opportunity its own script would provide. */
+  overflow-wrap: anywhere;
+}
+
 .lobby__grid {
   display: grid;
   grid-template-columns: minmax(240px, 320px) 1fr;

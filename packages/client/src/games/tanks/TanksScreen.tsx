@@ -66,7 +66,7 @@ export function TanksScreen({ room, mySeat }: Props): JSX.Element {
       hud={<TanksHud room={room} mySeat={mySeat} />}
       controls={
         mySeat >= 0 && showTouch ? (
-          <TanksTouchPad onButton={(bit, down) => inputRef.current?.setButton(bit, down)} />
+          <TanksTouchPad mySeat={mySeat} onButton={(bit, down) => inputRef.current?.setButton(bit, down)} />
         ) : null
       }
     />

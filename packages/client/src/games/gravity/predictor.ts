@@ -79,6 +79,13 @@ export class GravityPredictor {
     now: number,
     track: Track,
     server: RunnerSnapshot,
+    /**
+     * This runner's own actual speed this tick — `server.sp`, already scaled
+     * by `catchUpMul`, not the shared base ramp (`GravitySnapshot.sp`). Replay
+     * holds it constant across the (short) replay window rather than
+     * recomputing `catchUpMul` per tick, which needs the leader's position at
+     * each of those ticks and isn't worth chasing for a handful of ticks.
+     */
     runSpeed: number,
     controllable: boolean,
   ): RunnerBody | null {

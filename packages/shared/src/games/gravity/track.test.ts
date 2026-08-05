@@ -21,14 +21,24 @@ function fresh(track: Track): RunnerBody {
   return body;
 }
 
-/** Ticks this body survives if it flips now (or does not), capped at `LOOKAHEAD`. */
-function survivalTicks(body: RunnerBody, track: Track, flipNow: boolean, speed: number): number {
+/**
+ * Simulates one future (flip now, or don't) `LOOKAHEAD` ticks out and reports
+ * whether it survives and how far it gets.
+ *
+ * A wall bump no longer kills (see `physics.ts:maxAdvanceX`) — it stalls
+ * forward progress instead. That means "survives" alone can no longer tell
+ * the bot "stuck at a wall forever" apart from "moving freely": both futures
+ * report alive for the full lookahead. `x` is what breaks the tie, which is
+ * exactly what makes the bot flip over or under an obstruction instead of
+ * standing at it — the same thing a person does.
+ */
+function lookahead(body: RunnerBody, track: Track, flipNow: boolean, speed: number): { alive: boolean; x: number } {
   const probe: RunnerBody = { ...body };
   for (let i = 0; i < LOOKAHEAD; i += 1) {
     const result = stepRunner(probe, { flip: i === 0 && flipNow, controllable: true }, track, DT, speed);
-    if (result.crushed || result.fell) return i;
+    if (result.crushed || result.fell) return { alive: false, x: probe.x };
   }
-  return LOOKAHEAD;
+  return { alive: true, x: probe.x };
 }
 
 interface RunOutcome {
@@ -38,8 +48,9 @@ interface RunOutcome {
 }
 
 /**
- * A greedy bot: each tick, look at both futures and take whichever survives
- * longer.
+ * A greedy bot: each tick, look at both futures and take whichever is better
+ * — alive over dead first, then whichever gets further, which is what makes
+ * it flip past a stalling wall bump rather than parking at it.
  *
  * It flips only when flipping buys something, which is the same decision a
  * player makes, and it deliberately has no knowledge of the chunk layout. If
@@ -54,7 +65,10 @@ function runBot(track: Track, pace: keyof typeof PACE_MUL = 'normal'): RunOutcom
     const speed = speedAt(distance, pace);
     distance += speed * DT;
 
-    const flip = survivalTicks(body, track, true, speed) > survivalTicks(body, track, false, speed);
+    const withFlip = lookahead(body, track, true, speed);
+    const withoutFlip = lookahead(body, track, false, speed);
+    const flip =
+      withFlip.alive !== withoutFlip.alive ? withFlip.alive : withFlip.x > withoutFlip.x;
     const result = stepRunner(body, { flip, controllable: true }, track, DT, speed);
 
     if (result.crushed) return { survived: false, x: body.x, how: 'crushed' };
