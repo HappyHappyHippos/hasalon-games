@@ -43,17 +43,9 @@ export const RUN_HALF_H = 22;
  */
 export const SURFACE_EPS = 0.01;
 
-/**
- * Deliberately enormous.
- *
- * A flip has to read as a snap to the other side, not as a swan dive: at gentle
- * gravity the crossing takes long enough that a gap must be telegraphed most of
- * a screen in advance, and the game stops being about reflexes. At this value a
- * full-height crossing takes ~0.29 s — a tile and a half at the opening speed,
- * three and a half at the fastest.
- */
-export const GRAVITY = 6500;
-export const TERMINAL_VY = 1600;
+
+export const GRAVITY = 4000;
+export const TERMINAL_VY = 500;
 
 export const BASE_SPEED = 300;
 /** Added on top of `BASE_SPEED` once the ramp is complete. */
@@ -83,3 +75,39 @@ export const DEFAULT_TARGET_WINS = 5;
 
 /** Where everyone starts, in tiles from the left. */
 export const START_COL = 1;
+
+// ---------------------------------------------------------------------------
+// Bumping
+// ---------------------------------------------------------------------------
+
+/**
+ * Per-seat vertical offset at spawn, in units.
+ *
+ * Every runner shares one x (the shared camera depends on it), so at spawn
+ * they would otherwise share y too — an exact tie that `resolveBumps` cannot
+ * break safely (see its comment). A few units per seat is enough to give even
+ * seat 7 of 8 a well-defined position without threatening the ceiling; gravity
+ * and `resolveBumps` settle everyone back onto the floor within the first few
+ * ticks of `playing`.
+ */
+export const SPAWN_Y_STAGGER = 4;
+
+/** Passes per tick, so a later pair's push cannot fully undo an earlier one's. */
+export const BUMP_ITERATIONS = 3;
+
+/**
+ * Cap on how far a single bump-resolution pass may move a body, in units.
+ *
+ * A bump must read as a nudge, not a launch — this is deliberately small next
+ * to the runner's own half-height (`RUN_HALF_H`). It is also, deliberately,
+ * small enough that `BUMP_ITERATIONS * 2 * BUMP_MAX_PUSH` per tick is less
+ * than a falling body's per-tick travel near `TERMINAL_VY` (~8.3 units at 60
+ * ticks/s). A resting pair (the spawn stagger's near-coincident case) has
+ * nothing else moving them, so a small push still fully separates them over a
+ * few ticks. But a runner in the middle of a flip is moving through the space
+ * a slower or stationary neighbour occupies, not trying to stand inside it —
+ * if the cap were large enough to fully cancel that neighbour's encroachment
+ * every tick, the two would deadlock at a permanent 44-unit standoff instead
+ * of the faster one jostling past.
+ */
+export const BUMP_MAX_PUSH = 1;

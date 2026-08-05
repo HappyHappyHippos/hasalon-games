@@ -8,6 +8,7 @@ import {
   TANK_CLEAR,
   TANK_R,
   TURN_RATE,
+  WALL_SEPARATE_PASSES,
 } from './constants';
 import { generateMaze, hIndex, vIndex } from './maze';
 import {
@@ -227,6 +228,165 @@ describe('separateTanks', () => {
     expect(b.x).toBe(400);
   });
 });
+
+describe('separateTanks + resolveTankWalls — adversarial convergence', () => {
+  /** One shove/wall pass, same shape as `sim.ts:stepBodies`'s inner loop. */
+  function settle(bodies: TankBody[], maze: Maze, passes: number): void {
+    for (let pass = 0; pass < passes; pass += 1) {
+      separateTanks(bodies, TANK_R);
+      for (const b of bodies) resolveTankWalls(b, maze);
+    }
+  }
+
+  /** How deeply the worst-overlapping pair interpenetrates. 0 when all clear. */
+  function deepestOverlap(bodies: TankBody[]): number {
+    let worst = 0;
+    for (let i = 0; i < bodies.length; i += 1) {
+      for (let j = i + 1; j < bodies.length; j += 1) {
+        const d = Math.hypot(bodies[i]!.x - bodies[j]!.x, bodies[i]!.y - bodies[j]!.y);
+        worst = Math.max(worst, TANK_R * 2 - d);
+      }
+    }
+    return worst;
+  }
+
+  function noneOverlapping(bodies: TankBody[]): boolean {
+    for (let i = 0; i < bodies.length; i += 1) {
+      for (let j = i + 1; j < bodies.length; j += 1) {
+        const d = Math.hypot(bodies[i]!.x - bodies[j]!.x, bodies[i]!.y - bodies[j]!.y);
+        if (d < TANK_R * 2 - 1e-6) return false;
+      }
+    }
+    return true;
+  }
+
+  function noneEmbedded(bodies: TankBody[], maze: Maze): boolean {
+    return bodies.every((b) => clearanceFrom(maze, b.x, b.y) >= TANK_CLEAR - 1e-6);
+  }
+
+  it('settles two coincident tanks in an open room', () => {
+    const maze = room();
+    const a = body({ x: CELL * 2.5, y: CELL * 1.5 });
+    const b = body({ x: CELL * 2.5, y: CELL * 1.5 });
+    settle([a, b], maze, 4);
+    expect(noneOverlapping([a, b])).toBe(true);
+    expect(noneEmbedded([a, b], maze)).toBe(true);
+  });
+
+  /**
+   * Eight tanks ramming a single point at full speed, for four seconds.
+   *
+   * This is deliberately *not* "eight tanks on one pixel". Relaxing a pile that
+   * deep takes ~40 passes, and the sim would be paying for all of them on every
+   * tick of every match to handle a state it cannot reach: spawns are spaced by
+   * construction (`maze.ts`), and because separation runs every tick, the most
+   * overlap that can ever appear in one tick is one tick of travel — about 3.2
+   * units at `MAX_SPEED`. So the honest worst case is a sustained pile-up
+   * driven through the real loop, which is what this builds.
+   */
+  it('keeps eight tanks ramming one point from ever overlapping', () => {
+    const maze = room(9, 9);
+    const centre = { x: CELL * 4.5, y: CELL * 4.5 };
+    const bodies = Array.from({ length: 8 }, (_, i) => {
+      const bearing = (i / 8) * Math.PI * 2;
+      return body({
+        x: centre.x + Math.cos(bearing) * 70,
+        y: centre.y + Math.sin(bearing) * 70,
+        angle: bearing + Math.PI,
+      });
+    });
+
+    // While tanks are actively driving into each other, a little residual
+    // overlap at the end of a tick is correct — they are being pushed together
+    // faster than one tick of relaxation fully undoes. What matters is that it
+    // stays a rounding error rather than accumulating into tanks sitting inside
+    // one another. A tenth of a hull radius is invisible on screen.
+    const tolerance = TANK_R * 0.1;
+    let worstOverlap = 0;
+    for (let tick = 0; tick < 240; tick += 1) {
+      for (const b of bodies) {
+        b.x += Math.cos(b.angle) * MAX_SPEED * DT;
+        b.y += Math.sin(b.angle) * MAX_SPEED * DT;
+      }
+      settle(bodies, maze, WALL_SEPARATE_PASSES);
+      worstOverlap = Math.max(worstOverlap, deepestOverlap(bodies));
+      expect(noneEmbedded(bodies, maze)).toBe(true);
+    }
+    expect(worstOverlap).toBeLessThan(tolerance);
+  });
+
+  it('settles a pair driven into a dead-end corridor', () => {
+    // A 1-cell pocket off a room, closed on the top and bottom, so two tanks
+    // pushed toward it must resolve wall contact and tank-tank contact at
+    // the same time.
+    const maze = room(5, 4);
+    maze.hWalls[hIndex(maze, 4, 1)] = 1;
+    maze.hWalls[hIndex(maze, 4, 2)] = 1;
+
+    const a = body({ x: cellCentre(4, 1).x, y: cellCentre(4, 1).y, angle: Math.PI });
+    const b = body({ x: cellCentre(4, 1).x + 5, y: cellCentre(4, 1).y, angle: Math.PI });
+    settle([a, b], maze, 8);
+    expect(noneOverlapping([a, b])).toBe(true);
+    expect(noneEmbedded([a, b], maze)).toBe(true);
+  });
+
+  /**
+   * The actual regression test for the reported bug.
+   *
+   * "Jitter" is not overlap — it is a knot of tanks that never stops moving,
+   * because shoving them apart pushes them into a wall and resolving the wall
+   * pushes them back into each other. Before the fix the two constraints were
+   * geometrically unsatisfiable in a one-cell corridor (`TANK_R` 26 wanted 52
+   * units between centres; `TANK_CLEAR` 31 left only 34), so the fight ran
+   * forever. Pressing tanks into a corner and then giving them an *idle* tick
+   * is what exposes that: at rest, nothing should move.
+   */
+  it('comes to rest in a corner instead of jittering forever', () => {
+    const maze = room(9, 9);
+    const corner = { x: CELL * 0.5, y: CELL * 0.5 };
+    const bodies = Array.from({ length: 4 }, (_, i) =>
+      body({
+        x: corner.x + (i % 2) * 6,
+        y: corner.y + Math.floor(i / 2) * 6,
+        angle: Math.PI * 1.25, // driving into the corner
+      }),
+    );
+
+    for (let tick = 0; tick < 120; tick += 1) {
+      for (const b of bodies) {
+        b.x += Math.cos(b.angle) * MAX_SPEED * DT;
+        b.y += Math.sin(b.angle) * MAX_SPEED * DT;
+      }
+      settle(bodies, maze, WALL_SEPARATE_PASSES);
+    }
+
+    // Now stop driving and let it stand. The distinction that matters is
+    // between a *damped* settle and an oscillation: both move on the first idle
+    // tick, but only jitter keeps moving. So assert the motion decays, and
+    // decays monotonically — a pile that shuffled forever, or that rang like a
+    // spring, would fail here even though a single-tick snapshot of it looks
+    // identical to a healthy one.
+    let previousDrift = Infinity;
+    for (let tick = 0; tick < 20; tick += 1) {
+      const before = bodies.map((b) => ({ x: b.x, y: b.y }));
+      settle(bodies, maze, WALL_SEPARATE_PASSES);
+      const drift = Math.max(
+        ...bodies.map((b, i) => Math.hypot(b.x - before[i]!.x, b.y - before[i]!.y)),
+      );
+      expect(drift).toBeLessThanOrEqual(previousDrift + 1e-9);
+      previousDrift = drift;
+    }
+
+    // ...and it has genuinely stopped, not merely slowed.
+    expect(previousDrift).toBeLessThan(0.001);
+    expect(noneOverlapping(bodies)).toBe(true);
+    expect(noneEmbedded(bodies, maze)).toBe(true);
+  });
+});
+
+function cellCentre(cx: number, cy: number): { x: number; y: number } {
+  return { x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL };
+}
 
 describe('wrapAngle', () => {
   it('keeps angles in (-π, π]', () => {

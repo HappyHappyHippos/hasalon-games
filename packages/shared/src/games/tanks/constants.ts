@@ -26,7 +26,17 @@ export const CELL = 96;
  */
 export const WALL_HALF = 5;
 
-export const TANK_R = 26;
+/**
+ * Tank hull radius.
+ *
+ * Shrunk from 26: at 26, two tanks side by side in a one-cell-wide corridor
+ * needed more clearance from each other (`2 * TANK_R`) than the corridor had
+ * left over after each kept its distance from the walls
+ * (`CELL - 2 * TANK_CLEAR`) — a geometrically unsatisfiable pair of
+ * constraints that `separateTanks`/`resolveTankWalls` fought over forever.
+ * At 20 the corridor has room for both.
+ */
+export const TANK_R = 20;
 /** How close a tank's centre may get to a wall segment. */
 export const TANK_CLEAR = TANK_R + WALL_HALF;
 
@@ -43,6 +53,16 @@ export const BRAID_FRACTION = 0.3;
 // Movement
 // ---------------------------------------------------------------------------
 
+/**
+ * Passes of shove-apart / resolve-walls per tick (`sim.ts:stepBodies`).
+ *
+ * One pass pushes a tank straight from an overlap into a wall, or from a wall
+ * into an overlap, with nothing to re-check the constraint it just broke. A
+ * handful of alternating passes is what actually converges a knot of tanks in
+ * a corridor to a stable rest instead of jittering.
+ */
+export const WALL_SEPARATE_PASSES = 4;
+
 export const MAX_SPEED = 190;
 export const REVERSE_SPEED = 120;
 /** ~120 ms to full speed: weighty, but not laggy. */
@@ -55,7 +75,14 @@ export const TURN_RATE = 3.2;
 // Shells
 // ---------------------------------------------------------------------------
 
-export const BULLET_SPEED = 520;
+/**
+ * Slowed from 520 so a shell reads on screen instead of just flashing by.
+ * `ARM_TICKS` and `BULLET_LIFE` were re-checked against this value (see their
+ * comments): arming is still comfortably outside the tank's own hit radius,
+ * and life is a tick countdown independent of speed, so neither needed to
+ * change.
+ */
+export const BULLET_SPEED = 400;
 export const BULLET_R = 6;
 export const MAX_BOUNCES = 6;
 /** A shell that has found a loop to live in still expires. */

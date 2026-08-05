@@ -5,6 +5,11 @@
  * of the difficulty: a single shared camera, nobody off screen, no falling
  * behind, and a run speed the client can extrapolate exactly because it is a
  * function of distance rather than of anyone's input.
+ *
+ * That one shared x is also what makes `resolveBumps` below tractable: every
+ * alive runner's x is bit-identical (same speed, same dt, added the same
+ * number of times), so the only axis two bodies can ever actually separate
+ * along is y.
  */
 
 import { DT } from '../../engine';
@@ -13,6 +18,8 @@ import {
   ACCEL_DIST,
   ACCEL_GAIN,
   BASE_SPEED,
+  BUMP_ITERATIONS,
+  BUMP_MAX_PUSH,
   COUNTDOWN_TICKS,
   DEFAULT_TARGET_WINS,
   PACE_MUL,
@@ -20,12 +27,13 @@ import {
   ROUND_OVER_TICKS,
   RUN_HALF_H,
   RUN_HALF_W,
+  SPAWN_Y_STAGGER,
   SPEED_GAIN,
   START_COL,
   TILE,
   TRACK_HEIGHT,
 } from './constants';
-import { pushOut, settleOnFloor, stepRunner } from './physics';
+import { pushOut, settleOnFloor, stepRunner, supported } from './physics';
 import { makeRng, mixSeed } from './rng';
 import { buildTrack } from './track';
 import {
@@ -94,16 +102,22 @@ function startRound(state: GravityState): void {
 }
 
 /**
- * Everyone starts on the same column, spread apart only visually.
+ * Everyone starts on the same column, spread apart only visually — and, since
+ * commit 22449da, apart on y as well by a small seat-ordered offset (see
+ * `SPAWN_Y_STAGGER`). Without it every runner spawns at the exact same (x, y),
+ * and `resolveBumps`' first pass on `playing`'s first tick sees N(N-1)/2 pairs
+ * all tied at dy === 0 simultaneously — a cascade, not a jostle.
  *
  * Staggering the start x would make the shared camera meaningless and hand the
- * front runner a real advantage — every gap would reach them first.
+ * front runner a real advantage — every gap would reach them first — so x
+ * still matches for everyone exactly.
  */
 function resetRunner(state: GravityState, player: RunnerState): void {
   player.x = START_COL * TILE + RUN_HALF_W;
   player.alive = true;
   player.finished = false;
   settleOnFloor(player, state.track);
+  player.y -= player.seat * SPAWN_Y_STAGGER;
 }
 
 // ---------------------------------------------------------------------------
@@ -228,28 +242,58 @@ function checkRoundOver(state: GravityState): void {
   state.events.push({ t: 'roundOver', winnerSeat: winner ? winner.seat : null });
 }
 
-function resolveBumps(state: GravityState): void {
+/**
+ * Separate runners whose boxes overlap.
+ *
+ * Modelled on `tanks/physics.ts:separateTanks`: derive the push from the real
+ * relative position, fall back to a fixed axis only on an exact tie (broken by
+ * seat order, so it stays deterministic), and give each body half the overlap.
+ * The one adaptation is the axis itself — a box, not a circle, and one that in
+ * practice only ever separates on y, because every alive runner shares x (see
+ * the module comment). Deriving the sign from the real dy rather than
+ * hardcoding "always push seat A up" is what keeps this correct if that ever
+ * changes.
+ *
+ * Two things keep a bump from reading as a launch: the per-pass push is capped
+ * at `BUMP_MAX_PUSH`, and a handful of passes let a pair resolved early get
+ * re-checked after a later pair moves them again, rather than staying silently
+ * re-overlapped for the rest of the tick.
+ */
+export function resolveBumps(state: GravityState): void {
   const alive = state.players.filter((p) => p.alive && !p.finished);
-  for (let i = 0; i < alive.length; i += 1) {
-    for (let j = i + 1; j < alive.length; j += 1) {
-      const a = alive[i]!;
-      const b = alive[j]!;
-      const dx = Math.abs(a.x - b.x);
-      const dy = Math.abs(a.y - b.y);
-      if (dx < RUN_HALF_W * 2 && dy < RUN_HALF_H * 2) {
-        const overlapY = RUN_HALF_H * 2 - dy;
-        const sign = a.y < b.y ? -1 : 1;
-        a.y += sign * overlapY * 0.5;
-        b.y -= sign * overlapY * 0.5;
+
+  for (let iter = 0; iter < BUMP_ITERATIONS; iter += 1) {
+    for (let i = 0; i < alive.length; i += 1) {
+      for (let j = i + 1; j < alive.length; j += 1) {
+        const a = alive[i]!;
+        const b = alive[j]!;
+        if (!a.alive || !b.alive) continue;
+
+        const dx = Math.abs(a.x - b.x);
+        if (dx >= RUN_HALF_W * 2) continue;
+
+        const dy = b.y - a.y;
+        const overlapY = RUN_HALF_H * 2 - Math.abs(dy);
+        if (overlapY <= 0) continue;
+
+        const sign = dy !== 0 ? Math.sign(dy) : a.seat < b.seat ? 1 : -1;
+        const push = Math.min(overlapY * 0.5, BUMP_MAX_PUSH);
+        a.y -= sign * push;
+        b.y += sign * push;
+
         pushOut(a, state.track);
         pushOut(b, state.track);
-        if (a.y - RUN_HALF_H < 0 || a.y + RUN_HALF_H > TRACK_HEIGHT) {
-          a.alive = false;
-          state.events.push({ t: 'out', seat: a.seat, how: 'crushed' });
-        }
-        if (b.y - RUN_HALF_H < 0 || b.y + RUN_HALF_H > TRACK_HEIGHT) {
-          b.alive = false;
-          state.events.push({ t: 'out', seat: b.seat, how: 'crushed' });
+
+        // A push that lifts a body off its support must drop `grounded`, or it
+        // hovers in mid-air until it happens to run off the column beneath it.
+        if (a.grounded && !supported(state.track, a)) a.grounded = false;
+        if (b.grounded && !supported(state.track, b)) b.grounded = false;
+
+        for (const runner of [a, b]) {
+          if (runner.y - RUN_HALF_H < 0 || runner.y + RUN_HALF_H > TRACK_HEIGHT) {
+            runner.alive = false;
+            state.events.push({ t: 'out', seat: runner.seat, how: 'crushed' });
+          }
         }
       }
     }

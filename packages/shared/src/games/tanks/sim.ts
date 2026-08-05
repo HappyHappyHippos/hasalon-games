@@ -31,6 +31,7 @@ import {
   SHOT_COOLDOWN,
   TANK_R,
   TRIPLE_SPREAD,
+  WALL_SEPARATE_PASSES,
 } from './constants';
 import { marchBullet } from './ballistics';
 import { arenaDims, cellCentre, fallbackMaze, generateMaze, validateMaze } from './maze';
@@ -254,10 +255,16 @@ function stepBodies(state: TanksState, controllable: boolean): void {
     moving.push(player);
   }
 
-  // Shove apart, then re-resolve walls: a tank pushed by another must not end
-  // the tick inside a wall.
-  separateTanks(moving, TANK_R);
-  for (const body of moving) resolveTankWalls(body, state.maze);
+  // Shove apart, then re-resolve walls, and repeat: a single pass pushes a
+  // tank straight from an overlap back into the wall it was shoved against
+  // (or vice versa), with nothing to re-check the other constraint. A fixed
+  // number of alternating passes — same on every client, so still
+  // deterministic — lets the pair (or knot of tanks in a corridor) actually
+  // settle instead of fighting forever.
+  for (let pass = 0; pass < WALL_SEPARATE_PASSES; pass += 1) {
+    separateTanks(moving, TANK_R);
+    for (const body of moving) resolveTankWalls(body, state.maze);
+  }
 }
 
 function stepShooting(state: TanksState): void {

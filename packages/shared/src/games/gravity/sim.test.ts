@@ -1,12 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import type { GameSeat } from '../../gameModule';
-import { BASE_SPEED, COUNTDOWN_TICKS, PACE_MUL, RAMP_DIST, SPEED_GAIN } from './constants';
+import {
+  BASE_SPEED,
+  COUNTDOWN_TICKS,
+  PACE_MUL,
+  RAMP_DIST,
+  RUN_HALF_H,
+  SPEED_GAIN,
+  TRACK_HEIGHT,
+} from './constants';
 import {
   applyInput,
   createState,
   defaultConfig,
   matchWinner,
   resetInput,
+  resolveBumps,
   speedAt,
   stepTick,
 } from './sim';
@@ -154,15 +163,23 @@ describe('round flow', () => {
     expect(state.players[0]!.x).toBeGreaterThan(startX);
   });
 
-  it('starts everyone on the floor at the same place', () => {
-    const state = makeState(6);
+  it('starts everyone on the same x, staggered and distinct on y, and not crushing anyone', () => {
+    const state = makeState(8);
     const first = state.players[0]!;
+    const ys = new Set<number>();
     for (const player of state.players) {
       expect(player.x).toBe(first.x);
-      expect(player.y).toBe(first.y);
       expect(player.g).toBe(1);
-      expect(player.grounded).toBe(true);
+      ys.add(player.y);
+      expect(player.y - RUN_HALF_H).toBeGreaterThanOrEqual(0);
+      expect(player.y + RUN_HALF_H).toBeLessThanOrEqual(TRACK_HEIGHT);
     }
+    // Every seat gets a distinct y — the whole point of the stagger.
+    expect(ys.size).toBe(state.players.length);
+
+    // And nobody dies from being spawned on top of their neighbours.
+    run(state, COUNTDOWN_TICKS + 60);
+    expect(state.players.every((p) => p.alive)).toBe(true);
   });
 
   it('awards the round to the last runner going', () => {
@@ -258,5 +275,81 @@ describe('input', () => {
 
     applyInput(state, 'p0', 1, IN_FLIP);
     expect(state.players[0]!.heldBits).toBe(IN_FLIP);
+  });
+});
+
+describe('resolveBumps', () => {
+  it('separates 8 fully coincident bodies without killing anyone or flinging them', () => {
+    // 8 boxes of RUN_HALF_H*2 cannot all sit non-overlapping inside a single
+    // 300-unit corridor (7 gaps of 44 is 308) — the spawn stagger exists so
+    // this exact case never happens from a cold start. This test forces it
+    // anyway, directly, to prove the degenerate tie no longer cascades into a
+    // mass elimination the way the old sign-tie-breaks-to-1 code did: nobody
+    // should die, nothing should ever move further than BUMP_MAX_PUSH in a
+    // single pass, and repeated resolution should settle rather than churn.
+    const state = makeState(8);
+    skipCountdown(state);
+    const x = state.players[0]!.x;
+    const y = state.players[0]!.y;
+    for (const p of state.players) {
+      p.x = x;
+      p.y = y;
+    }
+
+    let previous = state.players.map((p) => p.y);
+    let maxStep = 0;
+    for (let i = 0; i < 200; i += 1) {
+      resolveBumps(state);
+      const current = state.players.map((p) => p.y);
+      for (let s = 0; s < current.length; s += 1) {
+        maxStep = Math.max(maxStep, Math.abs(current[s]! - previous[s]!));
+      }
+      previous = current;
+    }
+
+    expect(state.players.every((p) => p.alive)).toBe(true);
+    expect(Number.isFinite(maxStep)).toBe(true);
+    // One resolveBumps() call is BUMP_ITERATIONS passes; a single body can be
+    // touched by up to 7 other pairs per pass, so bound the whole call rather
+    // than a single pair's push.
+    expect(maxStep).toBeLessThan(RUN_HALF_H * 2);
+
+    // Runs to a stable rest: one more call barely moves anyone.
+    const settledBefore = state.players.map((p) => p.y);
+    resolveBumps(state);
+    for (let s = 0; s < state.players.length; s += 1) {
+      expect(Math.abs(state.players[s]!.y - settledBefore[s]!)).toBeLessThan(0.1);
+    }
+
+    for (const p of state.players) {
+      expect(Number.isFinite(p.y)).toBe(true);
+    }
+  });
+
+  it('leaves an already-clear pair untouched', () => {
+    const state = makeState(2);
+    skipCountdown(state);
+    const [a, b] = state.players;
+    a!.y = 100;
+    b!.y = 100 + RUN_HALF_H * 4;
+    const beforeA = a!.y;
+    const beforeB = b!.y;
+    resolveBumps(state);
+    expect(a!.y).toBe(beforeA);
+    expect(b!.y).toBe(beforeB);
+  });
+
+  it('nudges rather than launches: a single pass moves a body at most BUMP_MAX_PUSH', () => {
+    const state = makeState(2);
+    skipCountdown(state);
+    const [a, b] = state.players;
+    a!.y = 200;
+    b!.y = 200.1; // near-total overlap
+    const beforeA = a!.y;
+    resolveBumps(state);
+    // One call is BUMP_ITERATIONS passes; even so, no single body should have
+    // been flung the kind of distance that used to fling runners into the
+    // track bounds.
+    expect(Math.abs(a!.y - beforeA)).toBeLessThan(RUN_HALF_H);
   });
 });

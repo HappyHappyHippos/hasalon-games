@@ -26,24 +26,34 @@ describe('stickToTankBits', () => {
   });
 
   it('ignores a thumb resting just off centre', () => {
-    expect(stickToTankBits({ x: 0.2, y: -0.2 }, newStickState())).toBe(0);
+    expect(stickToTankBits({ x: 0.1, y: -0.1 }, newStickState())).toBe(0);
+  });
+
+  it('engages on a small deflection just past the dead zone', () => {
+    // Thumbstick's own dead zone (0.15 as passed by TouchPad) is the single
+    // real "ignore this" gate; the on-thresholds here sit just above it, so a
+    // thumb barely past centre already drives — this is the regression test
+    // for the "does not work well" complaint, where two stacked dead zones
+    // meant travelling ~40% of the way to the rim before anything moved.
+    expect(stickToTankBits({ x: 0, y: -0.2 }, newStickState())).toBe(IN_FWD);
+    expect(stickToTankBits({ x: 0.18, y: 0 }, newStickState())).toBe(IN_TRIGHT);
   });
 
   it('does not chatter around the threshold', () => {
     // A single threshold makes a thumb hovering near it flick on and off several
     // times a second, which reads as the tank stuttering rather than as input.
     const state = newStickState();
-    expect(stickToTankBits({ x: 0, y: -0.5 }, state)).toBe(IN_FWD);
+    expect(stickToTankBits({ x: 0, y: -0.3 }, state)).toBe(IN_FWD);
 
     // Below the on threshold but above the off threshold: still held.
-    expect(stickToTankBits({ x: 0, y: -0.3 }, state)).toBe(IN_FWD);
-    expect(stickToTankBits({ x: 0, y: -0.26 }, state)).toBe(IN_FWD);
+    expect(stickToTankBits({ x: 0, y: -0.17 }, state)).toBe(IN_FWD);
+    expect(stickToTankBits({ x: 0, y: -0.15 }, state)).toBe(IN_FWD);
 
     // Past the off threshold: released, and it now takes the full on threshold
     // to re-engage.
-    expect(stickToTankBits({ x: 0, y: -0.2 }, state)).toBe(0);
-    expect(stickToTankBits({ x: 0, y: -0.3 }, state)).toBe(0);
-    expect(stickToTankBits({ x: 0, y: -0.5 }, state)).toBe(IN_FWD);
+    expect(stickToTankBits({ x: 0, y: -0.13 }, state)).toBe(0);
+    expect(stickToTankBits({ x: 0, y: -0.17 }, state)).toBe(0);
+    expect(stickToTankBits({ x: 0, y: -0.3 }, state)).toBe(IN_FWD);
   });
 
   it('releases everything when the stick returns to centre', () => {

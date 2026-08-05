@@ -1,11 +1,15 @@
 /**
  * Local-runner prediction.
  *
- * The same replay-by-sequence shape as Tank Trouble's, and simpler for a
- * structural reason: a runner's motion depends only on their own body, their own
- * button, and geometry that never changes. Nothing another player does can
- * perturb it, so replay is exact rather than approximate and corrections should
- * be invisible.
+ * The same replay-by-sequence shape as Tank Trouble's. Vertical motion is
+ * predicted exactly from your own body, your own button and geometry that
+ * never changes, which is why `stepRunner` alone — no knowledge of anyone
+ * else — reproduces it bit-for-bit. But `resolveBumps` (server-side, in
+ * sim.ts) is not replayed here: it needs every player's body at once, which
+ * this predictor never has, so a bump is *not* another form of exact replay —
+ * it is a genuine perturbation from another player that only ever arrives as
+ * a server correction. See `RESYNC_DISTANCE` below for how small that
+ * correction actually is and why it doesn't need special handling.
  */
 
 import { DT, TICK_MS } from '@mg/shared';
@@ -19,6 +23,27 @@ import {
 import { gravityInput } from './input';
 
 const MAX_REPLAY_TICKS = 24;
+/**
+ * Above this, a frame-to-frame jump in the predicted y is flagged as a resync
+ * rather than ordinary motion (see `resynced` below).
+ *
+ * Bumps are the only source of correction this predictor can't replay
+ * (`resolveBumps` needs every body at once), and per `BUMP_MAX_PUSH` /
+ * `BUMP_ITERATIONS` in shared/constants.ts a bump moves a body at most
+ * `BUMP_ITERATIONS * 2 * BUMP_MAX_PUSH` = 6 units in a single 60Hz tick. Since
+ * this predictor rebuilds from the latest server snapshot every call, the
+ * jump actually observed here is bounded by how much bump displacement
+ * happened between two arrivals of `feed.latest` — at the 30Hz broadcast rate
+ * that's at most two ticks, i.e. ~12 units, and it recurs every snapshot
+ * during a sustained bump rather than compounding. 90 stays comfortably above
+ * that (7.5x), so a sustained bump never trips this flag: it reads as
+ * continuous per-snapshot motion rather than a discontinuity, which is
+ * correct — a bump nudging you is real displacement that should be shown
+ * immediately, not smoothed as though it were a clock-switch artifact. The
+ * threshold is unchanged from before bumps existed; it still only fires for
+ * genuine teleports (round start, a multi-second lag spike outrunning
+ * `MAX_REPLAY_TICKS`), which is what it was for.
+ */
 const RESYNC_DISTANCE = 90;
 
 export class GravityPredictor {

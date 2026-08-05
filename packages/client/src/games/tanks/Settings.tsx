@@ -3,6 +3,7 @@ import type { GameConfig } from '@mg/shared';
 import type { ArenaSize, TanksConfig } from '@mg/shared/tanks';
 import { Segmented } from '../../ui/Segmented';
 import { Toggle } from '../../ui/Toggle';
+import { NumberStepper } from '../../ui/NumberStepper';
 import { useT } from '../../strings';
 
 interface Props {
@@ -34,31 +35,10 @@ export function TanksSettings({ settings, isHost, onChange }: Props): JSX.Elemen
         disabled={!isHost}
         onChange={(powerupsEnabled) => onChange({ powerupsEnabled })}
       />
-      <label className="setting">
-        <span>{t.setRoundsToWin}</span>
-        <input
-          className="input input--number"
-          type="number"
-          min={1}
-          max={15}
-          disabled={!isHost}
-          value={config.targetWins}
-          onChange={(event) => onChange({ targetWins: Number(event.target.value) })}
-        />
-      </label>
-      <label className="setting">
-        <span>{t.setRoundSeconds}</span>
-        <input
-          className="input input--number"
-          type="number"
-          min={30}
-          max={180}
-          step={10}
-          disabled={!isHost}
-          value={config.roundSeconds}
-          onChange={(event) => onChange({ roundSeconds: Number(event.target.value) })}
-        />
-      </label>
+      <NumberStepper label={t.setRoundsToWin} value={config.targetWins} min={1} max={15}
+        disabled={!isHost} onChange={(targetWins) => onChange({ targetWins })} />
+      <NumberStepper label={t.setRoundSeconds} value={config.roundSeconds} min={30} max={180}
+        step={10} disabled={!isHost} onChange={(roundSeconds) => onChange({ roundSeconds })} />
     </div>
   );
 }

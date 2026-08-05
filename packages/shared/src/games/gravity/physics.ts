@@ -3,8 +3,12 @@
  *
  * Pure: body, button, static track, `dt`, run speed. Nothing else. Because a
  * runner's vertical motion depends only on their own body and geometry that
- * never changes, prediction here is exact — no other player can perturb it, and
- * corrections should be invisible.
+ * never changes, prediction here is exact for the solo case — corrections
+ * should be invisible. The one exception is `sim.ts:resolveBumps`, which is not
+ * in this file: it displaces a body's `y` (and clears `grounded` when that
+ * displacement lifts it off its support) *between* ticks of this function, so a
+ * neighbour can perturb a runner. `stepRunner` itself still reads nothing but
+ * its own body, input and the static track.
  */
 
 import {
@@ -16,7 +20,10 @@ import {
   TILE,
   TRACK_HEIGHT,
 } from './constants';
-import { boxHitsSolid, type Track } from './track';
+import { boxHitsSolid, isSolid, type Track } from './track';
+
+/** Bounded so a pathological stack of solids cannot loop `snapToSurface` forever. */
+const MAX_SNAP_RETRIES = 4;
 
 export interface RunnerBody {
   x: number;
@@ -68,8 +75,14 @@ export function stepRunner(
 
     if (hits(track, body.x, body.y)) {
       const dir = Math.sign(body.vy) || body.g;
-      snapToSurface(body, track, dir);
+      const settled = snapToSurface(body, track, dir);
       body.vy = 0;
+      if (!settled) {
+        // Nothing clean to snap to — this is not an ordinary landing, treat it
+        // like running face-first into geometry.
+        result.crushed = true;
+        return result;
+      }
       // Only a landing on the surface gravity is pulling toward sticks. Clipping
       // the far side on the way past would otherwise glue a runner to a ceiling
       // they were falling away from.
@@ -105,9 +118,14 @@ function hits(track: Track, x: number, y: number): boolean {
 /**
  * Push the body back out of whatever it just entered, along the axis it was
  * travelling. Tiles are a uniform grid, so the surface is at a tile boundary
- * and the correction is one snap rather than a search.
+ * and the correction is normally one snap rather than a search.
+ *
+ * Returns whether the body ended up clear. A single tile-thick surface never
+ * fails this, but a body shoved into a stack of solids by a bump might — the
+ * caller decides what a failed snap means rather than this function silently
+ * teleporting somewhere unverified.
  */
-function snapToSurface(body: RunnerBody, track: Track, dir: number): void {
+function snapToSurface(body: RunnerBody, track: Track, dir: number): boolean {
   if (dir > 0) {
     const feet = body.y + RUN_HALF_H;
     const surface = Math.floor(feet / TILE) * TILE;
@@ -117,13 +135,20 @@ function snapToSurface(body: RunnerBody, track: Track, dir: number): void {
     const surface = Math.ceil(head / TILE) * TILE;
     body.y = surface + RUN_HALF_H + SURFACE_EPS;
   }
-  // A one-tile-thick surface cannot leave the body still overlapping, but a
-  // pathological case must not silently pass through.
-  if (hits(track, body.x, body.y)) body.y -= dir * TILE;
+  if (!hits(track, body.x, body.y)) return true;
+
+  // Pathological: step back opposite the direction of travel a tile at a time,
+  // verifying each attempt, bounded so a sealed stack of solids cannot loop.
+  for (let step = 0; step < MAX_SNAP_RETRIES; step += 1) {
+    body.y -= dir * TILE;
+    if (body.y - RUN_HALF_H < 0 || body.y + RUN_HALF_H > TRACK_HEIGHT) return false;
+    if (!hits(track, body.x, body.y)) return true;
+  }
+  return false;
 }
 
 /** Whether there is still something directly under the runner's feet. */
-function supported(track: Track, body: RunnerBody): boolean {
+export function supported(track: Track, body: RunnerBody): boolean {
   const probe = body.y + body.g * (RUN_HALF_H + SURFACE_EPS * 4);
   return boxHitsSolid(track, body.x - RUN_HALF_W, probe, body.x + RUN_HALF_W, probe);
 }
@@ -131,26 +156,35 @@ function supported(track: Track, body: RunnerBody): boolean {
 /**
  * Stand a body on the floor, for spawning.
  *
- * The opening chunks are always flat (`chunks.ts:OPENING_CHUNK`), so the bottom
- * row is the floor and there is nothing to search for.
+ * Reads the track for the actual floor under the spawn column rather than
+ * assuming the last row — the opening chunks are always flat
+ * (`chunks.ts:OPENING_CHUNK`), so in practice this always resolves to the
+ * bottom row, but it no longer has to take that on faith.
  */
 export function settleOnFloor(body: RunnerBody, track: Track): void {
   body.g = 1;
   body.vy = 0;
   body.grounded = true;
-  body.y = (track.rows - 1) * TILE - RUN_HALF_H - SURFACE_EPS;
+  const col = Math.floor(body.x / TILE);
+  let row = 1;
+  while (row < track.rows - 1 && !isSolid(track, col, row)) row += 1;
+  if (!isSolid(track, col, row)) row = track.rows - 1;
+  body.y = row * TILE - RUN_HALF_H - SURFACE_EPS;
 }
 
 /**
  * After a bump pushes a body, re-snap it so it does not sit inside a wall.
  * Unlike stepRunner this is a one-shot correction, not a full tick.
+ *
+ * Each direction is tried from the *original* position — trying the second
+ * direction from wherever the first attempt left the body would compound one
+ * bad snap on top of another instead of two independent attempts.
  */
 export function pushOut(body: RunnerBody, track: Track): void {
   if (!hits(track, body.x, body.y)) return;
-  // Try snapping to the nearest surface in the direction of gravity.
-  snapToSurface(body, track, body.g);
-  if (hits(track, body.x, body.y)) {
-    // Still stuck — try the other direction.
-    snapToSurface(body, track, -body.g as 1 | -1);
-  }
+  const originY = body.y;
+  if (snapToSurface(body, track, body.g)) return;
+  body.y = originY;
+  if (snapToSurface(body, track, -body.g as 1 | -1)) return;
+  body.y = originY;
 }

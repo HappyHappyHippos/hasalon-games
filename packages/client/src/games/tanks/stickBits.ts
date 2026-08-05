@@ -13,6 +13,14 @@
  * Both axes are Schmitt triggers. A single threshold makes a thumb resting near
  * the boundary chatter between on and off several times a second, which reads as
  * the tank stuttering.
+ *
+ * `TouchPad` passes `Thumbstick` its own small `deadZone`, so that dead zone is
+ * the one real "ignore this" gate — a thumb resting near centre reports exactly
+ * `{x:0,y:0}` and never reaches this function. The on-thresholds here sit just
+ * above that dead zone rather than far past it, so a small deflection past dead
+ * centre already engages; the off-thresholds sit just below the on-thresholds,
+ * narrow enough to still kill chatter without reintroducing a second, larger
+ * dead zone stacked on top of the first.
  */
 
 import { IN_BACK, IN_FWD, IN_TLEFT, IN_TRIGHT } from '@mg/shared/tanks';
@@ -22,10 +30,10 @@ export interface StickVector {
   y: number;
 }
 
-const DRIVE_ON = 0.4;
-const DRIVE_OFF = 0.24;
-const TURN_ON = 0.3;
-const TURN_OFF = 0.18;
+const DRIVE_ON = 0.18;
+const DRIVE_OFF = 0.14;
+const TURN_ON = 0.16;
+const TURN_OFF = 0.12;
 
 export interface StickState {
   drive: 0 | 1 | -1;

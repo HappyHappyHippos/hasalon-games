@@ -24,6 +24,22 @@ const SOLID_EDGE = '#8f8778';
 /** Where the camera holds the pack, as a fraction across the view. */
 const CAMERA_ANCHOR = 0.34;
 
+/** Distance in world units for one full limb-swing cycle. */
+const RUN_STRIDE = 80;
+/** Per-seat phase offset so up to 8 runners don't swing their legs in sync. */
+const SEAT_PHASE_OFFSET = 0.15;
+
+/**
+ * The run-cycle phase for a runner at world x, offset by seat so a crowd of
+ * runners reads as a crowd rather than one figure copy-pasted eight times. A
+ * pure function of position (never of elapsed frames or wall-clock time), so
+ * it is exact under prediction and stable across a backgrounded tab.
+ */
+function runPhase(x: number, seat: number): number {
+  const raw = x / RUN_STRIDE + seat * SEAT_PHASE_OFFSET;
+  return raw - Math.floor(raw);
+}
+
 export interface GravityRenderContext {
   mySeat: number;
   colorBySeat: Record<number, number>;
@@ -43,7 +59,6 @@ export class GravityRenderer {
 
   private readonly predictor = new GravityPredictor();
   private reduced = false;
-  private animPhase = 0;
 
   constructor(canvas: HTMLCanvasElement, context: GravityRenderContext) {
     // The track scrolls, so the stage is a fixed window onto it rather than the
@@ -104,8 +119,7 @@ export class GravityRenderer {
       sfx.flip(mine ? mine.g === 1 : true);
     }
 
-    const cameraX = this.cameraFor(snap, bodies);
-    this.animPhase = (cameraX / 80) % 1;
+    const cameraX = this.cameraFor(snap, bodies, track);
 
     ctx.save();
     ctx.translate(-cameraX, 0);
@@ -113,10 +127,19 @@ export class GravityRenderer {
     this.drawBackground(ctx, cameraX);
     this.drawTerrain(ctx, track, cameraX);
 
+    // Draw everyone else first, the local player last, so a crowd overlapping
+    // near the leader never buries the one runner you actually need to find.
     for (const player of snap.players) {
+      if (player.s === this.context.mySeat) continue;
       const body = bodies.get(player.s) ?? null;
-      if (body) this.drawRunner(ctx, body, player.s, player.s === this.context.mySeat);
+      if (body) this.drawRunner(ctx, body, player.s, false);
       else this.drawGhost(ctx, player.x, player.y, player.s);
+    }
+    const mine = snap.players.find((player) => player.s === this.context.mySeat);
+    if (mine) {
+      const body = bodies.get(mine.s) ?? null;
+      if (body) this.drawRunner(ctx, body, mine.s, true);
+      else this.drawGhost(ctx, mine.x, mine.y, mine.s);
     }
 
     ctx.restore();
@@ -127,16 +150,27 @@ export class GravityRenderer {
    *
    * Following the leader's *server* x rather than a locally smoothed one keeps
    * every client's view of the track identical, so nobody can be shown a gap a
-   * moment before or after anyone else.
+   * moment before or after anyone else. No smoothing is added here for the
+   * same reason: any local easing would be state that depends on this
+   * client's own frame history, so two clients watching the same leader could
+   * end up looking at very slightly different windows onto the track — a
+   * camera that is a pure function of the snapshot alone can never diverge.
+   * The only fix applied is a clamp, since `lead` unclamped can scroll the
+   * view past the end of the track and show empty space beyond `track.width`.
    */
-  private cameraFor(snap: GravitySnapshot, bodies: Map<number, RunnerBody | null>): number {
+  private cameraFor(
+    snap: GravitySnapshot,
+    bodies: Map<number, RunnerBody | null>,
+    track: Track,
+  ): number {
     let lead = 0;
     for (const player of snap.players) {
       const body = bodies.get(player.s);
       const x = body ? body.x : player.x;
       if (player.al === 1 && x > lead) lead = x;
     }
-    return Math.max(0, lead - VIEW_WIDTH * CAMERA_ANCHOR);
+    const maxCamera = Math.max(0, track.width - VIEW_WIDTH);
+    return Math.min(maxCamera, Math.max(0, lead - VIEW_WIDTH * CAMERA_ANCHOR));
   }
 
   private trackFor(snap: GravitySnapshot): Track {
@@ -282,8 +316,14 @@ export class GravityRenderer {
       ctx.globalAlpha = 1;
     }
 
-    // The phase drives the run animation. Airborne runners tuck.
-    const phase = body.grounded ? this.animPhase : 0.5;
+    // The phase drives the run animation, driven by this runner's own x rather
+    // than the shared camera — otherwise every figure's legs swing in lockstep,
+    // which reads as a rendering bug rather than a crowd of runners. Purely a
+    // function of position (plus a per-seat offset so seats don't sync up with
+    // each other either), so it stays stable across a backgrounded tab where
+    // rAF is suspended and never depends on elapsed frames or wall clock.
+    // Airborne runners tuck.
+    const phase = body.grounded ? runPhase(body.x, seat) : 0.5;
     this.drawFigure(ctx, body.x, body.y, color, phase, body.g, hatIndex, faceIndex, mine);
 
     const name = this.context.nameBySeat[seat];
@@ -341,6 +381,16 @@ export class GravityRenderer {
     ctx.translate(2, 2);
     this.strokeFigureLines(ctx, neckY, shoulderY, hipY, footY, armSwing, legSwing);
     ctx.restore();
+
+    // --- Outline (same position, wider, dark) ---
+    // With 8 players staggered vertically and gently bumping, overlap is
+    // still common. A dark silhouette edge under each figure's own colour
+    // lets a colour keep reading as itself even when it's crossing another
+    // runner's limbs, without adding nameplates or anything louder.
+    ctx.strokeStyle = 'rgba(10, 12, 20, 0.6)';
+    ctx.lineWidth = lw + 2.5;
+    this.strokeFigureLines(ctx, neckY, shoulderY, hipY, footY, armSwing, legSwing);
+    ctx.lineWidth = lw;
 
     // --- Body ---
     ctx.strokeStyle = color;

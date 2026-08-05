@@ -2,6 +2,7 @@ import type { JSX } from 'react';
 import type { GameConfig } from '@mg/shared';
 import type { GravityConfig, GravityPace } from '@mg/shared/gravity';
 import { Segmented } from '../../ui/Segmented';
+import { NumberStepper } from '../../ui/NumberStepper';
 import { useT } from '../../strings';
 
 interface Props {
@@ -27,18 +28,8 @@ export function GravitySettings({ settings, isHost, onChange }: Props): JSX.Elem
         options={PACES.map((value, i) => ({ value, label: t.paceLabels[i]! }))}
         onChange={(pace) => onChange({ pace })}
       />
-      <label className="setting">
-        <span>{t.setRoundsToWin}</span>
-        <input
-          className="input input--number"
-          type="number"
-          min={1}
-          max={15}
-          disabled={!isHost}
-          value={config.targetWins}
-          onChange={(event) => onChange({ targetWins: Number(event.target.value) })}
-        />
-      </label>
+      <NumberStepper label={t.setRoundsToWin} value={config.targetWins} min={1} max={15}
+        disabled={!isHost} onChange={(targetWins) => onChange({ targetWins })} />
     </div>
   );
 }

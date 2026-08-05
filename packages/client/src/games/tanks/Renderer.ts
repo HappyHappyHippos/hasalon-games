@@ -30,6 +30,20 @@ const WALL_SHADOW = '#000000';
 /** Hard offset shadow, never a blur — see the note at the top of `tokens.css`. */
 const SHADOW_OFFSET = 3;
 
+/** Fill colours for one tank's parts, derived once per seat colour and cached. */
+interface TankPalette {
+  hull: string;
+  track: string;
+  turret: string;
+  barrel: string;
+}
+
+/** Solid black for every part — the shadow pass is the coloured tank's own shape. */
+const SHADOW_PALETTE: TankPalette = { hull: '#000000', track: '#000000', turret: '#000000', barrel: '#000000' };
+
+/** How far a wreck's turret is knocked off-centre, so it reads as destroyed, not just faded. */
+const WRECK_TURRET_SKEW = 0.6;
+
 const PICKUP_GLYPH: Record<TankPowerup, string> = {
   shield: '⛊',
   triple: '⋔',
@@ -62,6 +76,7 @@ export class TanksRenderer {
 
   private readonly predictor = new TanksPredictor();
   private readonly smoothers = new Map<number, PositionSmoother>();
+  private readonly paletteCache = new Map<number, TankPalette>();
 
   private shake = 0;
   private reduced = false;
@@ -269,21 +284,19 @@ export class TanksRenderer {
     seat: number,
     buffs: TanksSnapshot['players'][number]['bf'],
   ): void {
-    const color = colorFor(this.context.colorBySeat[seat] ?? seat);
+    const palette = this.paletteFor(seat);
 
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
 
-    ctx.fillStyle = '#000000';
-    ctx.fillRect(-TANK_R + SHADOW_OFFSET, -TANK_R + SHADOW_OFFSET, TANK_R * 2, TANK_R * 2);
+    // Shadow: same silhouette, solid black, hard-offset — never a blur.
+    ctx.save();
+    ctx.translate(SHADOW_OFFSET, SHADOW_OFFSET);
+    this.paintTankSilhouette(ctx, SHADOW_PALETTE, 0);
+    ctx.restore();
 
-    ctx.fillStyle = color;
-    ctx.fillRect(-TANK_R, -TANK_R, TANK_R * 2, TANK_R * 2);
-
-    // Barrel, pointing along the heading, so aim is always legible.
-    ctx.fillStyle = '#1c1a24';
-    ctx.fillRect(TANK_R - 4, -5, 22, 10);
+    this.paintTankSilhouette(ctx, palette, 0);
 
     ctx.restore();
 
@@ -312,14 +325,111 @@ export class TanksRenderer {
     angle: number,
     seat: number,
   ): void {
+    const palette = this.paletteFor(seat);
+
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
     ctx.globalAlpha = 0.35;
-    ctx.fillStyle = colorFor(this.context.colorBySeat[seat] ?? seat);
-    ctx.fillRect(-TANK_R, -TANK_R, TANK_R * 2, TANK_R * 2);
+    // A knocked-askew turret is what reads as "destroyed" rather than "faded".
+    this.paintTankSilhouette(ctx, palette, WRECK_TURRET_SKEW);
     ctx.restore();
     ctx.globalAlpha = 1;
+  }
+
+  /**
+   * The whole tank — tracks, hull, turret and barrel — as one shape, drawn in
+   * `angle`-local space with the barrel along +x. Used both for the coloured
+   * tank and, with `SHADOW_PALETTE`, for its offset shadow, so the shadow can
+   * never drift out of sync with a shape change here.
+   */
+  private paintTankSilhouette(
+    ctx: CanvasRenderingContext2D,
+    palette: TankPalette,
+    turretSkew: number,
+  ): void {
+    const trackHalfLen = TANK_R * 0.92;
+    const trackWidth = TANK_R * 0.34;
+    const trackOuter = TANK_R;
+    const trackInner = trackOuter - trackWidth;
+
+    // Tracks, both sides.
+    ctx.fillStyle = palette.track;
+    ctx.fillRect(-trackHalfLen, -trackOuter, trackHalfLen * 2, trackWidth);
+    ctx.fillRect(-trackHalfLen, trackInner, trackHalfLen * 2, trackWidth);
+
+    // Tread rungs — a handful of link lines across each track.
+    ctx.strokeStyle = palette.hull;
+    ctx.lineWidth = Math.max(1, TANK_R * 0.045);
+    ctx.beginPath();
+    const rungs = 6;
+    for (let i = 1; i < rungs; i++) {
+      const rx = -trackHalfLen + (trackHalfLen * 2 * i) / rungs;
+      ctx.moveTo(rx, -trackOuter);
+      ctx.lineTo(rx, -trackInner);
+      ctx.moveTo(rx, trackInner);
+      ctx.lineTo(rx, trackOuter);
+    }
+    ctx.stroke();
+
+    // Hull, rounded rather than a hard block.
+    const hullHalfLen = TANK_R * 0.8;
+    const hullHalfWid = TANK_R * 0.58;
+    const hullCorner = TANK_R * 0.28;
+    ctx.fillStyle = palette.hull;
+    roundedRect(ctx, -hullHalfLen, -hullHalfWid, hullHalfLen * 2, hullHalfWid * 2, hullCorner);
+    ctx.fill();
+
+    ctx.save();
+    ctx.rotate(turretSkew);
+
+    // Turret ring + cap.
+    const turretR = TANK_R * 0.46;
+    ctx.fillStyle = palette.turret;
+    circle(ctx, 0, 0, turretR);
+    ctx.fillStyle = palette.hull;
+    circle(ctx, 0, 0, turretR - TANK_R * 0.1);
+
+    // Barrel — tapered, so the aim direction stays the clearest thing on the
+    // sprite. Pointing +x, same as the hull before rotation.
+    const barrelBaseHalf = TANK_R * 0.16;
+    const barrelTipHalf = TANK_R * 0.09;
+    const barrelStart = turretR * 0.7;
+    const barrelEnd = barrelStart + TANK_R * 0.95;
+    const muzzleR = TANK_R * 0.12;
+
+    ctx.fillStyle = palette.barrel;
+    ctx.beginPath();
+    ctx.moveTo(barrelStart, -barrelBaseHalf);
+    ctx.lineTo(barrelEnd, -barrelTipHalf);
+    ctx.lineTo(barrelEnd, barrelTipHalf);
+    ctx.lineTo(barrelStart, barrelBaseHalf);
+    ctx.closePath();
+    ctx.fill();
+
+    circle(ctx, barrelEnd, 0, muzzleR);
+
+    ctx.restore();
+  }
+
+  /**
+   * Seat colour plus its derived tread/turret/barrel shades, cached per seat
+   * so the hex-shade math doesn't run every tank every frame — only when a
+   * seat's colour actually changes.
+   */
+  private paletteFor(seat: number): TankPalette {
+    const color = colorFor(this.context.colorBySeat[seat] ?? seat);
+    const cached = this.paletteCache.get(seat);
+    if (cached && cached.hull === color) return cached;
+
+    const palette: TankPalette = {
+      hull: color,
+      track: shade(color, 0.45),
+      turret: shade(color, 0.25),
+      barrel: '#1c1a24',
+    };
+    this.paletteCache.set(seat, palette);
+    return palette;
   }
 
   private smootherFor(seat: number): PositionSmoother {
@@ -375,4 +485,31 @@ function circle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number):
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
+}
+
+/** Adds a rounded-rect path (caller fills/strokes) — used for the tank hull. */
+function roundedRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+): void {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/** Darkens a `#rrggbb` colour toward black by `factor` (0..1). */
+function shade(hex: string, factor: number): string {
+  const num = parseInt(hex.slice(1), 16);
+  const r = Math.max(0, Math.round(((num >> 16) & 0xff) * (1 - factor)));
+  const g = Math.max(0, Math.round(((num >> 8) & 0xff) * (1 - factor)));
+  const b = Math.max(0, Math.round((num & 0xff) * (1 - factor)));
+  return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
 }

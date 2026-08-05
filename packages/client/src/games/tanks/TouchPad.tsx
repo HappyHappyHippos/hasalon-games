@@ -68,7 +68,12 @@ export function TanksTouchPad({ onButton }: Props): JSX.Element {
 
   return (
     <div className="pad">
-      <Thumbstick className="stick--pad" onMove={applyVector} />
+      {/*
+        A smaller-than-default dead zone: `stickBits.ts`'s on-thresholds sit just
+        above this, so this dead zone is the single real "ignore this" gate
+        rather than the first of two stacked ones.
+      */}
+      <Thumbstick className="stick--pad" deadZone={0.15} onMove={applyVector} />
 
       <button
         type="button"

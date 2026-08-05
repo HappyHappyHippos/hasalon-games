@@ -6,6 +6,8 @@ interface Props {
   value: number;
   min: number;
   max: number;
+  /** Amount each button press moves `value` by. Defaults to `1`. */
+  step?: number;
   disabled?: boolean;
   onChange: (value: number) => void;
 }
@@ -20,6 +22,7 @@ export function NumberStepper({
   value,
   min,
   max,
+  step = 1,
   disabled,
   onChange,
 }: Props): JSX.Element {
@@ -38,8 +41,8 @@ export function NumberStepper({
           type="button"
           className="number-stepper__button"
           disabled={disabled || value <= min}
-          aria-label={`− ${label}`}
-          onClick={() => change(-1)}
+          aria-label={step === 1 ? `− ${label}` : `− ${step} ${label}`}
+          onClick={() => change(-step)}
         >
           −
         </button>
@@ -50,8 +53,8 @@ export function NumberStepper({
           type="button"
           className="number-stepper__button"
           disabled={disabled || value >= max}
-          aria-label={`+ ${label}`}
-          onClick={() => change(1)}
+          aria-label={step === 1 ? `+ ${label}` : `+ ${step} ${label}`}
+          onClick={() => change(step)}
         >
           +
         </button>
