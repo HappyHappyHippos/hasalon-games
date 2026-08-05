@@ -1,6 +1,6 @@
 # Music
 
-Four background loops, each picked to match the screen or game it plays under.
+Background loops, each picked to match the screen or game it plays under.
 
 | File | Track | Author | Licence | Source |
 | --- | --- | --- | --- | --- |
@@ -8,6 +8,8 @@ Four background loops, each picked to match the screen or game it plays under.
 | `gunmayhem.mp3` | Wild West | Playlistsons | Pixabay Content License | https://pixabay.com/music/modern-country-wild-west-466301/ |
 | `achtung.mp3` | Sneaky Quirky | leberch | Pixabay Content License | https://pixabay.com/music/sneaky-sneaky-quirky-375837/ |
 | `memes.mp3` | Funky Chill | The_Mountain | Pixabay Content License | https://pixabay.com/music/funk-funky-chill-138615/ |
+| `tanks.mp3` | Retro Games (Glitch Technology Synthwave) | FASSounds | Pixabay Content License | https://pixabay.com/music/video-games-retro-games-glitch-technology-synthwave-199939/ |
+| `gravity.mp3` | Interstellar Chase Theme with Glitchy Synths | DesiFreeMusic | Pixabay Content License | https://pixabay.com/music/upbeat-interstellar-chase-theme-with-glitchy-synths-385801/ |
 
 Skribbl reuses `lobby.mp3`. Attribution is not required by the Pixabay Content
 License, but the source record stays here so every shipped asset is traceable.

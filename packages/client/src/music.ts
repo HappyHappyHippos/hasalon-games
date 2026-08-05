@@ -48,12 +48,8 @@ const TRACKS: Record<MusicTrack, string> = {
   gunmayhem: '/music/gunmayhem.mp3',
   achtung: '/music/achtung.mp3',
   memes: '/music/memes.mp3',
-  // Placeholders until real tracks are sourced, and deliberately not silence:
-  // a missing file would read as the codec bug above all over again. Tank
-  // Trouble borrows the fighter's bed and Gravity Guy the curve game's, both of
-  // which suit the pace closely enough to ship on.
-  tanks: '/music/gunmayhem.mp3',
-  gravity: '/music/achtung.mp3',
+  tanks: '/music/tanks.mp3',
+  gravity: '/music/gravity.mp3',
   // Skribbl deliberately shares the quiet lo-fi lobby bed. `play` notices the
   // URL is unchanged and lets it continue rather than restarting on match start.
   skribbl: '/music/lobby.mp3',
