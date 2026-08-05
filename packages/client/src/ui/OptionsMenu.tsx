@@ -132,6 +132,52 @@ export function OptionsMenu(): JSX.Element {
           </div>
         </div>
 
+        {room && (
+          <section className="options__section">
+            <h3 className="eyebrow">{t.sectionMatch}</h3>
+
+            {playing &&
+              (seated ? (
+                <Button
+                  variant="primary"
+                  full
+                  onClick={() => {
+                    socket.setPaused(!room.paused);
+                    if (room.paused) close();
+                  }}
+                >
+                  {room.paused ? t.resume : t.pauseForEveryone}
+                </Button>
+              ) : (
+                <p className="muted small">{t.onlyPlayersPause}</p>
+              ))}
+
+            {inMatch &&
+              (isHost ? (
+                <>
+                  <Button
+                    full
+                    onClick={() => {
+                      socket.restart();
+                      close();
+                    }}
+                  >
+                    {t.restartMatch}
+                  </Button>
+                  <Button variant="danger" full onClick={() => socket.rematch()}>
+                    {t.endMatch}
+                  </Button>
+                </>
+              ) : (
+                <p className="muted small">{t.onlyHostRestart}</p>
+              ))}
+
+            <Button variant="ghost" full onClick={() => socket.leave()}>
+              {t.leaveRoom}
+            </Button>
+          </section>
+        )}
+
         <section className="options__section">
           <h3 className="eyebrow">{t.sectionSound}</h3>
           <Toggle
@@ -237,47 +283,6 @@ export function OptionsMenu(): JSX.Element {
           </p>
         </section>
 
-        {inMatch && (
-          <section className="options__section">
-            <h3 className="eyebrow">{t.sectionMatch}</h3>
-
-            {playing &&
-              (seated ? (
-                <Button
-                  variant="primary"
-                  full
-                  onClick={() => {
-                    socket.setPaused(!room.paused);
-                    if (room.paused) close();
-                  }}
-                >
-                  {room.paused ? t.resume : t.pauseForEveryone}
-                </Button>
-              ) : (
-                <p className="muted small">{t.onlyPlayersPause}</p>
-              ))}
-
-            {isHost ? (
-              <>
-                <Button
-                  full
-                  onClick={() => {
-                    socket.restart();
-                    close();
-                  }}
-                >
-                  {t.restartMatch}
-                </Button>
-                <Button variant="danger" full onClick={() => socket.rematch()}>
-                  {t.endMatch}
-                </Button>
-              </>
-            ) : (
-              <p className="muted small">{t.onlyHostRestart}</p>
-            )}
-          </section>
-        )}
-
         {meta && room && (
           <section className="options__section">
             <h3 className="eyebrow">{t.controlsFor(meta.name)}</h3>
@@ -296,11 +301,6 @@ export function OptionsMenu(): JSX.Element {
           <Button variant="primary" size="lg" full onClick={close}>
             {t.backToGame}
           </Button>
-          {room && (
-            <Button variant="ghost" full onClick={() => socket.leave()}>
-              {t.leaveRoom}
-            </Button>
-          )}
         </div>
       </div>
     </div>

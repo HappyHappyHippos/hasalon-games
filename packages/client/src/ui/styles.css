@@ -2032,6 +2032,12 @@ strong,
   gap: 8px;
   flex: none;
 }
+.options__head-actions .btn {
+  font-size: 22px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 10px;
+}
 
 .options__section {
   display: flex;
