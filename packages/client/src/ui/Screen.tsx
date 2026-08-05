@@ -1,16 +1,11 @@
-import { useEffect, useState, type JSX, type ReactNode, type RefObject } from 'react';
+import { type JSX, type ReactNode, type RefObject } from 'react';
 import type { RoomView } from '@mg/shared';
 import { useStore } from '../store';
 import { useT } from '../strings';
 import { MatchOver, Paused } from './MatchOverlays';
 import { VoiceBar } from './VoiceBar';
 import { useHasTouch } from './useTouchControls';
-import {
-  fullscreenNeedsInstall,
-  isStandalone,
-  useIsFullscreen,
-  useToggleFullscreen,
-} from './useFullscreen';
+import { FullscreenButton } from './FullscreenButton';
 
 interface Props {
   room: RoomView;
@@ -70,7 +65,7 @@ export function Screen({
         the arena — which also made this button, sitting inside it, impossible
         to press on exactly the devices it exists for.
       */}
-      {hasTouch && !isStandalone() && <FullscreenButton />}
+      <FullscreenButton />
 
       <div className={`screenbox${paperArena ? ' screenbox--paper' : ''}`}>
         <canvas ref={canvasRef} className="screenbox__canvas" />
@@ -110,44 +105,6 @@ export function Screen({
   );
 }
 
-/**
- * The maximize button.
- *
- * On Android this is an ordinary fullscreen toggle. On iPhone there is no
- * fullscreen API for a normal tab at all, so the button's job changes: it says
- * how to get one — the home-screen shortcut, which opens standalone with no URL
- * bar because of the manifest. Saying that out loud beats a button that quietly
- * does nothing, and it is hidden entirely once you are already standalone.
- */
-function FullscreenButton(): JSX.Element {
-  const [hint, setHint] = useState(false);
-  const fullscreen = useIsFullscreen();
-  const toggleFullscreen = useToggleFullscreen();
-  const t = useT();
-
-  useEffect(() => {
-    if (!hint) return;
-    const timer = window.setTimeout(() => setHint(false), 6000);
-    return () => window.clearTimeout(timer);
-  }, [hint]);
-
-  const needsInstall = fullscreenNeedsInstall();
-
-  return (
-    <div className="fullscreenbtn__wrap">
-      {hint && <p className="fullscreenbtn__hint">{t.fullscreenInstallHint}</p>}
-      <button
-        type="button"
-        className="fullscreenbtn"
-        onClick={() => (needsInstall ? setHint((on) => !on) : toggleFullscreen())}
-        aria-label={fullscreen ? t.exitFullscreen : t.enterFullscreen}
-        title={fullscreen ? t.exitFullscreen : t.enterFullscreen}
-      >
-        {fullscreen ? '⤡' : '⛶'}
-      </button>
-    </div>
-  );
-}
 
 /**
  * Connection quality, in the corner.

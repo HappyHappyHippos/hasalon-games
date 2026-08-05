@@ -14,6 +14,7 @@ import { Toolbar } from './Toolbar';
 import { WordBanner } from './WordBanner';
 import { WordPicker } from './WordPicker';
 import { MatchOver, Paused } from '../../ui/MatchOverlays';
+import { FullscreenButton } from '../../ui/FullscreenButton';
 
 interface Props {
   room: RoomView;
@@ -220,6 +221,8 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
 
         <Chat room={room} canGuess={!isDrawer && !guessed && phase === 'drawing'} reason={guessReason} />
       </div>
+
+      <FullscreenButton />
 
       {/*
         The overlays every game needs, wherever it puts its canvas. Skribbl does

@@ -15,6 +15,7 @@ import { sfx } from '../audio';
 export function PauseButton(): JSX.Element | null {
   const room = useStore((s) => s.room);
   const mySeat = useStore(selectMySeat);
+  const setOptionsOpen = useStore((s) => s.setOptionsOpen);
   const t = useT();
 
   if (!room || room.phase !== 'playing' || mySeat < 0) return null;
@@ -28,6 +29,7 @@ export function PauseButton(): JSX.Element | null {
       onClick={() => {
         sfx.click();
         socket.setPaused(!room.paused);
+        setOptionsOpen(true);
       }}
     >
       {room.paused ? '▶' : '⏸'}

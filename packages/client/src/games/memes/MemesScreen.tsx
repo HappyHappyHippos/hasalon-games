@@ -3,6 +3,7 @@ import { TICK_RATE, type RoomView } from '@mg/shared';
 import { useStore } from '../../store';
 import { useT } from '../../strings';
 import { MatchOver, Paused } from '../../ui/MatchOverlays';
+import { FullscreenButton } from '../../ui/FullscreenButton';
 import { Composer } from './Composer';
 import { MemeCard } from './MemeCard';
 import { preloadMemes } from './preload';
@@ -98,6 +99,7 @@ export function MemesScreen({ room, mySeat }: Props): JSX.Element {
       {room.phase !== 'matchOver' && <div key={view?.phaseSeq ?? 0} className="memes__phase">{body}</div>}
       <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
       {warning && <p className="sr-only" role="status" aria-live="polite">{warning}</p>}
+      <FullscreenButton />
       {room.paused && room.phase === 'playing' && <Paused room={room} spectating={mySeat < 0} />}
       {room.phase === 'matchOver' && <MatchOver room={room} mySeat={mySeat} winnerSeat={winnerSeat} isHost={room.players.find((player) => player.id === playerId)?.isHost ?? false} />}
     </main>

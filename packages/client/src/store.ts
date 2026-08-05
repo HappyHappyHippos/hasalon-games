@@ -148,6 +148,7 @@ export interface AppState {
   musicVolume: number;
   touchControls: TouchControlsMode;
   lang: Lang;
+  optionsOpen: boolean;
   /**
    * Bumped once per `matchStarted`, which is the cue for the intro splash.
    *
@@ -194,6 +195,7 @@ export interface AppState {
   setMusicVolume(volume: number): void;
   setTouchControls(mode: TouchControlsMode): void;
   setLang(lang: Lang): void;
+  setOptionsOpen(open: boolean): void;
   onMatchStarted(room: RoomView): void;
   onWelcome(room: RoomView, playerId: string): void;
   onMatchEnded(room: RoomView, winnerSeat: number | null): void;
@@ -314,6 +316,7 @@ export const useStore = create<AppState>((set) => ({
   musicVolume: DEFAULT_MUSIC_VOLUME,
   touchControls: loadTouchControls(),
   lang: loadLang(),
+  optionsOpen: false,
   matchNonce: 0,
 
   setStatus: (status) => set({ status }),
@@ -369,6 +372,8 @@ export const useStore = create<AppState>((set) => ({
     }
     set({ lang });
   },
+
+  setOptionsOpen: (optionsOpen) => set({ optionsOpen }),
 
   onMatchStarted: (room) =>
     set((state) => ({

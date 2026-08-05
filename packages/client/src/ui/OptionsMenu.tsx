@@ -1,4 +1,4 @@
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, type JSX } from 'react';
 import { GAMES } from '@mg/shared';
 import { selectMySeat, useStore } from '../store';
 import { useT } from '../strings';
@@ -9,10 +9,9 @@ import { Button } from './Button';
 import { Toggle } from './Toggle';
 import { useHasTouch } from './useTouchControls';
 import { useVoice } from './useVoice';
-import { exitFullscreen, isStandalone, useIsFullscreen } from './useFullscreen';
+import { exitFullscreen, useIsFullscreen } from './useFullscreen';
 import type { TouchControlsMode } from '../store';
 import { LANGS, type Dict, type Lang } from '../i18n';
-import { isIOSDevice } from './mobileViewport';
 
 const TOUCH_MODES: Array<{ mode: TouchControlsMode; label: (t: Dict) => string }> = [
   { mode: 'auto', label: (t) => t.touchAuto },
@@ -36,7 +35,8 @@ const LANG_LABELS: Record<Lang, string> = { he: 'עברית', en: 'English' };
  * mid-match alike.
  */
 export function OptionsMenu(): JSX.Element {
-  const [open, setOpen] = useState(false);
+  const open = useStore((s) => s.optionsOpen);
+  const setOpen = useStore((s) => s.setOptionsOpen);
   const room = useStore((s) => s.room);
   const playerId = useStore((s) => s.playerId);
   const mySeat = useStore(selectMySeat);
@@ -62,11 +62,11 @@ export function OptionsMenu(): JSX.Element {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
-      setOpen((wasOpen) => !wasOpen);
+      setOpen(!useStore.getState().optionsOpen);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [setOpen]);
 
   // Duck the music rather than stopping it: the menu is usually open for a few
   // seconds and a hard stop/start either side of that is jarring.
@@ -112,11 +112,15 @@ export function OptionsMenu(): JSX.Element {
         <div className="options__head">
           <h2 className="overlay__title">{t.options}</h2>
           <div className="options__head-actions">
-            {isIOSDevice() && isStandalone() && (
-              <Button size="sm" onClick={() => window.location.reload()}>
-                {t.reloadApp}
-              </Button>
-            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => window.location.reload()}
+              aria-label={t.reloadApp}
+              title={t.reloadApp}
+            >
+              ↻
+            </Button>
             <Button variant="ghost" size="sm" onClick={close} aria-label={t.close}>
               ✕
             </Button>
