@@ -872,6 +872,7 @@ strong,
   border: 3px solid var(--ink);
   border-radius: 10px;
   overflow: hidden;
+  object-fit: cover;
 }
 .boxart--gunmayhem { background: #2d1f3d; }
 .boxart--memes { background: #f58a3a; }
