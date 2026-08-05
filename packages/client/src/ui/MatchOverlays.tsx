@@ -1,5 +1,6 @@
 import { useMemo, type CSSProperties, type JSX } from 'react';
 import { colorFor, type RoomView } from '@mg/shared';
+import { useStore } from '../store';
 import { useT } from '../strings';
 import { socket } from '../net/socket';
 import { Button } from './Button';
@@ -19,7 +20,14 @@ import { Avatar } from './Avatar';
  * Anyone seated can pause, and anyone seated can lift it — a pause you have to
  * find the original presser to undo is a hostage situation, not a feature.
  */
-export function Paused({ room, spectating }: { room: RoomView; spectating: boolean }): JSX.Element {
+export function Paused({ room, spectating }: { room: RoomView; spectating: boolean }): JSX.Element | null {
+  const optionsOpen = useStore((s) => s.optionsOpen);
+  const playerId = useStore((s) => s.playerId);
+
+  if (optionsOpen || (room.pausedBy === playerId)) {
+    return null;
+  }
+
   const pauser = room.players.find((p) => p.id === room.pausedBy);
   const t = useT();
 

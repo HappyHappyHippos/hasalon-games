@@ -98,7 +98,12 @@ export function OptionsMenu(): JSX.Element {
   const seated = mySeat >= 0;
   const meta = room ? GAMES[room.gameId].meta : null;
 
-  const close = (): void => setOpen(false);
+  const close = (): void => {
+    setOpen(false);
+    if (room?.phase === 'playing' && room?.paused) {
+      socket.setPaused(false);
+    }
+  };
 
   return (
     <div className="overlay overlay--solid options__overlay" onClick={close} role="presentation">
