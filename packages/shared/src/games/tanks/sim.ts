@@ -75,6 +75,7 @@ export function defaultConfig(): TanksConfig {
     targetWins: DEFAULT_TARGET_WINS,
     roundSeconds: DEFAULT_ROUND_SECONDS,
     arenaSize: 'normal',
+    stageId: 'random',
     powerupsEnabled: true,
   };
 }

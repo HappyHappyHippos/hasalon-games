@@ -4,6 +4,7 @@ import type { ArenaSize, TanksConfig } from '@mg/shared/tanks';
 import { Segmented } from '../../ui/Segmented';
 import { Toggle } from '../../ui/Toggle';
 import { NumberStepper } from '../../ui/NumberStepper';
+import { TankStageCarousel } from './TankStageCarousel';
 import { useT } from '../../strings';
 
 interface Props {
@@ -22,6 +23,11 @@ export function TanksSettings({ settings, isHost, onChange }: Props): JSX.Elemen
 
   return (
     <div className="settings">
+      <TankStageCarousel
+        value={config.stageId ?? 'random'}
+        disabled={!isHost}
+        onChange={(stageId) => onChange({ stageId })}
+      />
       <Segmented
         label={t.setArenaSize}
         value={config.arenaSize}

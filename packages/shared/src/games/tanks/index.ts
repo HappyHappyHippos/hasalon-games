@@ -6,4 +6,5 @@ export * from './physics';
 export * from './powerups';
 export * from './rng';
 export * from './sim';
+export * from './stages';
 export * from './types';

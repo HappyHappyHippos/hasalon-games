@@ -10,6 +10,7 @@ import {
   stepTick,
 } from './sim';
 import { IN_MASK, type ArenaSize, type TankEvent, type TanksConfig } from './types';
+import { TANK_STAGE_IDS } from './stages';
 
 const ARENA_SIZES: ArenaSize[] = ['small', 'normal', 'large'];
 
@@ -53,6 +54,10 @@ export const tanksModule: GameModule = {
       roundSeconds: clampInt(input.roundSeconds, base.roundSeconds, 30, 180),
       arenaSize:
         input.arenaSize && ARENA_SIZES.includes(input.arenaSize) ? input.arenaSize : base.arenaSize,
+      stageId:
+        input.stageId && (input.stageId === 'random' || TANK_STAGE_IDS.includes(input.stageId))
+          ? input.stageId
+          : base.stageId ?? 'random',
       powerupsEnabled:
         typeof input.powerupsEnabled === 'boolean' ? input.powerupsEnabled : base.powerupsEnabled,
     };

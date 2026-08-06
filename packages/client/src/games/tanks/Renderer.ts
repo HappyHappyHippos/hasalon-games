@@ -21,12 +21,14 @@ import { feed } from '../../net/feed';
 import { sfx } from '../../audio';
 import { prefersReducedMotion } from '../../ui/motion';
 import { TanksPredictor, advanceTank, ticksBehind } from './predictor';
-import type { TankBody } from '@mg/shared/tanks';
+import { getImage } from '../../game/images';
+import { TANK_STAGES, TANK_STAGE_IDS, type TankBody } from '@mg/shared/tanks';
 
 const FLOOR = '#1c1a24';
 const LETTERBOX = '#100f16';
 const WALL = '#efe9dc';
 const WALL_SHADOW = '#000000';
+const DEBUG_HITBOXES = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debugHitboxes');
 
 /** Hard offset shadow, never a blur — see the note at the top of `tokens.css`. */
 const SHADOW_OFFSET = 3;
@@ -282,30 +284,61 @@ export class TanksRenderer {
   // -------------------------------------------------------------------------
 
   private drawFloor(ctx: CanvasRenderingContext2D, maze: Maze): void {
+    const width = arenaWidth(maze);
+    const height = arenaHeight(maze);
     ctx.fillStyle = FLOOR;
-    ctx.fillRect(0, 0, arenaWidth(maze), arenaHeight(maze));
+    ctx.fillRect(0, 0, width, height);
+
+    // Draw backdrop image if available for current seed / round.
+    const stageId = TANK_STAGE_IDS[Math.abs(maze.cols * 31 + maze.rows) % TANK_STAGE_IDS.length]!;
+    const stageDef = TANK_STAGES[stageId];
+    if (stageDef) {
+      const img = getImage(stageDef.backdropUrl);
+      if (img) {
+        ctx.drawImage(img, 0, 0, width, height);
+      }
+    }
   }
 
   private drawWalls(ctx: CanvasRenderingContext2D, maze: Maze): void {
-    // Shadows first, all of them, then the walls on top: interleaving would let
-    // one wall's shadow land on its neighbour's face.
-    for (const pass of [0, 1]) {
-      ctx.fillStyle = pass === 0 ? WALL_SHADOW : WALL;
-      const dx = pass === 0 ? SHADOW_OFFSET : 0;
-      const dy = pass === 0 ? SHADOW_OFFSET : 0;
+    // Determine active stage theme hitboxes
+    const stageId = TANK_STAGE_IDS[Math.abs(maze.cols * 31 + maze.rows) % TANK_STAGE_IDS.length]!;
+    const stageDef = TANK_STAGES[stageId];
 
-      for (let y = 0; y < maze.rows; y += 1) {
-        for (let x = 0; x <= maze.cols; x += 1) {
-          if (!hasVWall(maze, x, y)) continue;
-          ctx.fillRect(x * CELL - WALL_HALF + dx, y * CELL - WALL_HALF + dy, WALL_HALF * 2, CELL + WALL_HALF * 2);
+    // If stage image backdrop is loaded, suppress procedural wall fills
+    const imgLoaded = stageDef && !!getImage(stageDef.backdropUrl);
+
+    if (!imgLoaded) {
+      for (const pass of [0, 1]) {
+        ctx.fillStyle = pass === 0 ? WALL_SHADOW : WALL;
+        const dx = pass === 0 ? SHADOW_OFFSET : 0;
+        const dy = pass === 0 ? SHADOW_OFFSET : 0;
+
+        for (let y = 0; y < maze.rows; y += 1) {
+          for (let x = 0; x <= maze.cols; x += 1) {
+            if (!hasVWall(maze, x, y)) continue;
+            ctx.fillRect(x * CELL - WALL_HALF + dx, y * CELL - WALL_HALF + dy, WALL_HALF * 2, CELL + WALL_HALF * 2);
+          }
+        }
+        for (let y = 0; y <= maze.rows; y += 1) {
+          for (let x = 0; x < maze.cols; x += 1) {
+            if (!hasHWall(maze, x, y)) continue;
+            ctx.fillRect(x * CELL - WALL_HALF + dx, y * CELL - WALL_HALF + dy, CELL + WALL_HALF * 2, WALL_HALF * 2);
+          }
         }
       }
-      for (let y = 0; y <= maze.rows; y += 1) {
-        for (let x = 0; x < maze.cols; x += 1) {
-          if (!hasHWall(maze, x, y)) continue;
-          ctx.fillRect(x * CELL - WALL_HALF + dx, y * CELL - WALL_HALF + dy, CELL + WALL_HALF * 2, WALL_HALF * 2);
-        }
+    }
+
+    if (DEBUG_HITBOXES && stageDef) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(74, 222, 128, 0.9)';
+      ctx.fillStyle = 'rgba(74, 222, 128, 0.2)';
+      ctx.lineWidth = 2;
+      for (const box of stageDef.obstacles) {
+        ctx.fillRect(box.x, box.y, box.w, box.h);
+        ctx.strokeRect(box.x, box.y, box.w, box.h);
       }
+      ctx.restore();
     }
   }
 

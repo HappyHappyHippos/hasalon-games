@@ -29,11 +29,27 @@ export interface TanksInput {
 
 export type ArenaSize = 'small' | 'normal' | 'large';
 
+export type TankStageId =
+  | 'alien_planet'
+  | 'israel'
+  | 'jungle'
+  | 'living_room'
+  | 'science_lab'
+  | 'snow';
+
+export interface ObstacleBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
 export interface TanksConfig {
   game: 'tanks';
   targetWins: number;
   roundSeconds: number;
   arenaSize: ArenaSize;
+  stageId: TankStageId | 'random';
   powerupsEnabled: boolean;
 }
 
