@@ -102,6 +102,9 @@ export function OptionsMenu(): JSX.Element {
     setOpen(false);
     if (room?.phase === 'playing' && room?.paused) {
       socket.setPaused(false);
+      useStore.setState((state) =>
+        state.room ? { room: { ...state.room, paused: false, pausedBy: null } } : {},
+      );
     }
   };
 
@@ -119,14 +122,14 @@ export function OptionsMenu(): JSX.Element {
           <div className="options__head-actions">
             <Button
               variant="ghost"
-              size="sm"
+              size="md"
               onClick={() => window.location.reload()}
               aria-label={t.reloadApp}
               title={t.reloadApp}
             >
               ↻
             </Button>
-            <Button variant="ghost" size="sm" onClick={close} aria-label={t.close}>
+            <Button variant="ghost" size="md" onClick={close} aria-label={t.close}>
               ✕
             </Button>
           </div>
@@ -164,7 +167,14 @@ export function OptionsMenu(): JSX.Element {
                   >
                     {t.restartMatch}
                   </Button>
-                  <Button variant="danger" full onClick={() => socket.rematch()}>
+                  <Button
+                    variant="danger"
+                    full
+                    onClick={() => {
+                      socket.rematch();
+                      close();
+                    }}
+                  >
                     {t.endMatch}
                   </Button>
                 </>
@@ -172,7 +182,14 @@ export function OptionsMenu(): JSX.Element {
                 <p className="muted small">{t.onlyHostRestart}</p>
               ))}
 
-            <Button variant="ghost" full onClick={() => socket.leave()}>
+            <Button
+              variant="ghost"
+              full
+              onClick={() => {
+                socket.leave();
+                close();
+              }}
+            >
               {t.leaveRoom}
             </Button>
           </section>
