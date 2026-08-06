@@ -355,3 +355,50 @@ describe('Meme Machine determinism', () => {
     expect(replay()).toBe(replay());
   });
 });
+
+describe('Meme Machine skip template', () => {
+  it('defaults skipsRemaining to 2 per player in caption phase and allows up to 2 skips', () => {
+    const state = makeState(3);
+    intoWriting(state);
+
+    const player = state.players[0]!;
+    expect(player.skipsRemaining).toBe(2);
+    expect(privateFor(state, player.id)?.skipsRemaining).toBe(2);
+
+    const firstTemplateId = player.templateId;
+
+    // First skip
+    applyInput(state, player.id, { k: 'skipMeme' });
+    expect(player.skipsRemaining).toBe(1);
+    expect(privateFor(state, player.id)?.skipsRemaining).toBe(1);
+    const secondTemplateId = player.templateId;
+    expect(secondTemplateId).not.toBe(firstTemplateId);
+
+    // Second skip
+    applyInput(state, player.id, { k: 'skipMeme' });
+    expect(player.skipsRemaining).toBe(0);
+    expect(privateFor(state, player.id)?.skipsRemaining).toBe(0);
+    const thirdTemplateId = player.templateId;
+    expect(thirdTemplateId).not.toBe(secondTemplateId);
+
+    // Third skip attempt - should be ignored as 2 skips max limit is reached
+    applyInput(state, player.id, { k: 'skipMeme' });
+    expect(player.skipsRemaining).toBe(0);
+    expect(player.templateId).toBe(thirdTemplateId);
+  });
+
+  it('ignores skipMeme after player submits or outside writing phase', () => {
+    const state = makeState(3);
+    intoWriting(state);
+
+    const player = state.players[0]!;
+    applyInput(state, player.id, { k: 'submit', texts: ['my meme'] });
+    expect(player.submitted).toBe(true);
+
+    const templateBefore = player.templateId;
+    applyInput(state, player.id, { k: 'skipMeme' });
+    expect(player.templateId).toBe(templateBefore);
+    expect(player.skipsRemaining).toBe(2);
+  });
+});
+

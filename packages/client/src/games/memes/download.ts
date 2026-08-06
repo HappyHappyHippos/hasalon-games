@@ -36,19 +36,25 @@ function dimensions(source: Drawable): { width: number; height: number } {
 }
 
 function linesFor(ctx: CanvasRenderingContext2D, text: string, width: number): string[] {
-  const words = text.trim().split(/\s+/u).filter(Boolean);
-  if (words.length === 0) return [];
   const lines: string[] = [];
-  let line = words[0]!;
-  for (const word of words.slice(1)) {
-    const candidate = `${line} ${word}`;
-    if (ctx.measureText(candidate).width <= width) line = candidate;
-    else {
-      lines.push(line);
-      line = word;
+  const paragraphs = text.split(/\r?\n/);
+  for (const para of paragraphs) {
+    const words = para.trim().split(/\s+/u).filter(Boolean);
+    if (words.length === 0) {
+      if (paragraphs.length > 1) lines.push('');
+      continue;
     }
+    let line = words[0]!;
+    for (const word of words.slice(1)) {
+      const candidate = `${line} ${word}`;
+      if (ctx.measureText(candidate).width <= width) line = candidate;
+      else {
+        lines.push(line);
+        line = word;
+      }
+    }
+    lines.push(line);
   }
-  lines.push(line);
   return lines;
 }
 

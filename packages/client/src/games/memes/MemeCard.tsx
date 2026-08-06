@@ -68,17 +68,21 @@ function Caption({
     if (!element) return;
     const measure = (): void => {
       const rect = element.getBoundingClientRect();
-      const floor = compact ? 10 : 14;
+      const floor = compact ? 8 : 8;
+      const horizontalPadding = box.style === 'panel' ? 14 : 6;
+      const verticalPadding = box.style === 'panel' ? 14 : 6;
+      const availableWidth = Math.max(1, rect.width - horizontalPadding);
+      const availableHeight = Math.max(1, rect.height - verticalPadding);
       let fitted = fitText({
-        width: rect.width,
-        height: rect.height,
+        width: availableWidth,
+        height: availableHeight,
         text,
         minSize: floor,
         maxSize: compact ? 22 : 48,
       });
       // The pure estimate is deliberately fast and conservative, but actual
       // glyph metrics differ between Rubik's Hebrew/Latin faces. Verify against
-      // the rendered box so even a 60-character caption cannot be clipped.
+      // the rendered box so even long multi-line captions cannot be clipped.
       element.style.fontSize = `${fitted}px`;
       while (
         fitted > floor
@@ -94,7 +98,7 @@ function Caption({
     observer?.observe(element);
     void document.fonts?.ready.then(measure);
     return () => observer?.disconnect();
-  }, [compact, text]);
+  }, [compact, text, position.w, position.h, box.style]);
 
   const clampMove = (x: number, y: number): MemeBoxPosition => ({
     ...position,

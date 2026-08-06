@@ -7,7 +7,7 @@ import { useShowTouchControls } from '../../ui/useTouchControls';
 import { useVoice } from '../../ui/useVoice';
 import { TanksRenderer } from './Renderer';
 import { attachTanksInput } from './input';
-import { TanksTouchPad } from './TouchPad';
+import { Controls } from './Controls';
 
 interface Props {
   room: RoomView;
@@ -66,7 +66,7 @@ export function TanksScreen({ room, mySeat }: Props): JSX.Element {
       hud={<TanksHud room={room} mySeat={mySeat} />}
       controls={
         mySeat >= 0 && showTouch ? (
-          <TanksTouchPad mySeat={mySeat} onButton={(bit, down) => inputRef.current?.setButton(bit, down)} />
+          <Controls mySeat={mySeat} onButton={(bit, down) => inputRef.current?.setButton(bit, down)} />
         ) : null
       }
     />

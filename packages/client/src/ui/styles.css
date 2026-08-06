@@ -1364,15 +1364,15 @@ strong,
   position: fixed;
   z-index: 15;
   top: calc(6px + env(safe-area-inset-top));
-  inset-inline-end: calc(64px + env(safe-area-inset-right));
-  width: 42px;
-  height: 42px;
+  inset-inline-end: calc(52px + env(safe-area-inset-right));
+  width: 38px;
+  height: 38px;
   border: 2px solid var(--ink);
   border-radius: 999px;
   background: rgba(253, 246, 232, 0.9);
   box-shadow: var(--shadow-sm);
   color: var(--ink);
-  font-size: 16px;
+  font-size: 15px;
   line-height: 1;
   cursor: pointer;
   padding: 0;
@@ -1386,15 +1386,15 @@ strong,
   position: fixed;
   z-index: 15;
   top: calc(6px + env(safe-area-inset-top));
-  inset-inline-end: calc(120px + env(safe-area-inset-right));
-  width: 42px;
-  height: 42px;
+  inset-inline-end: calc(96px + env(safe-area-inset-right));
+  width: 38px;
+  height: 38px;
   border: 2px solid var(--ink);
   border-radius: 999px;
   background: rgba(253, 246, 232, 0.9);
   box-shadow: var(--shadow-sm);
   color: var(--ink);
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
   padding: 0;
@@ -1417,23 +1417,27 @@ strong,
   position: fixed;
   z-index: 15;
   bottom: 12px;
-  inset-inline-end: 62px;
+  inset-inline-end: 56px;
   display: flex;
   flex-direction: row-reverse;
   align-items: center;
   gap: 8px;
 }
+.app--playing .fullscreenbtn__wrap {
+  bottom: 12px;
+  inset-inline-end: 12px;
+}
 
 .fullscreenbtn {
-  width: 44px;
-  height: 44px;
+  width: 38px;
+  height: 38px;
   flex: none;
   border: 2px solid var(--ink);
   border-radius: 999px;
   background: rgba(253, 246, 232, 0.9);
   box-shadow: var(--shadow-sm);
   color: var(--ink);
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1;
   cursor: pointer;
   padding: 0;
@@ -1586,8 +1590,10 @@ strong,
 }
 
 .pad__btn--shoot {
-  right: calc(14px + env(safe-area-inset-right));
-  bottom: calc(20px + env(safe-area-inset-bottom));
+  right: clamp(14px, calc(14px + env(safe-area-inset-right, 0px)), var(--max-right, calc(100% - 92px - 14px)));
+  bottom: clamp(12px, calc(20px + env(safe-area-inset-bottom, 0px)), var(--max-bottom, calc(100% - 92px - 12px)));
+  max-width: calc(100vw - 28px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px));
+  max-height: calc(100vh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px));
   width: 92px;
   height: 92px;
   font-size: 16px;
@@ -2142,14 +2148,14 @@ strong,
   inset-inline-end: 12px;
   bottom: 12px;
   z-index: 15;
-  width: 42px;
-  height: 42px;
-  border: 2.5px solid var(--ink);
+  width: 38px;
+  height: 38px;
+  border: 2px solid var(--ink);
   border-radius: 50%;
   background: var(--surface);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
-  font-size: 19px;
+  font-size: 17px;
   line-height: 1;
 }
 .options:active {
@@ -2176,31 +2182,33 @@ strong,
 }
 
 @media (max-width: 760px), (max-height: 560px) {
-  /* Keep a full 44px target on small screens for all four buttons. */
   .app--playing .options {
-    width: 44px;
-    height: 44px;
-    font-size: 20px;
+    width: 38px;
+    height: 38px;
+    font-size: 17px;
   }
   .pausebtn {
-    inset-inline-end: calc(58px + env(safe-area-inset-right));
-    width: 44px;
-    height: 44px;
+    inset-inline-end: calc(52px + env(safe-area-inset-right));
+    width: 38px;
+    height: 38px;
+    font-size: 15px;
   }
   .mutebtn {
-    inset-inline-end: calc(108px + env(safe-area-inset-right));
-    width: 44px;
-    height: 44px;
-    font-size: 19px;
+    inset-inline-end: calc(96px + env(safe-area-inset-right));
+    width: 38px;
+    height: 38px;
+    font-size: 16px;
   }
-  .fullscreenbtn__wrap {
+  .fullscreenbtn__wrap,
+  .app--playing .fullscreenbtn__wrap {
     top: calc(6px + env(safe-area-inset-top));
     bottom: auto;
-    inset-inline-end: calc(158px + env(safe-area-inset-right));
+    inset-inline-end: calc(96px + env(safe-area-inset-right));
   }
   .fullscreenbtn {
-    width: 44px;
-    height: 44px;
+    width: 38px;
+    height: 38px;
+    font-size: 16px;
   }
 }
 
@@ -2806,6 +2814,7 @@ strong,
   align-items: center;
   gap: 14px;
   padding: 10px 16px;
+  padding-inline-end: calc(140px + env(safe-area-inset-right));
   background: var(--surface);
   border: var(--outline);
   border-radius: var(--radius);
@@ -2819,6 +2828,13 @@ strong,
   position: sticky;
   top: 0;
   z-index: 5;
+}
+
+.skribbl__top-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
 }
 
 .skribbl__round {
@@ -3303,7 +3319,7 @@ strong,
     min-height: 50px;
     max-height: 50px;
     padding: 6px 10px;
-    padding-inline-end: calc(150px + env(safe-area-inset-right));
+    padding-inline-end: calc(140px + env(safe-area-inset-right));
     gap: 8px;
   }
   .skribbl__clock {
@@ -3382,7 +3398,7 @@ strong,
   z-index: 5;
   min-height: 56px;
   padding: 7px 10px;
-  padding-inline-end: calc(150px + env(safe-area-inset-right));
+  padding-inline-end: calc(140px + env(safe-area-inset-right));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3392,6 +3408,13 @@ strong,
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
   font-family: var(--font-display);
+}
+
+.memes__top-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
 }
 
 .memes__clock {
@@ -3448,6 +3471,13 @@ strong,
   border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
   font: 900 72px/1 var(--font-display);
+}
+
+.memes__skip-bar {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  margin-bottom: 8px;
 }
 
 .memes__composer {
@@ -3532,6 +3562,9 @@ strong,
   justify-content: center;
   overflow: hidden;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+  box-sizing: border-box;
   font-family: var(--font-display);
   font-weight: 900;
   line-height: 1.05;
@@ -3563,7 +3596,11 @@ strong,
   justify-content: center;
   overflow: hidden;
   overflow-wrap: anywhere;
+  word-break: break-word;
+  white-space: pre-wrap;
+  box-sizing: border-box;
   pointer-events: none;
+  text-align: inherit;
 }
 .meme-card__caption--panel .meme-card__text { padding: 7px; }
 .meme-card__move {
@@ -3717,8 +3754,8 @@ strong,
 
 @media (max-width: 760px), (max-height: 560px) {
   .memes { padding: calc(6px + env(safe-area-inset-top)) calc(6px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left)); gap: 6px; }
-  .memes__top { min-height: 50px; padding: 4px 8px; padding-inline-end: calc(150px + env(safe-area-inset-right)); }
-  .memes__clock { width: 39px; height: 39px; flex-basis: 39px; }
+  .memes__top { min-height: 50px; padding: 4px 8px; padding-inline-end: calc(140px + env(safe-area-inset-right)); }
+  .memes__clock { width: 38px; height: 38px; flex-basis: 38px; }
   .memes__phase { align-content: start; }
   .memes__composer { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 9px; }
   .memes__preview .meme-card { width: min(100%, calc(45dvh * var(--meme-aspect))); }

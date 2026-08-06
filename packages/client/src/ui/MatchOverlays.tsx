@@ -58,8 +58,7 @@ export function Paused({ room, spectating }: { room: RoomView; spectating: boole
 /**
  * Easily accessible Mute/Unmute button for HUD overlays and match screens.
  */
-export function MuteButton({ inline = false }: { inline?: boolean }): JSX.Element | null {
-  const room = useStore((s) => s.room);
+export function MuteButton({ inline = true }: { inline?: boolean }): JSX.Element | null {
   const muted = useStore((s) => s.muted);
   const musicMuted = useStore((s) => s.musicMuted);
   const setMuted = useStore((s) => s.setMuted);
@@ -77,34 +76,19 @@ export function MuteButton({ inline = false }: { inline?: boolean }): JSX.Elemen
     if (!nextMuted) sfx.click();
   };
 
-  if (inline) {
-    return (
-      <Button
-        variant="ghost"
-        size="md"
-        full
-        onClick={toggleMute}
-        aria-label={isAllMuted ? t.unmuteAudio : t.muteAudio}
-        title={isAllMuted ? t.unmuteAudio : t.muteAudio}
-      >
-        {isAllMuted ? `🔊 ${t.unmuteAudio}` : `🔇 ${t.muteAudio}`}
-      </Button>
-    );
-  }
-
-  const inMatch = room !== null && room.phase !== 'lobby';
-  if (!inMatch) return null;
+  if (!inline) return null;
 
   return (
-    <button
-      type="button"
-      className="mutebtn"
+    <Button
+      variant="ghost"
+      size="md"
+      full
+      onClick={toggleMute}
       aria-label={isAllMuted ? t.unmuteAudio : t.muteAudio}
       title={isAllMuted ? t.unmuteAudio : t.muteAudio}
-      onClick={toggleMute}
     >
-      {isAllMuted ? '🔇' : '🔊'}
-    </button>
+      {isAllMuted ? `🔊 ${t.unmuteAudio}` : `🔇 ${t.muteAudio}`}
+    </Button>
   );
 }
 

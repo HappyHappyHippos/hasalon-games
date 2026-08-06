@@ -47,3 +47,8 @@ export function sendVote(v: MemesVote): void {
 export function sendReact(r: number): void {
   socket.sendInput({ k: 'react', r });
 }
+
+export function sendSkipMeme(): void {
+  socket.sendInputReliable({ k: 'skipMeme' });
+}
+

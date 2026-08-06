@@ -19,14 +19,10 @@
  * - **Both need a user gesture.** They are called from a real `pointerdown`
  *   inside the arena, never on mount — a promise rejection is the normal
  *   outcome of getting that wrong, not an error worth surfacing.
- * - **Orientation lock only works while fullscreen**, and only on Android, so it
- *   is attempted after the fullscreen promise resolves rather than beside it.
+ * - **Orientation is unconstrained** so the device can rotate freely between
+ *   portrait and landscape modes when maximized.
  */
 import { useCallback, useSyncExternalStore } from 'react';
-
-interface OrientationLock extends ScreenOrientation {
-  lock?: (orientation: string) => Promise<void>;
-}
 
 export function fullscreenSupported(): boolean {
   return typeof document !== 'undefined' && document.fullscreenEnabled === true;
@@ -67,7 +63,7 @@ export function useIsFullscreen(): boolean {
   return useSyncExternalStore(subscribe, isFullscreen, () => false);
 }
 
-/** Enter fullscreen and try to pin landscape. Safe to call when unsupported. */
+/** Enter fullscreen. Safe to call when unsupported. */
 export async function enterFullscreen(): Promise<void> {
   if (!fullscreenSupported() || isFullscreen()) return;
   try {
@@ -75,11 +71,6 @@ export async function enterFullscreen(): Promise<void> {
   } catch {
     // Denied, unsupported, or not from a gesture. Nothing to do about it.
     return;
-  }
-  try {
-    await (screen.orientation as OrientationLock).lock?.('landscape');
-  } catch {
-    // Desktop, iOS, or a tablet the user has rotation-locked already.
   }
 }
 

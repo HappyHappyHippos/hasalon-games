@@ -38,6 +38,7 @@ export interface MemeBoxPosition {
 export type MemesInput =
   | { k: 'draft'; texts: string[]; p?: MemeBoxPosition[] }
   | { k: 'submit'; texts: string[]; p?: MemeBoxPosition[] }
+  | { k: 'skipMeme' }
   | { k: 'vote'; v: MemesVote }
   | { k: 'react'; r: number };
 
@@ -65,6 +66,7 @@ export interface MemesPlayer {
   draftPositions: MemeBoxPosition[];
   submitted: boolean;
   draftBudget: number;
+  skipsRemaining: number;
   /** Server-only lifecycle fact, supplied through GameInstance.setConnected. */
   connected: boolean;
 }
@@ -129,6 +131,7 @@ export interface MemesPrivate {
   submitted: boolean;
   myVote: MemesVote | null;
   isAuthor: boolean;
+  skipsRemaining: number;
 }
 
 export interface MemeTextBox {

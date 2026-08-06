@@ -24,4 +24,23 @@ describe('Meme Machine fitText', () => {
     expect(fitText({ width: 0, height: 20, text: 'hello', minSize: 13, maxSize: 40 })).toBe(13);
     expect(fitText({ width: 20, height: 20, text: '', minSize: 13, maxSize: 40 })).toBe(13);
   });
+
+  it('handles multi-line text with explicit newlines', () => {
+    const base = { width: 300, height: 100, minSize: 8, maxSize: 48 };
+    const singleLine = fitText({ ...base, text: 'hello world' });
+    const multiLine = fitText({ ...base, text: 'hello\nworld\nagain\ntogether' });
+    expect(multiLine).toBeLessThan(singleLine);
+  });
+
+  it('scales down font size for long text captions to fit inside box', () => {
+    const longText = fitText({
+      width: 200,
+      height: 60,
+      text: 'This is a very long caption entered by a player that needs to wrap across multiple lines',
+      minSize: 8,
+      maxSize: 48,
+    });
+    expect(longText).toBeGreaterThanOrEqual(8);
+    expect(longText).toBeLessThan(24);
+  });
 });

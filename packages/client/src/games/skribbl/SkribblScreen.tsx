@@ -153,7 +153,15 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
   return (
     <main className={`skribbl${isDrawer ? ' skribbl--drawing' : ''}`}>
       <header className="skribbl__top">
-        <span className="skribbl__round">{t.skribblRound(round || 1, total)}</span>
+        <div className="skribbl__top-info">
+          <span
+            className={`skribbl__clock${secondsLeft <= 10 && phase === 'drawing' ? ' skribbl__clock--low' : ''}`}
+            dir="ltr"
+          >
+            {secondsLeft}
+          </span>
+          <span className="skribbl__round">{t.skribblRound(round || 1, total)}</span>
+        </div>
 
         <div className="skribbl__wordwrap">
           {phase === 'drawing' || phase === 'reveal' ? (
@@ -173,13 +181,6 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
             </p>
           )}
         </div>
-
-        <span
-          className={`skribbl__clock${secondsLeft <= 10 && phase === 'drawing' ? ' skribbl__clock--low' : ''}`}
-          dir="ltr"
-        >
-          {secondsLeft}
-        </span>
       </header>
 
       <div className="skribbl__body">

@@ -2,9 +2,11 @@ import { useEffect, useRef, useState, type CSSProperties, type JSX } from 'react
 import { TICK_RATE, type RoomView } from '@mg/shared';
 import { useStore } from '../../store';
 import { useT } from '../../strings';
+import { Button } from '../../ui/Button';
 import { MatchOver, Paused } from '../../ui/MatchOverlays';
 import { FullscreenButton } from '../../ui/FullscreenButton';
 import { Composer } from './Composer';
+import { sendSkipMeme } from './input';
 import { MemeCard } from './MemeCard';
 import { preloadMemes } from './preload';
 import { ResultCard } from './ResultCard';
@@ -76,8 +78,27 @@ export function MemesScreen({ room, mySeat }: Props): JSX.Element {
 
   let body: JSX.Element;
   if (phase === 'writing') {
+    const skipsLeft = mine?.skipsRemaining ?? 2;
+    const canSkip = mySeat >= 0 && mine?.templateId && !mine.submitted;
     body = mySeat >= 0 && mine?.templateId
-      ? <><Composer view={mine} /><WritingRoster room={room} /></>
+      ? (
+        <>
+          {canSkip && (
+            <div className="memes__skip-bar">
+              <Button
+                variant="plain"
+                size="md"
+                disabled={skipsLeft <= 0}
+                onClick={sendSkipMeme}
+              >
+                {t.memesSkip ? t.memesSkip(skipsLeft) : `Skip Meme (${skipsLeft} left)`}
+              </Button>
+            </div>
+          )}
+          <Composer view={mine} />
+          <WritingRoster room={room} />
+        </>
+      )
       : <div className="memes__center"><p>{t.memesSpectating}</p><WritingRoster room={room} /></div>;
   } else if (phase === 'standings') {
     body = <MemesStandings room={room} mySeat={mySeat} />;
@@ -93,8 +114,10 @@ export function MemesScreen({ room, mySeat }: Props): JSX.Element {
   return (
     <main className="memes">
       {room.phase !== 'matchOver' && <header className="memes__top">
-        <strong>{t.memesRound(round || 1, view?.rounds ?? 1)}</strong>
-        <Countdown ticks={view?.phaseTicks ?? 0} total={view?.phaseTotal ?? 0} low={seconds <= 10 && (phase === 'writing' || phase === 'voting')} />
+        <div className="memes__top-info">
+          <Countdown ticks={view?.phaseTicks ?? 0} total={view?.phaseTotal ?? 0} low={seconds <= 10 && (phase === 'writing' || phase === 'voting')} />
+          <strong>{t.memesRound(round || 1, view?.rounds ?? 1)}</strong>
+        </div>
       </header>}
       {room.phase !== 'matchOver' && <div key={view?.phaseSeq ?? 0} className="memes__phase">{body}</div>}
       <p className="sr-only" role="status" aria-live="polite">{announcement}</p>

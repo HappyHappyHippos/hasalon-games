@@ -92,6 +92,7 @@ export function createState(seats: GameSeat[], config: MemesConfig, seed: number
         draftPositions: [],
         submitted: false,
         draftBudget: MAX_DRAFTS_PER_SECOND,
+        skipsRemaining: 2,
         connected: true,
       }),
     ),
@@ -129,6 +130,7 @@ function dealRound(state: MemesState): void {
     player.draftPositions = (template?.boxes ?? []).map(({ x, y, w, h }) => ({ x, y, w, h }));
     player.submitted = false;
     player.draftBudget = MAX_DRAFTS_PER_SECOND;
+    player.skipsRemaining = 2;
     if (template) state.usedTemplates.add(template.id);
   }
 }
@@ -361,6 +363,19 @@ export function applyInput(state: MemesState, playerId: string, raw: unknown): v
     return;
   }
 
+  if (raw.k === 'skipMeme') {
+    if (state.phase !== 'writing' || player.submitted || player.skipsRemaining <= 0) return;
+    player.skipsRemaining -= 1;
+    const [newTemplate] = pickTemplates(1, state.usedTemplates, state.rng);
+    if (newTemplate) {
+      player.templateId = newTemplate.id;
+      player.draft = Array.from({ length: newTemplate.slots }, () => '');
+      player.draftPositions = newTemplate.boxes.map(({ x, y, w, h }) => ({ x, y, w, h }));
+      state.usedTemplates.add(newTemplate.id);
+    }
+    return;
+  }
+
   const entry = currentEntry(state);
   if (!entry || entry.authorId === playerId) return;
 
@@ -493,6 +508,7 @@ export function privateFor(state: MemesState, playerId: string): MemesPrivate | 
     submitted: player.submitted,
     myVote: entry?.ballots.get(playerId) ?? null,
     isAuthor: entry?.authorId === playerId,
+    skipsRemaining: player.skipsRemaining,
   };
 }
 
