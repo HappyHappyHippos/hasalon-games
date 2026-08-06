@@ -3,9 +3,6 @@ import type { RngState } from '../achtung/rng';
 export type WeaponKind = 'pistol' | 'smg' | 'shotgun' | 'sniper' | 'rocket' | 'knife';
 
 export type LevelId =
-  | 'salon'
-  | 'rooftops'
-  | 'towers'
   | 'candyland'
   | 'desert'
   | 'factory'

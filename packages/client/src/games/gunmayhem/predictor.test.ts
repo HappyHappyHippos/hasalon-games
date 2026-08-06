@@ -17,7 +17,7 @@ import {
 import { GunMayhemPredictor } from './predictor';
 import { gmInput } from './input';
 
-const level = getLevel('salon');
+const level = getLevel('candyland');
 
 /**
  * How far behind the server is, in ticks.
@@ -84,7 +84,7 @@ function run(
       { id: 'p0', name: 'P0', colorIndex: 0 },
       { id: 'p1', name: 'P1', colorIndex: 1 },
     ],
-    { ...defaultConfig(), levelId: 'salon' },
+    { ...defaultConfig(), levelId: 'candyland' },
     4242,
   );
   for (let i = 0; i < COUNTDOWN_TICKS; i++) stepTick(state);

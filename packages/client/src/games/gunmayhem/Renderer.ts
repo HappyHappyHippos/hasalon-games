@@ -134,7 +134,7 @@ export class GunMayhemRenderer {
   private wasPredicting = false;
 
   private raf = 0;
-  private level: Level = getLevel('salon');
+  private level: Level = getLevel('candyland');
   private seenEventTick = -1;
   private particles: Particle[] = [];
   private floaters: FloatingText[] = [];

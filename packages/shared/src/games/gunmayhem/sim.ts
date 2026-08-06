@@ -73,7 +73,7 @@ import {
 export function defaultConfig(): GunMayhemConfig {
   return {
     game: 'gunmayhem',
-    levelId: 'salon',
+    levelId: 'candyland',
     stocks: DEFAULT_STOCKS,
     targetWins: DEFAULT_TARGET_WINS,
     weaponsEnabled: true,

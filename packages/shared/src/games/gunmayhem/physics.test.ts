@@ -23,7 +23,7 @@ const GROUND_TOP = 500;
 const LEDGE_TOP = 400;
 
 const TEST_LEVEL: Level = {
-  id: 'salon',
+  id: 'candyland',
   name: 'Test',
   platforms: [
     { x: 0, y: GROUND_TOP, w: 800, h: 40, oneWay: false },

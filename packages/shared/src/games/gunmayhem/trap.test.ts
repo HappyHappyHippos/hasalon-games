@@ -151,12 +151,12 @@ describe('stage geometry', () => {
     // rather than from which face is nearer, so a body barely inside the left
     // end of an 800-wide floor and moving left was placed 800 units away at the
     // right end of it.
-    const salon = LEVELS.salon;
-    const floor = salon.platforms.find((p) => !p.oneWay)!;
+    const candyland = LEVELS.candyland;
+    const floor = candyland.platforms.find((p) => !p.oneWay)!;
 
     const justInsideLeft = body(floor.x + 2, floor.y + floor.h / 2, -200);
     const b = { ...justInsideLeft };
-    stepMovement(b, hold(-1), salon, DT);
+    stepMovement(b, hold(-1), candyland, DT);
 
     expect(Math.abs(b.x - justInsideLeft.x)).toBeLessThan(floor.w / 2);
   });

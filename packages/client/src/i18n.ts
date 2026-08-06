@@ -291,9 +291,6 @@ const he = {
   setStage: 'במה',
   stageRandom: 'אקראי',
   stageNames: [
-    'הסלון',
-    'גגות',
-    'מגדלים',
     'עולם הממתקים',
     'מדבר',
     'מפעל',
@@ -664,9 +661,6 @@ const en: Dict = {
   setStage: 'Stage',
   stageRandom: 'Random',
   stageNames: [
-    'The Salon',
-    'Rooftops',
-    'Towers',
     'Candyland',
     'Desert',
     'Factory',

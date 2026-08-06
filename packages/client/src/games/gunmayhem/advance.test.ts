@@ -16,7 +16,7 @@ import {
 } from '@mg/shared/gunmayhem';
 import { MAX_ADVANCE_TICKS, advanceBullet, advancePlayer, ticksBehind } from './advance';
 
-const level = getLevel('salon');
+const level = getLevel('candyland');
 
 function seats(count: number) {
   return Array.from({ length: count }, (_, i) => ({
@@ -27,7 +27,7 @@ function seats(count: number) {
 }
 
 function playingState(): GunMayhemState {
-  const state = createState(seats(2), { ...defaultConfig(), levelId: 'salon' }, 4242);
+  const state = createState(seats(2), { ...defaultConfig(), levelId: 'candyland' }, 4242);
   for (let i = 0; i < COUNTDOWN_TICKS; i++) stepTick(state);
   expect(state.phase).toBe('playing');
   return state;
@@ -143,7 +143,7 @@ describe('advancePlayer', () => {
     // every extrapolated tick re-catches them on the ledge they just left, and
     // they are drawn standing on it until the next snapshot drags them down.
     const platform = level.platforms.find((p) => p.oneWay);
-    expect(platform, 'the salon level should have a one-way platform').toBeTruthy();
+    expect(platform, 'the candyland level should have a one-way platform').toBeTruthy();
 
     // Feet just above the ledge, falling onto it — the exact case a one-way
     // platform is supposed to catch, unless the player is dropping through.

@@ -32,7 +32,7 @@ import { bracket, lerp } from '../../game/interpolation';
 import type { FeedEntry } from '../../net/feed';
 import { advancePlayer, ticksBehind } from './advance';
 
-const level = getLevel('salon');
+const level = getLevel('candyland');
 const SEAT = 1;
 
 /** Half of a 100 ms round trip — roughly the production link. */
@@ -53,7 +53,7 @@ function record(ticks: number, bitsAt: (tick: number) => number): Recorded {
       { id: 'p0', name: 'P0', colorIndex: 0 },
       { id: 'p1', name: 'P1', colorIndex: 1 },
     ],
-    { ...defaultConfig(), levelId: 'salon' },
+    { ...defaultConfig(), levelId: 'candyland' },
     4242,
   );
   for (let i = 0; i < COUNTDOWN_TICKS; i++) stepTick(state);
