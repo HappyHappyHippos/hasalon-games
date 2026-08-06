@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DT } from '../../engine';
 import {
   COYOTE_TICKS,
+  DOUBLE_JUMP_DELAY_TICKS,
   JETPACK_FUEL_TICKS,
   JETPACK_MAX_RISE,
   JUMP_BUFFER_TICKS,
@@ -58,6 +59,7 @@ function body(overrides: Partial<MoveBody> = {}): MoveBody {
     jumpBuffer: 0,
     dropThrough: 0,
     jetpack: 0,
+    airJumpDelay: 0,
     ...overrides,
   };
 }
@@ -192,6 +194,22 @@ describe('jumping', () => {
       if (b.vy < 0) jumped = true;
     }
     expect(jumped).toBe(true);
+  });
+
+  it('enforces a cooldown delay before double jumping', () => {
+    const b = body();
+    stepMovement(b, input({ jumpPressed: true }), TEST_LEVEL, DT);
+    expect(b.airJumpDelay).toBe(DOUBLE_JUMP_DELAY_TICKS);
+
+    // Attempting air jump immediately on next tick fails while airJumpDelay > 0
+    const res1 = stepMovement(b, input({ jumpPressed: true }), TEST_LEVEL, DT);
+    expect(res1.jumped).toBeNull();
+    expect(b.airJumpDelay).toBe(1);
+
+    // On following tick, airJumpDelay reaches 0 and buffered jump executes
+    const res2 = stepMovement(b, input(), TEST_LEVEL, DT);
+    expect(res2.jumped).toBe('air');
+    expect(b.jumpsLeft).toBe(MAX_JUMPS - 2);
   });
 });
 

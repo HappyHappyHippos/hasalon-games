@@ -57,7 +57,19 @@ export interface TanksConfig {
 // Powerups
 // ---------------------------------------------------------------------------
 
-export type TankPowerup = 'shield' | 'triple' | 'speed' | 'heavy' | 'rapid' | 'bounce' | 'ghost' | 'mini';
+export type TankPowerup =
+  | 'shield'
+  | 'triple'
+  | 'speed'
+  | 'heavy'
+  | 'rapid'
+  | 'bounce'
+  | 'ghost'
+  | 'mini'
+  | 'laser'
+  | 'shotgun'
+  | 'homing'
+  | 'mine';
 
 /**
  * Remaining ticks for timed buffs, remaining shots for charge buffs. Absent
@@ -108,6 +120,10 @@ export interface TankBullet {
   /** Ticks before this shell may hit the tank that fired it. */
   arm: number;
   heavy: boolean;
+  laser?: boolean;
+  shotgun?: boolean;
+  homing?: boolean;
+  mine?: boolean;
 }
 
 export interface TankPickup {
@@ -129,6 +145,9 @@ export interface Maze {
   /** `cols * (rows + 1)` — a wall on the top edge of cell (x, y). */
   hWalls: Uint8Array;
   spawns: MazeSpawn[];
+  stageId?: TankStageId;
+  obstacles?: ObstacleBox[];
+  spawnsPos?: { x: number; y: number }[];
 }
 
 export interface MazeSpawn {
@@ -193,6 +212,7 @@ export interface TanksSnapshot {
   phase: TanksPhase;
   phaseTicks: number;
   round: number;
+  stageId: TankStageId;
   /** Arena seed / cols / rows. */
   az: number;
   aw: number;
@@ -234,6 +254,14 @@ export interface TankSnapshotBullet {
   o: number;
   /** Heavy shell. */
   h: 0 | 1;
+  /** Laser beam flag. */
+  l?: 0 | 1;
+  /** Homing missile flag. */
+  hm?: 0 | 1;
+  /** Mine flag. */
+  m?: 0 | 1;
+  /** Shotgun pellet flag. */
+  p?: 0 | 1;
 }
 
 export interface TankSnapshotPickup {

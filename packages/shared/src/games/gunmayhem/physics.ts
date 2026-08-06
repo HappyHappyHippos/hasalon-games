@@ -3,6 +3,7 @@ import {
   AIR_FRICTION,
   AIR_JUMP_VELOCITY,
   COYOTE_TICKS,
+  DOUBLE_JUMP_DELAY_TICKS,
   DROP_THROUGH_TICKS,
   FAST_FALL_SPEED,
   GRAVITY,
@@ -54,6 +55,7 @@ export interface MoveBody {
    * means the predictor has to know about it.
    */
   jetpack: number;
+  airJumpDelay: number;
 }
 
 export interface MoveInput {
@@ -106,6 +108,7 @@ export function stepMovement(
   else if (body.jumpBuffer > 0) body.jumpBuffer -= 1;
   if (body.coyote > 0) body.coyote -= 1;
   if (body.dropThrough > 0) body.dropThrough -= 1;
+  if (body.airJumpDelay > 0) body.airJumpDelay -= 1;
 
   // --- horizontal ---------------------------------------------------------
   const dir = input.controllable ? (input.right ? 1 : 0) - (input.left ? 1 : 0) : 0;
@@ -140,8 +143,9 @@ export function stepMovement(
       body.coyote = 0;
       body.jumpBuffer = 0;
       body.jumpsLeft = MAX_JUMPS - 1 + mods.extraJumps;
+      body.airJumpDelay = DOUBLE_JUMP_DELAY_TICKS;
       result.jumped = 'ground';
-    } else if (body.jumpsLeft > 0) {
+    } else if (body.jumpsLeft > 0 && body.airJumpDelay <= 0) {
       body.vy = AIR_JUMP_VELOCITY;
       body.jumpsLeft -= 1;
       body.jumpBuffer = 0;

@@ -33,6 +33,7 @@ function body(x: number, y: number, vx = 0, vy = 0): MoveBody {
     jumpBuffer: 0,
     dropThrough: 0,
     jetpack: 0,
+    airJumpDelay: 0,
   };
 }
 

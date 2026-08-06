@@ -1,3 +1,4 @@
+import { getImage } from '../../game/images';
 import { TICK_MS, colorFor } from '@mg/shared';
 import {
   ARENA_HEIGHT,
@@ -1021,6 +1022,13 @@ export class GunMayhemRenderer {
       ctx.beginPath();
       ctx.arc(0, 0, half * 2.1, 0, Math.PI * 2);
       ctx.fill();
+
+      const img = getImage(`/powerups/powerup_${powerup.k}.png`);
+      if (img) {
+        ctx.drawImage(img, -half, -half, POWERUP_SIZE, POWERUP_SIZE);
+        ctx.restore();
+        continue;
+      }
 
       ctx.fillStyle = def.color;
       ctx.strokeStyle = INK;

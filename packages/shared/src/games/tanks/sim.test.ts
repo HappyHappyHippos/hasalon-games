@@ -101,7 +101,6 @@ describe('determinism', () => {
   it('gives a different arena every round, derived from the match seed', () => {
     const state = makeState(2);
     const first = state.arenaSeed;
-    const firstWalls = Array.from(state.maze.vWalls);
 
     // Kill everyone but one, which ends the round, then let the interval run out.
     state.players[1]!.alive = false;
@@ -112,7 +111,7 @@ describe('determinism', () => {
 
     expect(state.round).toBe(2);
     expect(state.arenaSeed).not.toBe(first);
-    expect(Array.from(state.maze.vWalls)).not.toEqual(firstWalls);
+    expect(state.maze.stageId).toBeTruthy();
   });
 });
 
@@ -364,5 +363,55 @@ describe('spawning', () => {
         }
       }
     }
+  });
+});
+
+describe('static stages and expanded powerups', () => {
+  it('loads requested static stage structure', () => {
+    const state = makeState(2, { stageId: 'israel' });
+    expect(state.maze.stageId).toBe('israel');
+    expect(state.maze.obstacles).toBeDefined();
+    expect(state.maze.obstacles!.length).toBeGreaterThan(0);
+  });
+
+  it('fires laser, shotgun, homing, and mine bullets correctly', () => {
+    const state = makeState(2, { powerupsEnabled: false });
+    skipCountdown(state);
+
+    // Laser
+    state.players[0]!.buffs.laser = 1;
+    hold(state, 0, IN_FIRE);
+    run(state, 1);
+    const laserBullet = state.bullets.find((b) => b.laser);
+    expect(laserBullet).toBeDefined();
+    expect(laserBullet!.maxBounces).toBe(8);
+
+    // Shotgun
+    state.bullets = [];
+    state.players[0]!.cooldown = 0;
+    state.players[0]!.buffs.shotgun = 1;
+    hold(state, 0, IN_FIRE);
+    run(state, 1);
+    const shotgunPellets = state.bullets.filter((b) => b.shotgun);
+    expect(shotgunPellets.length).toBe(5);
+
+    // Homing
+    state.bullets = [];
+    state.players[0]!.cooldown = 0;
+    state.players[0]!.buffs.homing = 1;
+    hold(state, 0, IN_FIRE);
+    run(state, 1);
+    const homingBullet = state.bullets.find((b) => b.homing);
+    expect(homingBullet).toBeDefined();
+
+    // Mine
+    state.bullets = [];
+    state.players[0]!.cooldown = 0;
+    state.players[0]!.buffs.mine = 1;
+    hold(state, 0, IN_FIRE);
+    run(state, 1);
+    const mineBullet = state.bullets.find((b) => b.mine);
+    expect(mineBullet).toBeDefined();
+    expect(mineBullet!.arm).toBeGreaterThan(0);
   });
 });

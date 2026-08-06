@@ -7,7 +7,8 @@ describe('Meme Machine caption validation', () => {
   it.each([
     ['Hebrew', ['בדיחה'], 1, true],
     ['mixed text', ['hello שלום'], 1, true],
-    ['letters split over two boxes', ['a', 'ב'], 2, true],
+    ['letters split over two boxes', ['a', 'ב'], 2, false],
+    ['single text box in multi-slot', ['ab', ''], 2, true],
     ['emoji only', ['😂😂'], 1, false],
     ['punctuation only', ['...'], 1, false],
     ['whitespace only', ['   \n\t'], 1, false],

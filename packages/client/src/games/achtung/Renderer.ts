@@ -1,3 +1,4 @@
+import { getImage } from '../../game/images';
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
@@ -618,9 +619,18 @@ export class AchtungRenderer {
       ctx.save();
       ctx.translate(pickup.x, pickup.y);
 
-      // A sticker on the floor: the scope colour as the fill, a hard ink
-      // outline, and its offset shadow solid and unblurred — the same
-      // vocabulary as every card in the lobby.
+      const img = getImage(`/powerups/powerup_${pickup.kind}.png`);
+      if (img) {
+        ctx.beginPath();
+        ctx.arc(2.5, 2.5, radius, 0, Math.PI * 2);
+        ctx.fillStyle = INK;
+        ctx.fill();
+
+        ctx.drawImage(img, -radius, -radius, radius * 2, radius * 2);
+        ctx.restore();
+        continue;
+      }
+
       ctx.beginPath();
       ctx.arc(2.5, 2.5, radius, 0, Math.PI * 2);
       ctx.fillStyle = INK;

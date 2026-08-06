@@ -55,7 +55,7 @@ export function Paused({ room, spectating }: { room: RoomView; spectating: boole
   );
 }
 
-const CARDLESS_GAMES = new Set<GameId>(['gunmayhem', 'tanks', 'achtung', 'gravity']);
+const CARDLESS_GAMES = new Set<GameId>(['gunmayhem', 'tanks', 'achtung', 'gravity', 'memes', 'skribbl']);
 
 /**
  * Easily accessible Mute/Unmute button for HUD overlays and match screens.

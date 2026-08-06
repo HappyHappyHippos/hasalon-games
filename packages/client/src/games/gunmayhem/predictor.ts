@@ -268,6 +268,7 @@ function bodyFrom(server: GmSnapshotPlayer): MoveBody {
     jumpBuffer: server.jb ?? 0,
     dropThrough: server.dp ?? 0,
     jetpack: server.jp ?? 0,
+    airJumpDelay: server.jd ?? 0,
   };
 }
 

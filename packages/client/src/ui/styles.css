@@ -465,6 +465,8 @@ strong,
 .number-stepper__button {
   width: 44px;
   height: 44px;
+  min-width: 44px;
+  min-height: 44px;
   padding: 0;
   border: 0;
   background: var(--paper);
@@ -474,6 +476,9 @@ strong,
   font-weight: 800;
   line-height: 1;
   cursor: pointer;
+  touch-action: manipulation;
+  z-index: 1;
+  flex-shrink: 0;
 }
 .number-stepper__button:first-child { border-inline-end: 2.5px solid var(--ink); }
 .number-stepper__button:last-child { border-inline-start: 2.5px solid var(--ink); }
@@ -1135,6 +1140,7 @@ strong,
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  padding-inline-end: calc(148px + env(safe-area-inset-right));
 }
 
 .rail__round {
@@ -1363,7 +1369,7 @@ strong,
 .pausebtn {
   position: fixed;
   z-index: 15;
-  top: calc(6px + env(safe-area-inset-top));
+  top: calc(8px + env(safe-area-inset-top));
   inset-inline-end: calc(52px + env(safe-area-inset-right));
   width: 38px;
   height: 38px;
@@ -1388,7 +1394,7 @@ strong,
 .mutebtn {
   position: fixed;
   z-index: 15;
-  top: calc(6px + env(safe-area-inset-top));
+  top: calc(8px + env(safe-area-inset-top));
   inset-inline-end: calc(96px + env(safe-area-inset-right));
   width: 38px;
   height: 38px;
@@ -2177,7 +2183,7 @@ strong,
    biggest button on the pad — mid-match it always moves to the top corner,
    the same row as the maximize and pause buttons, on every screen size. */
 .app--playing .options {
-  top: calc(6px + env(safe-area-inset-top));
+  top: calc(8px + env(safe-area-inset-top));
   bottom: auto;
   inset-inline-end: calc(8px + env(safe-area-inset-right));
   opacity: 0.5;
@@ -2210,7 +2216,7 @@ strong,
     font-size: 16px;
   }
   .app--playing .fullscreenbtn__wrap {
-    top: calc(6px + env(safe-area-inset-top));
+    top: calc(8px + env(safe-area-inset-top));
     bottom: auto;
     inset-inline-end: calc(96px + env(safe-area-inset-right));
   }
@@ -2724,6 +2730,19 @@ strong,
   }
 }
 
+@media (max-width: 480px) {
+  .settings {
+    grid-template-columns: 1fr;
+  }
+  .number-stepper__button {
+    touch-action: manipulation;
+    min-width: 44px;
+    min-height: 44px;
+    z-index: 1;
+    flex-shrink: 0;
+  }
+}
+
 /* Every major room card sits on one mobile measure. Keeping the gutter on the
    outer scroller leaves room for hard shadows without letting any child make
    the page pan sideways. The height arm covers phones held in landscape. */
@@ -2755,6 +2774,12 @@ strong,
   .lobby__grid,
   .picker {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .gamecard__tagline {
+    display: block;
+  }
+  .gamecard__players {
+    display: none;
   }
 }
 
@@ -2823,7 +2848,7 @@ strong,
   align-items: center;
   gap: 14px;
   padding: 10px 16px;
-  padding-inline-end: calc(140px + env(safe-area-inset-right));
+  padding-inline-end: calc(148px + env(safe-area-inset-right));
   background: var(--surface);
   border: var(--outline);
   border-radius: var(--radius);
@@ -3333,7 +3358,7 @@ strong,
     min-height: 50px;
     max-height: 50px;
     padding: 6px 10px;
-    padding-inline-end: calc(140px + env(safe-area-inset-right));
+    padding-inline-end: calc(148px + env(safe-area-inset-right));
     gap: 8px;
   }
   .skribbl__clock {
@@ -3397,13 +3422,13 @@ strong,
 }
 
 .memes {
+  height: 100dvh;
   min-height: 100%;
-  min-height: 100dvh;
   padding: calc(12px + env(safe-area-inset-top)) calc(12px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) calc(12px + env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
   gap: 12px;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .memes__top {
@@ -3412,7 +3437,7 @@ strong,
   z-index: 5;
   min-height: 56px;
   padding: 7px 10px;
-  padding-inline-end: calc(140px + env(safe-area-inset-right));
+  padding-inline-end: calc(148px + env(safe-area-inset-right));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3462,6 +3487,7 @@ strong,
 .memes__phase {
   flex: 1;
   min-height: 0;
+  overflow-y: auto;
   display: grid;
   align-content: center;
   animation: meme-deal 180ms cubic-bezier(0.22, 1.35, 0.4, 1) both;
@@ -3761,12 +3787,13 @@ strong,
 
 @media (max-width: 760px), (max-height: 560px) {
   .memes { padding: calc(6px + env(safe-area-inset-top)) calc(6px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left)); gap: 6px; }
-  .memes__top { min-height: 50px; padding: 4px 8px; padding-inline-end: calc(140px + env(safe-area-inset-right)); }
+  .memes__top { min-height: 50px; padding: 4px 8px; padding-inline-end: calc(148px + env(safe-area-inset-right)); }
   .memes__clock { width: 38px; height: 38px; flex-basis: 38px; }
   .memes__phase { align-content: start; }
   .memes__composer { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 9px; }
-  .memes__preview .meme-card { width: min(100%, calc(45dvh * var(--meme-aspect))); }
-  .memes__fields { padding: 10px; gap: 8px; }
+  .memes__preview { height: 26dvh; }
+  .memes__preview .meme-card { width: min(100%, calc(26dvh * var(--meme-aspect))); height: 100%; }
+  .memes__fields { padding: 8px 10px; gap: 6px; }
   .memes__fields h2 { font-size: 18px; }
   .memes__field textarea { min-height: 58px; font-size: 16px; }
   .memes__roster { margin-top: 9px; }
@@ -3868,8 +3895,8 @@ strong,
   }
   .gamecard { gap: 6px; padding: 7px; box-shadow: var(--shadow-sm); }
   .gamecard__name { font-size: 15px; }
-  .gamecard__tagline { display: none; }
-  .gamecard__players { font-size: 10px; letter-spacing: 0; }
+  .gamecard__tagline { display: block; }
+  .gamecard__players { display: none; font-size: 10px; letter-spacing: 0; }
   .gamecard__badge { top: -8px; inset-inline-end: -5px; padding: 3px 6px; font-size: 9px; }
 }
 

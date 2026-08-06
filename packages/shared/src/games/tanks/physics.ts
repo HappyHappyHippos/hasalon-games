@@ -87,6 +87,22 @@ export function stepTank(
  * one wall can never push the tank into another.
  */
 export function resolveTankWalls(body: TankBody, maze: Maze, clear: number = TANK_CLEAR): void {
+  if (maze.obstacles && maze.obstacles.length > 0) {
+    const minX = clear;
+    const maxX = 1280 - clear;
+    const minY = clear;
+    const maxY = 720 - clear;
+    if (body.x < minX) body.x = minX;
+    if (body.x > maxX) body.x = maxX;
+    if (body.y < minY) body.y = minY;
+    if (body.y > maxY) body.y = maxY;
+
+    for (const box of maze.obstacles) {
+      resolveCircleBox(body, box, clear);
+    }
+    return;
+  }
+
   const cx = clampInt(Math.floor(body.x / CELL), 0, maze.cols - 1);
   const cy = clampInt(Math.floor(body.y / CELL), 0, maze.rows - 1);
 
@@ -104,6 +120,40 @@ export function resolveTankWalls(body: TankBody, maze: Maze, clear: number = TAN
       if (hasHWall(maze, gx, gy + 1)) pushOut(body, left, bottom, right, bottom, clear);
     }
   }
+}
+
+export function resolveCircleBox(
+  body: TankBody,
+  box: { x: number; y: number; w: number; h: number },
+  clear: number,
+): void {
+  const px = Math.max(box.x, Math.min(box.x + box.w, body.x));
+  const py = Math.max(box.y, Math.min(box.y + box.h, body.y));
+
+  const dx = body.x - px;
+  const dy = body.y - py;
+  const d2 = dx * dx + dy * dy;
+
+  if (d2 >= clear * clear) return;
+
+  if (d2 < 1e-6) {
+    const distLeft = body.x - box.x;
+    const distRight = box.x + box.w - body.x;
+    const distTop = body.y - box.y;
+    const distBottom = box.y + box.h - body.y;
+    const minDist = Math.min(distLeft, distRight, distTop, distBottom);
+
+    if (minDist === distLeft) body.x = box.x - clear;
+    else if (minDist === distRight) body.x = box.x + box.w + clear;
+    else if (minDist === distTop) body.y = box.y - clear;
+    else body.y = box.y + box.h + clear;
+    return;
+  }
+
+  const d = Math.sqrt(d2);
+  const push = (clear - d) / d;
+  body.x += dx * push;
+  body.y += dy * push;
 }
 
 /** Separate overlapping tanks, each giving half the overlap. Seat order, for determinism. */

@@ -69,7 +69,7 @@ function drawCaption(
   canvasWidth: number,
   canvasHeight: number,
 ): void {
-  if (!text.trim()) return;
+  if (!text || !text.trim()) return;
   const left = x * canvasWidth;
   const top = y * canvasHeight;
   const width = widthRatio * canvasWidth;

@@ -110,6 +110,7 @@ export interface GmPlayer {
   dropThrough: number;
   /** Jetpack thrust ticks left. Part of the `MoveBody` half of a player. */
   jetpack: number;
+  airJumpDelay: number;
 
   /** Timed powerup effects. Cleared on every respawn. */
   buffs: GmBuffs;
@@ -256,6 +257,8 @@ export interface GmSnapshotPlayer {
   j: number;
   /** jetpack fuel — the predictor needs this to predict thrust */
   jp: number;
+  /** air jump delay ticks */
+  jd?: number;
   /**
    * Active buff timers, omitted entirely when nothing is active. Most players
    * have no buffs most of the time, so leaving the key off keeps the common

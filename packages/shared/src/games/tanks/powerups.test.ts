@@ -25,4 +25,13 @@ describe('powerups', () => {
       }
     }
   });
+
+  it('handles charge powerups like laser, shotgun, homing, mine', () => {
+    for (const kind of ['laser', 'shotgun', 'homing', 'mine'] as const) {
+      const buffs = emptyBuffs();
+      grant(buffs, kind);
+      expect(buffs[kind]).toBeGreaterThan(0);
+      expect(POWERUPS[kind].charges).toBeGreaterThan(0);
+    }
+  });
 });

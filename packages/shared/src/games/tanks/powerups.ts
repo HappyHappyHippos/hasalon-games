@@ -14,10 +14,14 @@ import {
   BOUNCE_CHARGES,
   GHOST_TICKS,
   HEAVY_CHARGES,
+  HOMING_CHARGES,
+  LASER_CHARGES,
+  MINE_CHARGES,
   MINI_SPEED_MUL,
   MINI_TICKS,
   RAPID_TICKS,
   SHIELD_TICKS,
+  SHOTGUN_CHARGES,
   SPEED_MUL,
   SPEED_TICKS,
   SPEED_TURN_MUL,
@@ -47,6 +51,10 @@ export const POWERUPS: Record<TankPowerup, PowerupSpec> = {
   bounce: { kind: 'bounce', charges: BOUNCE_CHARGES, label: 'Bounce+', color: '#39d9c0' },
   ghost: { kind: 'ghost', duration: GHOST_TICKS, label: 'Ghost', color: '#d8d4ea' },
   mini: { kind: 'mini', duration: MINI_TICKS, label: 'Mini', color: '#ff8fd6' },
+  laser: { kind: 'laser', charges: LASER_CHARGES, label: 'Laser', color: '#ff3366' },
+  shotgun: { kind: 'shotgun', charges: SHOTGUN_CHARGES, label: 'Shotgun', color: '#ff9900' },
+  homing: { kind: 'homing', charges: HOMING_CHARGES, label: 'Homing', color: '#33ccff' },
+  mine: { kind: 'mine', charges: MINE_CHARGES, label: 'Mine', color: '#ffcc00' },
 };
 
 export const POWERUP_KINDS: TankPowerup[] = [
@@ -58,6 +66,10 @@ export const POWERUP_KINDS: TankPowerup[] = [
   'bounce',
   'ghost',
   'mini',
+  'laser',
+  'shotgun',
+  'homing',
+  'mine',
 ];
 
 export function emptyBuffs(): TankBuffs {

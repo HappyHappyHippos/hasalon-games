@@ -22,6 +22,8 @@ export function normalizeCaption(raw: unknown, minimumSlots: number): string[] {
 
 export function isUsableCaption(texts: readonly unknown[], minimumSlots: number): boolean {
   const normalized = normalizeCaption(texts, minimumSlots);
-  const useful = normalized.join('').match(/[\p{L}\p{N}]/gu)?.length ?? 0;
-  return useful >= MIN_USABLE_CHARS;
+  return normalized.some((text) => {
+    const useful = text.match(/[\p{L}\p{N}]/gu)?.length ?? 0;
+    return useful >= MIN_USABLE_CHARS;
+  });
 }

@@ -132,6 +132,7 @@ function createPlayer(seat: GameSeat, index: number, config: GunMayhemConfig): G
     jumpBuffer: 0,
     dropThrough: 0,
     jetpack: 0,
+    airJumpDelay: 0,
     buffs: emptyBuffs(),
     damage: 0,
     stocks: config.stocks,
@@ -183,6 +184,7 @@ function resetToSpawn(state: GunMayhemState, player: GmPlayer, index: number): v
   player.coyote = 0;
   player.jumpBuffer = 0;
   player.dropThrough = 0;
+  player.airJumpDelay = 0;
   // Powerups do not survive dying. This runs on respawn and on round start.
   player.jetpack = 0;
   player.buffs = emptyBuffs();
@@ -997,6 +999,7 @@ function toSnapshotPlayer(p: GmPlayer): GmSnapshotPlayer {
     rt: p.respawnTimer,
     j: p.jumpsLeft,
     jp: p.jetpack,
+    jd: p.airJumpDelay,
     w: p.weapon,
     am: p.ammo,
     cd: p.cooldown,

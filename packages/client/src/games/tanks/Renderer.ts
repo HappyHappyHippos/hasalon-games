@@ -7,7 +7,6 @@ import {
   WALL_HALF,
   arenaHeight,
   arenaWidth,
-  generateMaze,
   hasHWall,
   hasVWall,
   type Maze,
@@ -22,7 +21,7 @@ import { sfx } from '../../audio';
 import { prefersReducedMotion } from '../../ui/motion';
 import { TanksPredictor, advanceTank, ticksBehind } from './predictor';
 import { getImage } from '../../game/images';
-import { TANK_STAGES, TANK_STAGE_IDS, type TankBody } from '@mg/shared/tanks';
+import { TANK_STAGES, type TankBody } from '@mg/shared/tanks';
 
 const FLOOR = '#1c1a24';
 const LETTERBOX = '#100f16';
@@ -158,6 +157,39 @@ function drawPickupGlyph(ctx: CanvasRenderingContext2D, kind: TankPowerup, r: nu
       }
       break;
     }
+    case 'laser': {
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.6, 0);
+      ctx.lineTo(r * 0.6, 0);
+      ctx.stroke();
+      break;
+    }
+    case 'shotgun': {
+      for (const [dx, dy] of [
+        [-r * 0.4, r * 0.3],
+        [-r * 0.2, -r * 0.1],
+        [0, -r * 0.4],
+        [r * 0.2, -r * 0.1],
+        [r * 0.4, r * 0.3],
+      ] as const) {
+        circle(ctx, dx, dy, r * 0.12);
+      }
+      break;
+    }
+    case 'homing': {
+      circle(ctx, 0, 0, r * 0.45);
+      ctx.beginPath();
+      ctx.moveTo(-r * 0.6, 0);
+      ctx.lineTo(r * 0.6, 0);
+      ctx.moveTo(0, -r * 0.6);
+      ctx.lineTo(0, r * 0.6);
+      ctx.stroke();
+      break;
+    }
+    case 'mine': {
+      circle(ctx, 0, 0, r * 0.4);
+      break;
+    }
     default:
       break;
   }
@@ -256,11 +288,22 @@ export class TanksRenderer {
   }
 
   private mazeFor(snap: TanksSnapshot): Maze {
-    const key = `${snap.az}:${snap.aw}:${snap.ah}`;
+    const stageId = snap.stageId ?? 'alien_planet';
+    const key = `${snap.az}:${snap.aw}:${snap.ah}:${stageId}`;
     if (this.maze && this.mazeKey === key) return this.maze;
-    this.maze = generateMaze(snap.az, snap.aw, snap.ah, snap.players.length);
+
+    const stageDef = TANK_STAGES[stageId] ?? TANK_STAGES.alien_planet;
+    this.maze = {
+      cols: snap.aw,
+      rows: snap.ah,
+      vWalls: new Uint8Array(0),
+      hWalls: new Uint8Array(0),
+      spawns: [],
+      stageId,
+      obstacles: stageDef.obstacles,
+      spawnsPos: stageDef.spawns,
+    };
     this.mazeKey = key;
-    // A new arena means every smoothed position is about to teleport.
     this.smoothers.clear();
     this.predictor.reset();
     return this.maze;
@@ -289,8 +332,7 @@ export class TanksRenderer {
     ctx.fillStyle = FLOOR;
     ctx.fillRect(0, 0, width, height);
 
-    // Draw backdrop image if available for current seed / round.
-    const stageId = TANK_STAGE_IDS[Math.abs(maze.cols * 31 + maze.rows) % TANK_STAGE_IDS.length]!;
+    const stageId = maze.stageId ?? 'alien_planet';
     const stageDef = TANK_STAGES[stageId];
     if (stageDef) {
       const img = getImage(stageDef.backdropUrl);
@@ -301,11 +343,8 @@ export class TanksRenderer {
   }
 
   private drawWalls(ctx: CanvasRenderingContext2D, maze: Maze): void {
-    // Determine active stage theme hitboxes
-    const stageId = TANK_STAGE_IDS[Math.abs(maze.cols * 31 + maze.rows) % TANK_STAGE_IDS.length]!;
+    const stageId = maze.stageId ?? 'alien_planet';
     const stageDef = TANK_STAGES[stageId];
-
-    // If stage image backdrop is loaded, suppress procedural wall fills
     const imgLoaded = stageDef && !!getImage(stageDef.backdropUrl);
 
     if (!imgLoaded) {
@@ -342,15 +381,6 @@ export class TanksRenderer {
     }
   }
 
-  /**
-   * A rounded crate rather than a plain disc: a hard offset shadow (never a
-   * blur — see the note at the top of `tokens.css`), the spec's own colour as
-   * fill, a drawn glyph instead of an emoji, and a gentle idle bob so the
-   * floor doesn't read as static once the ink and walls are.
-   *
-   * The bob/pulse phase is keyed on the pickup's id so a handful spawned at
-   * once don't all bounce in lockstep.
-   */
   private drawPickups(ctx: CanvasRenderingContext2D, snap: TanksSnapshot, now: number): void {
     for (const pickup of snap.pickups) {
       const spec = POWERUPS[pickup.k];
@@ -361,18 +391,28 @@ export class TanksRenderer {
       const cx = pickup.x;
       const cy = pickup.y + bob;
       const w = r * 1.9;
-      const h = r * 1.6;
-      const corner = r * 0.5;
+      const h = r * 1.9;
 
+      const img = getImage(`/powerups/powerup_${pickup.k}.png`);
+      if (img) {
+        ctx.save();
+        ctx.fillStyle = '#000000';
+        roundedRect(ctx, cx - w / 2 + SHADOW_OFFSET, cy - h / 2 + SHADOW_OFFSET, w, h, r * 0.5);
+        ctx.fill();
+        ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+        ctx.restore();
+        continue;
+      }
+
+      const corner = r * 0.5;
       ctx.fillStyle = '#000000';
       roundedRect(ctx, cx - w / 2 + SHADOW_OFFSET, cy - h / 2 + SHADOW_OFFSET, w, h, corner);
       ctx.fill();
 
-      ctx.fillStyle = spec.color;
+      ctx.fillStyle = spec?.color ?? '#ffd447';
       roundedRect(ctx, cx - w / 2, cy - h / 2, w, h, corner);
       ctx.fill();
 
-      // A thin darker rim reads as a capsule seam rather than a flat sticker.
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
       ctx.lineWidth = Math.max(1, r * 0.08);
       roundedRect(ctx, cx - w / 2, cy - h / 2, w, h, corner);
@@ -385,14 +425,6 @@ export class TanksRenderer {
     }
   }
 
-  /**
-   * Shells are drawn from the snapshot with only a short linear carry.
-   *
-   * Extrapolating them properly would mean re-marching the lattice on the
-   * client, and a mispredicted bounce — a shell visibly passing through a wall
-   * and snapping back — reads far worse than a shell being a frame or two
-   * behind. Capping the carry keeps it honest.
-   */
   private drawBullets(
     ctx: CanvasRenderingContext2D,
     snap: TanksSnapshot,
@@ -403,12 +435,24 @@ export class TanksRenderer {
     for (const bullet of snap.bullets) {
       const x = bullet.x + bullet.vx * carry;
       const y = bullet.y + bullet.vy * carry;
-      const radius = bullet.h === 1 ? 10 : 6;
 
-      // A short trail behind the shell, which is most of what makes a ricochet
-      // readable at speed.
+      if (bullet.m === 1) {
+        // Mine
+        ctx.fillStyle = '#ffcc00';
+        ctx.strokeStyle = '#1c1a24';
+        ctx.lineWidth = 2;
+        circle(ctx, x, y, 10);
+        ctx.stroke();
+        ctx.fillStyle = '#1c1a24';
+        circle(ctx, x, y, 4);
+        continue;
+      }
+
+      const radius = bullet.h === 1 ? 10 : bullet.l === 1 ? 4 : bullet.p === 1 ? 4 : 6;
+      const color = bullet.l === 1 ? '#ff3366' : bullet.hm === 1 ? '#33ccff' : bullet.p === 1 ? '#ff9900' : bullet.h === 1 ? '#ff9f43' : '#ffe296';
+
       if (!this.reduced) {
-        ctx.strokeStyle = 'rgba(255, 226, 150, 0.35)';
+        ctx.strokeStyle = bullet.l === 1 ? 'rgba(255, 51, 102, 0.5)' : 'rgba(255, 226, 150, 0.35)';
         ctx.lineWidth = radius;
         ctx.lineCap = 'round';
         ctx.beginPath();
@@ -417,7 +461,7 @@ export class TanksRenderer {
         ctx.stroke();
       }
 
-      ctx.fillStyle = bullet.h === 1 ? '#ff9f43' : '#ffe296';
+      ctx.fillStyle = color;
       circle(ctx, x, y, radius);
     }
   }

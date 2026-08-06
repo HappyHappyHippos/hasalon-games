@@ -87,14 +87,24 @@ export function attachInput(
     if (event.pointerType === 'mouse' && event.button !== 0) return;
     const rect = surface.getBoundingClientRect();
     touches.set(event.pointerId, event.clientX - rect.left < rect.width / 2 ? 'left' : 'right');
-    surface.setPointerCapture?.(event.pointerId);
+    if (event.pointerType !== 'touch') surface.setPointerCapture?.(event.pointerId);
     event.preventDefault();
     update();
   };
 
+  const onPointerMove = (event: PointerEvent): void => {
+    if (!touches.has(event.pointerId)) return;
+    const rect = surface.getBoundingClientRect();
+    const side = event.clientX - rect.left < rect.width / 2 ? 'left' : 'right';
+    if (touches.get(event.pointerId) !== side) {
+      touches.set(event.pointerId, side);
+      update();
+    }
+  };
+
   const onPointerUp = (event: PointerEvent): void => {
     if (!touches.delete(event.pointerId)) return;
-    surface.releasePointerCapture?.(event.pointerId);
+    if (event.pointerType !== 'touch') surface.releasePointerCapture?.(event.pointerId);
     update();
   };
 
@@ -102,6 +112,7 @@ export function attachInput(
   window.addEventListener('keyup', onKeyUp);
   window.addEventListener('blur', onBlur);
   surface.addEventListener('pointerdown', onPointerDown);
+  surface.addEventListener('pointermove', onPointerMove);
   surface.addEventListener('pointerup', onPointerUp);
   surface.addEventListener('pointercancel', onPointerUp);
 
@@ -114,6 +125,7 @@ export function attachInput(
       window.removeEventListener('keyup', onKeyUp);
       window.removeEventListener('blur', onBlur);
       surface.removeEventListener('pointerdown', onPointerDown);
+      surface.removeEventListener('pointermove', onPointerMove);
       surface.removeEventListener('pointerup', onPointerUp);
       surface.removeEventListener('pointercancel', onPointerUp);
       localInput.turn = 0;

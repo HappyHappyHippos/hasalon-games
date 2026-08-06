@@ -148,6 +148,28 @@ export const MINI_TICKS = seconds(8);
 export const MINI_HIT_R = TANK_R * 0.65;
 export const MINI_SPEED_MUL = 1.2;
 
+export const LASER_CHARGES = 3;
+export const LASER_SPEED_MUL = 4.8;
+export const LASER_BOUNCES = 8;
+export const LASER_R = 4;
+
+export const SHOTGUN_CHARGES = 3;
+export const SHOTGUN_PELLETS = 5;
+export const SHOTGUN_SPREAD = 0.22;
+export const SHOTGUN_BOUNCES = 2;
+export const SHOTGUN_R = 4;
+
+export const HOMING_CHARGES = 3;
+export const HOMING_SPEED = 220;
+export const HOMING_TURN_RATE = 3.5;
+export const HOMING_BOUNCES = 4;
+
+export const MINE_CHARGES = 3;
+export const MINE_ARM_TICKS = seconds(0.67);
+export const MINE_PROXIMITY_R = 45;
+export const MINE_EXPLOSION_R = 65;
+export const MINE_LIFE = seconds(20);
+
 // ---------------------------------------------------------------------------
 // Round flow
 // ---------------------------------------------------------------------------

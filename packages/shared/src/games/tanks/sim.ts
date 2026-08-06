@@ -21,9 +21,19 @@ import {
   HEAVY_BOUNCES,
   HEAVY_R,
   HEAVY_SPEED_MUL,
+  HOMING_BOUNCES,
+  HOMING_SPEED,
+  HOMING_TURN_RATE,
+  LASER_BOUNCES,
+  LASER_R,
+  LASER_SPEED_MUL,
   MAX_BOUNCES,
   MAX_POWERUPS,
   MAX_SHELLS,
+  MINE_ARM_TICKS,
+  MINE_EXPLOSION_R,
+  MINE_LIFE,
+  MINE_PROXIMITY_R,
   MINI_HIT_R,
   MUZZLE,
   PICKUP_R,
@@ -32,12 +42,16 @@ import {
   RECOIL,
   ROUND_OVER_TICKS,
   SHOT_COOLDOWN,
+  SHOTGUN_BOUNCES,
+  SHOTGUN_PELLETS,
+  SHOTGUN_R,
+  SHOTGUN_SPREAD,
   TANK_R,
   TRIPLE_SPREAD,
   WALL_SEPARATE_PASSES,
 } from './constants';
 import { marchBullet } from './ballistics';
-import { arenaDims, cellCentre, fallbackMaze, generateMaze, validateMaze } from './maze';
+import { cellCentre } from './maze';
 import { resolveTankWalls, separateTanks, stepTank, type TankBody } from './physics';
 import {
   POWERUP_KINDS,
@@ -50,6 +64,7 @@ import {
   tickBuffs,
 } from './powerups';
 import { makeRng, mixSeed, nextInt, pick } from './rng';
+import { TANK_STAGES, TANK_STAGE_IDS } from './stages';
 import {
   IN_BACK,
   IN_FIRE,
@@ -110,7 +125,16 @@ export function createState(seats: GameSeat[], config: TanksConfig, seed: number
     rng,
     matchSeed: seed >>> 0,
     arenaSeed: 0,
-    maze: fallbackMaze(players.length),
+    maze: {
+      cols: 13.333333333333334,
+      rows: 7.5,
+      vWalls: new Uint8Array(0),
+      hWalls: new Uint8Array(0),
+      spawns: [],
+      stageId: 'alien_planet',
+      obstacles: TANK_STAGES.alien_planet.obstacles,
+      spawnsPos: TANK_STAGES.alien_planet.spawns,
+    },
     players,
     bullets: [],
     pickups: [],
@@ -133,23 +157,46 @@ function startRound(state: TanksState): void {
   state.pickups = [];
   state.powerupTimer = POWERUP_EVERY;
 
-  const { cols, rows } = arenaDims(state.players.length, state.config.arenaSize);
   state.arenaSeed = mixSeed(state.matchSeed, state.round);
-  const maze = generateMaze(state.arenaSeed, cols, rows, state.players.length);
-  // Constructive generation cannot produce an unplayable arena, but a live match
-  // is the wrong place to find out otherwise.
-  state.maze = validateMaze(maze, state.players.length) ? maze : fallbackMaze(state.players.length);
+
+  const selectedStageId =
+    state.config.stageId === 'random' || !TANK_STAGES[state.config.stageId]
+      ? TANK_STAGE_IDS[Math.abs(state.arenaSeed) % TANK_STAGE_IDS.length]!
+      : state.config.stageId;
+
+  const stage = TANK_STAGES[selectedStageId];
+  state.maze = {
+    cols: 13.333333333333334,
+    rows: 7.5,
+    vWalls: new Uint8Array(0),
+    hWalls: new Uint8Array(0),
+    spawns: [],
+    stageId: stage.id,
+    obstacles: stage.obstacles,
+    spawnsPos: stage.spawns,
+  };
 
   for (const player of state.players) resetToSpawn(state, player);
 }
 
 function resetToSpawn(state: TanksState, player: TankPlayerState): void {
-  const spawns = state.maze.spawns;
-  const spawn = spawns[player.seat % spawns.length]!;
-  const centre = cellCentre(spawn.cx, spawn.cy);
-  player.x = centre.x;
-  player.y = centre.y;
-  player.angle = spawn.angle;
+  if (state.maze.spawnsPos && state.maze.spawnsPos.length > 0) {
+    const spawn = state.maze.spawnsPos[player.seat % state.maze.spawnsPos.length]!;
+    player.x = spawn.x;
+    player.y = spawn.y;
+    player.angle = Math.atan2(360 - spawn.y, 640 - spawn.x);
+  } else if (state.maze.spawns && state.maze.spawns.length > 0) {
+    const spawns = state.maze.spawns;
+    const spawn = spawns[player.seat % spawns.length]!;
+    const centre = cellCentre(spawn.cx, spawn.cy);
+    player.x = centre.x;
+    player.y = centre.y;
+    player.angle = spawn.angle;
+  } else {
+    player.x = 120 + player.seat * 100;
+    player.y = 150;
+    player.angle = 0;
+  }
   player.speed = 0;
   player.alive = true;
   player.cooldown = 0;
@@ -289,15 +336,64 @@ function fire(state: TanksState, player: TankPlayerState): void {
   const heavy = has(player.buffs, 'heavy');
   const triple = has(player.buffs, 'triple');
   const bounce = has(player.buffs, 'bounce');
-  const speed = BULLET_SPEED * (heavy ? HEAVY_SPEED_MUL : 1);
-  const maxBounces = (heavy ? HEAVY_BOUNCES : MAX_BOUNCES) + (bounce ? BOUNCE_BONUS : 0);
+  const laser = has(player.buffs, 'laser');
+  const shotgun = has(player.buffs, 'shotgun');
+  const homing = has(player.buffs, 'homing');
+  const mine = has(player.buffs, 'mine');
 
-  const angles = triple
-    ? [player.angle - TRIPLE_SPREAD, player.angle, player.angle + TRIPLE_SPREAD]
-    : [player.angle];
+  if (mine) {
+    state.bullets.push({
+      id: state.nextBulletId,
+      owner: player.seat,
+      x: player.x,
+      y: player.y,
+      vx: 0,
+      vy: 0,
+      radius: 12,
+      bounces: 0,
+      maxBounces: 0,
+      life: MINE_LIFE,
+      arm: MINE_ARM_TICKS,
+      heavy: false,
+      mine: true,
+    });
+    state.nextBulletId += 1;
+    player.cooldown = SHOT_COOLDOWN * (has(player.buffs, 'rapid') ? RAPID_COOLDOWN_MUL : 1);
+    spendCharge(player.buffs, 'mine');
+    state.events.push({ t: 'fire', seat: player.seat, heavy: false });
+    return;
+  }
+
+  let angles: number[] = [player.angle];
+  if (shotgun) {
+    angles = [];
+    const step = (SHOTGUN_SPREAD * 2) / (SHOTGUN_PELLETS - 1);
+    for (let i = 0; i < SHOTGUN_PELLETS; i++) {
+      angles.push(player.angle - SHOTGUN_SPREAD + i * step);
+    }
+  } else if (triple) {
+    angles = [player.angle - TRIPLE_SPREAD, player.angle, player.angle + TRIPLE_SPREAD];
+  }
+
+  let baseSpeed = BULLET_SPEED;
+  if (laser) baseSpeed = BULLET_SPEED * LASER_SPEED_MUL;
+  else if (heavy) baseSpeed = BULLET_SPEED * HEAVY_SPEED_MUL;
+  else if (homing) baseSpeed = HOMING_SPEED;
+
+  let maxBounces = MAX_BOUNCES;
+  if (laser) maxBounces = LASER_BOUNCES;
+  else if (heavy) maxBounces = HEAVY_BOUNCES;
+  else if (shotgun) maxBounces = SHOTGUN_BOUNCES;
+  else if (homing) maxBounces = HOMING_BOUNCES;
+
+  if (bounce) maxBounces += BOUNCE_BONUS;
+
+  let bulletRadius = BULLET_R;
+  if (heavy) bulletRadius = HEAVY_R;
+  else if (laser) bulletRadius = LASER_R;
+  else if (shotgun) bulletRadius = SHOTGUN_R;
 
   for (const angle of angles) {
-    // Every shell of a spread counts against the six-shell cap.
     if (liveShells(state, player.seat) >= MAX_SHELLS) break;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
@@ -306,24 +402,31 @@ function fire(state: TanksState, player: TankPlayerState): void {
       owner: player.seat,
       x: player.x + cos * MUZZLE,
       y: player.y + sin * MUZZLE,
-      vx: cos * speed,
-      vy: sin * speed,
-      radius: heavy ? HEAVY_R : BULLET_R,
+      vx: cos * baseSpeed,
+      vy: sin * baseSpeed,
+      radius: bulletRadius,
       bounces: 0,
       maxBounces,
       life: BULLET_LIFE,
       arm: ARM_TICKS,
       heavy,
+      laser,
+      shotgun,
+      homing,
     });
     state.nextBulletId += 1;
   }
 
   player.cooldown = SHOT_COOLDOWN * (has(player.buffs, 'rapid') ? RAPID_COOLDOWN_MUL : 1);
-  // Recoil replaces nothing — it just shoves the hull back along its heading.
   player.speed -= RECOIL;
+
   if (heavy) spendCharge(player.buffs, 'heavy');
   if (triple) spendCharge(player.buffs, 'triple');
   if (bounce) spendCharge(player.buffs, 'bounce');
+  if (laser) spendCharge(player.buffs, 'laser');
+  if (shotgun) spendCharge(player.buffs, 'shotgun');
+  if (homing) spendCharge(player.buffs, 'homing');
+
   state.events.push({ t: 'fire', seat: player.seat, heavy });
 }
 
@@ -343,6 +446,64 @@ function stepBullets(state: TanksState): void {
     bullet.life = countdown(bullet.life);
     bullet.arm = countdown(bullet.arm);
     if (bullet.life === 0) continue;
+
+    if (bullet.mine) {
+      if (bullet.arm <= 0) {
+        const triggerTank = state.players.find(
+          (p) => p.alive && Math.hypot(p.x - bullet.x, p.y - bullet.y) <= MINE_PROXIMITY_R,
+        );
+        if (triggerTank) {
+          state.events.push({ t: 'bounce', x: bullet.x, y: bullet.y });
+          for (const victim of state.players) {
+            if (!victim.alive) continue;
+            if (Math.hypot(victim.x - bullet.x, victim.y - bullet.y) <= MINE_EXPLOSION_R) {
+              if (has(victim.buffs, 'shield')) {
+                delete victim.buffs.shield;
+                state.events.push({ t: 'shieldPop', seat: victim.seat });
+              } else {
+                victim.alive = false;
+                victim.speed = 0;
+                state.events.push({
+                  t: 'kill',
+                  seat: victim.seat,
+                  by: bullet.owner === victim.seat ? null : bullet.owner,
+                });
+              }
+            }
+          }
+          continue;
+        }
+      }
+      kept.push(bullet);
+      continue;
+    }
+
+    if (bullet.homing) {
+      const enemies = state.players.filter((p) => p.alive && p.seat !== bullet.owner);
+      let nearest: TankPlayerState | null = null;
+      let minDist = Infinity;
+      for (const enemy of enemies) {
+        const d = Math.hypot(enemy.x - bullet.x, enemy.y - bullet.y);
+        if (d < minDist) {
+          minDist = d;
+          nearest = enemy;
+        }
+      }
+      if (nearest) {
+        const targetAngle = Math.atan2(nearest.y - bullet.y, nearest.x - bullet.x);
+        const currentAngle = Math.atan2(bullet.vy, bullet.vx);
+        let angleDiff = targetAngle - currentAngle;
+        while (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+        while (angleDiff <= -Math.PI) angleDiff += Math.PI * 2;
+
+        const maxTurn = HOMING_TURN_RATE * DT;
+        const turn = Math.max(-maxTurn, Math.min(maxTurn, angleDiff));
+        const newAngle = currentAngle + turn;
+        const speed = Math.hypot(bullet.vx, bullet.vy) || HOMING_SPEED;
+        bullet.vx = Math.cos(newAngle) * speed;
+        bullet.vy = Math.sin(newAngle) * speed;
+      }
+    }
 
     marchBullet(state.maze, bullet, DT, (x, y) => state.events.push({ t: 'bounce', x, y }));
     if (bullet.bounces > bullet.maxBounces) continue;
@@ -471,6 +632,7 @@ export function makeSnapshot(state: TanksState, events: TankEvent[]): TanksSnaps
     phase: state.phase,
     phaseTicks: state.phaseTicks,
     round: state.round,
+    stageId: state.maze.stageId ?? 'alien_planet',
     az: state.arenaSeed,
     aw: state.maze.cols,
     ah: state.maze.rows,
@@ -494,6 +656,10 @@ export function makeSnapshot(state: TanksState, events: TankEvent[]): TanksSnaps
       vy: round1(b.vy),
       o: b.owner,
       h: b.heavy ? 1 : 0,
+      ...(b.laser ? { l: 1 as const } : {}),
+      ...(b.homing ? { hm: 1 as const } : {}),
+      ...(b.mine ? { m: 1 as const } : {}),
+      ...(b.shotgun ? { p: 1 as const } : {}),
     })),
     pickups: state.pickups.map((p) => ({ x: round1(p.x), y: round1(p.y), k: p.kind })),
     events,

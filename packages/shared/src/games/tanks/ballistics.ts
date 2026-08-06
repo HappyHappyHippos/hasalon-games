@@ -26,6 +26,11 @@ export function marchBullet(
   dt: number,
   onBounce?: BounceHandler,
 ): void {
+  if (maze.obstacles && maze.obstacles.length > 0) {
+    marchObstaclesBullet(maze, bullet, dt, onBounce);
+    return;
+  }
+
   let remaining = dt;
   // A shell cannot legitimately cross this many cells in one tick. The cap is a
   // guard against a pathological velocity, not part of normal operation.
@@ -119,4 +124,138 @@ function approachLine(pos: number, vel: number, line: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
+}
+
+function marchObstaclesBullet(
+  maze: Maze,
+  bullet: TankBullet,
+  dt: number,
+  onBounce?: BounceHandler,
+): void {
+  let remaining = dt;
+  let guard = 64;
+
+  const minX = 0;
+  const maxX = 1280;
+  const minY = 0;
+  const maxY = 720;
+
+  while (remaining > 1e-9 && guard > 0) {
+    guard -= 1;
+
+    let bestT = remaining;
+    let hitAxis: 'x' | 'y' | null = null;
+    let hitX = bullet.x;
+    let hitY = bullet.y;
+
+    if (bullet.vx < 0) {
+      const t = (minX - bullet.x) / bullet.vx;
+      if (t > 1e-6 && t <= bestT) {
+        bestT = t;
+        hitAxis = 'x';
+        hitX = minX;
+        hitY = bullet.y + bullet.vy * t;
+      }
+    } else if (bullet.vx > 0) {
+      const t = (maxX - bullet.x) / bullet.vx;
+      if (t > 1e-6 && t <= bestT) {
+        bestT = t;
+        hitAxis = 'x';
+        hitX = maxX;
+        hitY = bullet.y + bullet.vy * t;
+      }
+    }
+
+    if (bullet.vy < 0) {
+      const t = (minY - bullet.y) / bullet.vy;
+      if (t > 1e-6 && t <= bestT) {
+        bestT = t;
+        hitAxis = 'y';
+        hitX = bullet.x + bullet.vx * t;
+        hitY = minY;
+      }
+    } else if (bullet.vy > 0) {
+      const t = (maxY - bullet.y) / bullet.vy;
+      if (t > 1e-6 && t <= bestT) {
+        bestT = t;
+        hitAxis = 'y';
+        hitX = bullet.x + bullet.vx * t;
+        hitY = maxY;
+      }
+    }
+
+    if (maze.obstacles) {
+      for (const box of maze.obstacles) {
+        const bLeft = box.x;
+        const bRight = box.x + box.w;
+        const bTop = box.y;
+        const bBottom = box.y + box.h;
+
+        if (bullet.vx > 0) {
+          const t = (bLeft - bullet.x) / bullet.vx;
+          if (t > 1e-6 && t < bestT) {
+            const y = bullet.y + bullet.vy * t;
+            if (y >= bTop && y <= bBottom) {
+              bestT = t;
+              hitAxis = 'x';
+              hitX = bLeft;
+              hitY = y;
+            }
+          }
+        }
+        if (bullet.vx < 0) {
+          const t = (bRight - bullet.x) / bullet.vx;
+          if (t > 1e-6 && t < bestT) {
+            const y = bullet.y + bullet.vy * t;
+            if (y >= bTop && y <= bBottom) {
+              bestT = t;
+              hitAxis = 'x';
+              hitX = bRight;
+              hitY = y;
+            }
+          }
+        }
+        if (bullet.vy > 0) {
+          const t = (bTop - bullet.y) / bullet.vy;
+          if (t > 1e-6 && t < bestT) {
+            const x = bullet.x + bullet.vx * t;
+            if (x >= bLeft && x <= bRight) {
+              bestT = t;
+              hitAxis = 'y';
+              hitX = x;
+              hitY = bTop;
+            }
+          }
+        }
+        if (bullet.vy < 0) {
+          const t = (bBottom - bullet.y) / bullet.vy;
+          if (t > 1e-6 && t < bestT) {
+            const x = bullet.x + bullet.vx * t;
+            if (x >= bLeft && x <= bRight) {
+              bestT = t;
+              hitAxis = 'y';
+              hitX = x;
+              hitY = bBottom;
+            }
+          }
+        }
+      }
+    }
+
+    if (hitAxis !== null) {
+      bullet.x = hitX;
+      bullet.y = hitY;
+      remaining -= bestT;
+      if (hitAxis === 'x') bullet.vx = -bullet.vx;
+      else bullet.vy = -bullet.vy;
+
+      bullet.bounces += 1;
+      onBounce?.(bullet.x, bullet.y);
+      if (bullet.bounces > bullet.maxBounces) return;
+    } else {
+      bullet.x += bullet.vx * remaining;
+      bullet.y += bullet.vy * remaining;
+      remaining = 0;
+    }
+  }
 }

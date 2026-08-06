@@ -94,6 +94,7 @@ export function bodyFrom(server: GmSnapshotPlayer): MoveBody {
     // dropping player on the ledge they just left.
     dropThrough: server.dp ?? 0,
     jetpack: server.jp ?? 0,
+    airJumpDelay: server.jd ?? 0,
   };
 }
 

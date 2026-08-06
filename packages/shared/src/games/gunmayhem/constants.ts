@@ -56,6 +56,7 @@ export const TURN_ACCEL = 4200;
 export const JUMP_VELOCITY = -780;
 export const AIR_JUMP_VELOCITY = -720;
 export const MAX_JUMPS = 2;
+export const DOUBLE_JUMP_DELAY_TICKS = 2;
 
 /**
  * Coyote time and jump buffering. These two are most of the difference between
