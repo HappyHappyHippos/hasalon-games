@@ -1416,11 +1416,11 @@ strong,
 .fullscreenbtn__wrap {
   position: fixed;
   z-index: 15;
-  top: calc(6px + env(safe-area-inset-top));
-  inset-inline-end: calc(176px + env(safe-area-inset-right));
+  bottom: 12px;
+  inset-inline-end: 62px;
   display: flex;
   flex-direction: row-reverse;
-  align-items: flex-start;
+  align-items: center;
   gap: 8px;
 }
 
@@ -2194,6 +2194,8 @@ strong,
     font-size: 19px;
   }
   .fullscreenbtn__wrap {
+    top: calc(6px + env(safe-area-inset-top));
+    bottom: auto;
     inset-inline-end: calc(158px + env(safe-area-inset-right));
   }
   .fullscreenbtn {

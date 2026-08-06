@@ -10,6 +10,7 @@ import { renderGameScreen } from './games/registry';
 import { Intro } from './ui/Intro';
 import { InstallPrompt } from './ui/InstallPrompt';
 import { OptionsMenu } from './ui/OptionsMenu';
+import { FullscreenButton } from './ui/FullscreenButton';
 import { PauseButton } from './ui/PauseButton';
 import { MuteButton } from './ui/MatchOverlays';
 import { Toast } from './ui/Toast';
@@ -82,6 +83,7 @@ export function App(): JSX.Element {
     <div className={`app${inMatch ? ' app--playing' : ''}`}>
       <Toast />
       <OptionsMenu />
+      <FullscreenButton />
       <PauseButton />
       <MuteButton />
       <InstallPrompt />

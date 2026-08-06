@@ -159,25 +159,23 @@ export function LobbyScreen(): JSX.Element {
             <h2 className="eyebrow">{t.voiceHeading}</h2>
             <VoiceBar />
 
-            {!isHost && (
-              <div className="sticker lobby__ready">
-                <Button
-                  variant={me?.ready ? 'plain' : 'primary'}
-                  size="lg"
-                  full
-                  tone={me?.ready ? undefined : colorFor(identity.colorIndex)}
-                  disabled={!me?.connected}
-                  onClick={() => socket.setReady(!me?.ready)}
-                >
-                  {me?.ready ? t.notReady : t.ready}
-                </Button>
-                {!canStart && (
-                  <p className="muted small center" style={{ marginTop: '0.5rem' }}>
-                    {t.readyCount(readyPlayers.length, game.meta.minPlayers, t.games[game.meta.id].name)}
-                  </p>
-                )}
-              </div>
-            )}
+            <div className="sticker lobby__ready">
+              <Button
+                variant={me?.ready ? 'plain' : 'primary'}
+                size="lg"
+                full
+                tone={me?.ready ? undefined : colorFor(identity.colorIndex)}
+                disabled={!me?.connected}
+                onClick={() => socket.setReady(!me?.ready)}
+              >
+                {me?.ready ? t.notReady : t.ready}
+              </Button>
+              {!canStart && (
+                <p className="muted small center" style={{ marginTop: '0.5rem' }}>
+                  {t.readyCount(readyPlayers.length, game.meta.minPlayers, t.games[game.meta.id].name)}
+                </p>
+              )}
+            </div>
           </section>
 
           <section className="lobby__choice">
@@ -200,7 +198,7 @@ export function LobbyScreen(): JSX.Element {
         </div>
 
         <footer className="sticker lobby__foot">
-          {isHost ? (
+          {isHost && (
             <Button
               variant="primary"
               size="lg"
@@ -209,16 +207,6 @@ export function LobbyScreen(): JSX.Element {
               title={canStart ? undefined : t.needReady(game.meta.minPlayers)}
             >
               {t.startGame(t.games[game.meta.id].name)}
-            </Button>
-          ) : (
-            <Button
-              variant={me?.ready ? 'plain' : 'primary'}
-              size="lg"
-              tone={me?.ready ? undefined : colorFor(identity.colorIndex)}
-              disabled={!me?.connected}
-              onClick={() => socket.setReady(!me?.ready)}
-            >
-              {me?.ready ? t.notReady : t.ready}
             </Button>
           )}
 

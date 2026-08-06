@@ -10,7 +10,6 @@ import { Logo } from '../ui/Logo';
 import { CLIENT_GAMES, CLIENT_GAME_IDS } from '../games/registry';
 import { isIOSDevice } from '../ui/mobileViewport';
 import { isStandalone } from '../ui/useFullscreen';
-import { FullscreenButton } from '../ui/FullscreenButton';
 
 export function HomeScreen(): JSX.Element {
   const identity = useStore((s) => s.identity);
@@ -59,7 +58,6 @@ export function HomeScreen(): JSX.Element {
     <main className="home">
       <div className="home__inner">
         <header className="home__hero">
-          <FullscreenButton />
           <Logo />
           <p className="home__blurb">{t.tagline}</p>
         </header>
