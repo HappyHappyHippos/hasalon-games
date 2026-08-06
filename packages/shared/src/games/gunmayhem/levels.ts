@@ -240,13 +240,82 @@ const SNOW: Level = {
   },
 };
 
+const ISRAEL: Level = {
+  id: 'israel',
+  name: 'Israel',
+  platforms: [
+    { x: 185, y: 188, w: 230, h: 22, oneWay: true },
+    { x: 560, y: 188, w: 153, h: 22, oneWay: true },
+    { x: 864, y: 188, w: 230, h: 22, oneWay: true },
+    { x: 233, y: 335, w: 136, h: 22, oneWay: true },
+    { x: 484, y: 337, w: 312, h: 22, oneWay: true },
+    { x: 910, y: 335, w: 136, h: 22, oneWay: true },
+    { x: 245, y: 506, w: 162, h: 22, oneWay: true },
+    { x: 560, y: 473, w: 159, h: 22, oneWay: true },
+    { x: 874, y: 506, w: 159, h: 22, oneWay: true },
+    { x: 96, y: 588, w: 321, h: 26, oneWay: false },
+    { x: 522, y: 618, w: 237, h: 26, oneWay: false },
+    { x: 864, y: 588, w: 321, h: 26, oneWay: false },
+  ],
+  spawns: [
+    { x: 300, y: 130 },
+    { x: 636, y: 130 },
+    { x: 979, y: 130 },
+    { x: 640, y: 280 },
+    { x: 256, y: 530 },
+    { x: 1024, y: 530 },
+  ],
+  palette: {
+    sky: '#74c0fc',
+    far: '#ffec99',
+    near: '#ffd43b',
+    platform: '#fab005',
+    platformTop: '#fff9db',
+    accent: '#1c7ed6',
+  },
+};
+
+const PIRATES: Level = {
+  id: 'pirates',
+  name: 'Pirate Bay',
+  platforms: [
+    { x: 203, y: 184, w: 212, h: 22, oneWay: true },
+    { x: 551, y: 176, w: 187, h: 22, oneWay: true },
+    { x: 873, y: 186, w: 213, h: 22, oneWay: true },
+    { x: 291, y: 348, w: 157, h: 22, oneWay: true },
+    { x: 496, y: 389, w: 285, h: 24, oneWay: true },
+    { x: 818, y: 343, w: 153, h: 22, oneWay: true },
+    { x: 303, y: 522, w: 175, h: 22, oneWay: true },
+    { x: 787, y: 522, w: 166, h: 22, oneWay: true },
+    { x: 496, y: 620, w: 276, h: 26, oneWay: false },
+  ],
+  spawns: [
+    { x: 309, y: 125 },
+    { x: 644, y: 115 },
+    { x: 979, y: 125 },
+    { x: 638, y: 330 },
+    { x: 390, y: 460 },
+    { x: 870, y: 460 },
+  ],
+  palette: {
+    sky: '#4dabf7',
+    far: '#15aabf',
+    near: '#12b886',
+    platform: '#d9480f',
+    platformTop: '#ffec99',
+    accent: '#e8590c',
+  },
+};
+
 export const LEVELS: Record<LevelId, Level> = {
   candyland: CANDYLAND,
   desert: DESERT,
   factory: FACTORY,
   green: GREEN,
   green_2: GREEN_2,
+  israel: ISRAEL,
   living_room: LIVING_ROOM,
+  pirates: PIRATES,
   snow: SNOW,
 };
 
@@ -256,7 +325,9 @@ export const LEVEL_IDS: LevelId[] = [
   'factory',
   'green',
   'green_2',
+  'israel',
   'living_room',
+  'pirates',
   'snow',
 ];
 

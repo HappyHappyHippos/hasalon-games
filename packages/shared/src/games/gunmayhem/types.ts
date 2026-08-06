@@ -8,7 +8,9 @@ export type LevelId =
   | 'factory'
   | 'green'
   | 'green_2'
+  | 'israel'
   | 'living_room'
+  | 'pirates'
   | 'snow';
 
 /**
