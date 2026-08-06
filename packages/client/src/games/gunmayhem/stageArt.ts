@@ -24,28 +24,36 @@ const INK = '#14110f';
 
 /** Where a level's optional painted backdrop lives, if one has been added. */
 export function backdropUrl(id: LevelId): string {
-  return `/stages/${id}/backdrop.png`;
+  const legacyPath = `/stages/${id}/backdrop.png`;
+  const stageAssetPath = `/stages/gun_mayhem_stage_${id}.png`;
+  return getImage(stageAssetPath) ? stageAssetPath : legacyPath;
 }
 
 /**
  * Blit the painted backdrop for this level, if it has loaded.
  *
- * Scaled to cover the arena and drifted very slightly, so it reads as a
- * distant plane rather than a sticker. Returns false when there is no image,
- * which is the normal case until assets are dropped in.
+ * Scaled to cover the arena. Returns false when there is no image.
  */
 export function drawBackdrop(
   ctx: CanvasRenderingContext2D,
   id: LevelId,
   now: number,
 ): boolean {
-  const image = getImage(backdropUrl(id));
+  const url = backdropUrl(id);
+  const image = getImage(url);
   if (!image) return false;
 
-  const drift = Math.sin(now / 9000) * 10;
   ctx.save();
-  ctx.globalAlpha = 0.85;
-  ctx.drawImage(image, -20 + drift, -14, ARENA_WIDTH + 40, ARENA_HEIGHT + 28);
+  if (url.includes('gun_mayhem_stage_')) {
+    // Full stage image asset: covers exact 1280x720 arena space without drift
+    ctx.globalAlpha = 1.0;
+    ctx.drawImage(image, 0, 0, ARENA_WIDTH, ARENA_HEIGHT);
+  } else {
+    // Legacy procedural backdrop drift
+    const drift = Math.sin(now / 9000) * 10;
+    ctx.globalAlpha = 0.85;
+    ctx.drawImage(image, -20 + drift, -14, ARENA_WIDTH + 40, ARENA_HEIGHT + 28);
+  }
   ctx.restore();
   return true;
 }

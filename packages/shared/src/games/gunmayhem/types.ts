@@ -2,7 +2,17 @@ import type { RngState } from '../achtung/rng';
 
 export type WeaponKind = 'pistol' | 'smg' | 'shotgun' | 'sniper' | 'rocket' | 'knife';
 
-export type LevelId = 'salon' | 'rooftops' | 'towers';
+export type LevelId =
+  | 'salon'
+  | 'rooftops'
+  | 'towers'
+  | 'candyland'
+  | 'desert'
+  | 'factory'
+  | 'green'
+  | 'green_2'
+  | 'living_room'
+  | 'snow';
 
 /**
  * Timed powerups. `jetpack` and `repair` are deliberately not in here:

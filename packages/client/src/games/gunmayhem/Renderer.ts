@@ -27,7 +27,7 @@ import { isPredicting, predictsSelf } from '../../net/playbackMode';
 import { advancePlayer, ticksBehind } from './advance';
 import { GunMayhemPredictor } from './predictor';
 import { LocalShotFx } from './localFx';
-import { drawBackdrop, drawScenery } from './stageArt';
+import { backdropUrl, drawBackdrop, drawScenery } from './stageArt';
 import { drawSlash, drawWeapon, muzzleX, recoilStrength } from './weaponArt';
 
 const INK = '#14110f';
@@ -291,32 +291,38 @@ export class GunMayhemRenderer {
       ctx.beginPath();
       ctx.ellipse(640 + drift * 0.5, 780, 620, 210, 0, 0, Math.PI * 2);
       ctx.fill();
-    }
 
-    drawScenery(ctx, this.level, now);
+      drawScenery(ctx, this.level, now);
+    }
   }
 
   private drawPlatforms(): void {
     const { ctx } = this.stage;
     const palette = this.level.palette;
+    const url = backdropUrl(this.level.id);
+    const isImageStage = url.includes('gun_mayhem_stage_');
+    const isDebugHitboxes =
+      typeof window !== 'undefined' && window.location.search.includes('debugHitboxes');
 
     for (const platform of this.level.platforms) {
-      ctx.fillStyle = palette.platform;
-      roundRect(ctx, platform.x, platform.y, platform.w, platform.h, 5);
-      ctx.fill();
+      if (!isImageStage) {
+        ctx.fillStyle = palette.platform;
+        roundRect(ctx, platform.x, platform.y, platform.w, platform.h, 5);
+        ctx.fill();
 
-      // Lit top face, so which side you can land on is obvious at a glance.
-      ctx.fillStyle = palette.platformTop;
-      roundRect(ctx, platform.x, platform.y, platform.w, Math.min(6, platform.h), 3);
-      ctx.fill();
+        // Lit top face, so which side you can land on is obvious at a glance.
+        ctx.fillStyle = palette.platformTop;
+        roundRect(ctx, platform.x, platform.y, platform.w, Math.min(6, platform.h), 3);
+        ctx.fill();
 
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = INK;
-      roundRect(ctx, platform.x, platform.y, platform.w, platform.h, 5);
-      ctx.stroke();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = INK;
+        roundRect(ctx, platform.x, platform.y, platform.w, platform.h, 5);
+        ctx.stroke();
+      }
 
       // Dashes under one-way ledges: the visual language for "you can pass".
-      if (platform.oneWay) {
+      if (platform.oneWay && !isImageStage) {
         ctx.save();
         ctx.globalAlpha = 0.5;
         ctx.strokeStyle = palette.platformTop;
@@ -326,6 +332,17 @@ export class GunMayhemRenderer {
         ctx.moveTo(platform.x + 4, platform.y + platform.h + 4);
         ctx.lineTo(platform.x + platform.w - 4, platform.y + platform.h + 4);
         ctx.stroke();
+        ctx.restore();
+      }
+
+      // Debug overlay for verifying platform bounding box alignment
+      if (isDebugHitboxes) {
+        ctx.save();
+        ctx.strokeStyle = platform.oneWay ? 'rgba(255, 0, 0, 0.9)' : 'rgba(0, 255, 0, 0.9)';
+        ctx.fillStyle = platform.oneWay ? 'rgba(255, 0, 0, 0.25)' : 'rgba(0, 255, 0, 0.25)';
+        ctx.lineWidth = 2;
+        ctx.fillRect(platform.x, platform.y, platform.w, platform.h);
+        ctx.strokeRect(platform.x, platform.y, platform.w, platform.h);
         ctx.restore();
       }
     }
