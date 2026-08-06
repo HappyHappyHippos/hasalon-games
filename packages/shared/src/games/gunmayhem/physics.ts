@@ -12,6 +12,8 @@ import {
   JETPACK_THRUST,
   JUMP_BUFFER_TICKS,
   JUMP_VELOCITY,
+  KB_BASE,
+  KB_PER_DAMAGE,
   MAX_FALL_SPEED,
   MAX_JUMPS,
   PLAYER_HALF_H,
@@ -343,3 +345,12 @@ function approach(value: number, target: number, maxDelta: number): number {
   if (value > target) return Math.max(value - maxDelta, target);
   return value;
 }
+
+/**
+ * Calculates knockback impulse magnitude based on target damage percentage and weapon knockback multiplier.
+ * Impulse starts at full strength at 0% damage, and extra pushback per damage % grows at 50% of the previous rate.
+ */
+export function calculateKnockback(damage: number, kbMul: number = 1): number {
+  return (KB_BASE + damage * (KB_PER_DAMAGE * 0.5)) * kbMul;
+}
+

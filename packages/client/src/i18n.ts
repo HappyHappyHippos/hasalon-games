@@ -200,7 +200,7 @@ const he = {
   // Game names stay as they are — they are proper nouns in both languages.
   games: {
     achtung: {
-      name: 'אכטונג די קורבה',
+      name: 'קרב הקו',
       tagline: 'להחזיר את החוש האומנותי מכיתה ג',
       controls: 'חצים ימינה ושמאלה, או A ו-D',
       rules: [
@@ -212,7 +212,7 @@ const he = {
       ],
     },
     gunmayhem: {
-      name: 'גאן מייהם',
+      name: 'אנדרלמוסקטרים',
       tagline: 'מלא יריות ומלא צחוקים',
       controls: 'חצים או WASD לתזוזה · למעלה לקפיצה · למטה לצניחה · J ירי · K פצצה',
       rules: [
@@ -226,7 +226,7 @@ const he = {
       ],
     },
     skribbl: {
-      name: 'סקריבל',
+      name: 'שרבוטיאדה',
       tagline: 'תקשקשו על המסך בזמן שמקשקשים עם החברים',
       controls: 'ציירו עם העכבר או האצבע · הקלידו ניחוש בצ׳אט',
       rules: [
@@ -238,7 +238,7 @@ const he = {
       ],
     },
     memes: {
-      name: 'מכונת הממים',
+      name: 'אלוף הממים',
       tagline: 'כותבים יחד, צוחקים אחד על השני',
       controls: 'כתבו כיתוב · הצביעו 👍 😐 👎',
       rules: [
@@ -250,7 +250,7 @@ const he = {
       ],
     },
     tanks: {
-      name: 'טנק טראבל',
+      name: 'אוי טנק!',
       tagline: 'לירות מעבר לפינה, בדרך כלל על עצמכם',
       controls: 'חצים או WASD לנהיגה · M או רווח לירי',
       rules: [
@@ -264,7 +264,7 @@ const he = {
       ],
     },
     gravity: {
-      name: 'גראביטי גאי',
+      name: 'הפוך על הפוך',
       tagline: 'כפתור אחד. לרוץ זה חובה, ליפול זה בחירה',
       controls: 'רווח, חץ למעלה, או נגיעה במסך כדי להפוך כיוון',
       rules: [
@@ -375,7 +375,7 @@ const he = {
   memesResizeCaption: (n: number) => `שנו את גודל כיתוב ${n}`,
   memesAddCaption: 'הוסיפו תיבת טקסט',
   memesRemoveCaption: 'הסירו',
-  memesSkip: (n: number) => `דילוג על המם (${n} נותרו)`,
+  memesSkip: (n: number) => `דלג (${n})`,
   memesSubmit: 'סיימתי',
   memesSubmitted: 'הכיתוב בפנים!',
   memesWaitingWriters: 'מי כבר סיים',
@@ -752,7 +752,7 @@ const en: Dict = {
   memesResizeCaption: (n: number) => `Resize caption ${n}`,
   memesAddCaption: 'Add text box',
   memesRemoveCaption: 'Remove',
-  memesSkip: (n: number) => `Skip Meme (${n} left)`,
+  memesSkip: (n: number) => `Skip (${n})`,
   memesSubmit: 'Submit',
   memesSubmitted: 'Caption locked in!',
   memesWaitingWriters: 'Who is finished',

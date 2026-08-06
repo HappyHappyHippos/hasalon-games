@@ -10,6 +10,7 @@ import {
   RUN_SPEED,
 } from './constants';
 import {
+  calculateKnockback,
   segmentHitsBox,
   stepMovement,
   type MoveBody,
@@ -424,3 +425,16 @@ describe('segmentHitsBox', () => {
     expect(hit(40, 60, 80, 100)).toBeNull();
   });
 });
+
+describe('calculateKnockback', () => {
+  it('starts at full strength at 0% damage', () => {
+    expect(calculateKnockback(0)).toBe(240);
+    expect(calculateKnockback(0, 2)).toBe(480);
+  });
+
+  it('grows extra pushback per damage % at 50% of the previous rate', () => {
+    expect(calculateKnockback(100)).toBe(240 + 100 * 4.75);
+    expect(calculateKnockback(50, 1.5)).toBe((240 + 50 * 4.75) * 1.5);
+  });
+});
+

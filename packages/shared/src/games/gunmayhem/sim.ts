@@ -28,8 +28,6 @@ import {
   CRATE_TTL_TICKS,
   DEFAULT_STOCKS,
   DEFAULT_TARGET_WINS,
-  KB_BASE,
-  KB_PER_DAMAGE,
   KB_UP_BIAS,
   MAX_DAMAGE,
   PLAYER_HALF_H,
@@ -43,7 +41,7 @@ import {
   SHIELD_KB_MUL,
 } from './constants';
 import { LEVEL_IDS, getLevel, spawnPoint } from './levels';
-import { blocksBullets, segmentHitsBox, stepMovement, type MoveInput } from './physics';
+import { blocksBullets, calculateKnockback, segmentHitsBox, stepMovement, type MoveInput } from './physics';
 import {
   applyPowerup,
   emptyBuffs,
@@ -733,6 +731,25 @@ function explode(
  * true when a shield ate the hit, so callers can report it as a pop instead of
  * a hit.
  */
+function killPlayer(state: GunMayhemState, player: GmPlayer): void {
+  player.active = false;
+  player.stocks -= 1;
+  player.vx = 0;
+  player.vy = 0;
+
+  // Credit the last person to hit them, if it was recent enough to count.
+  const recentlyHit = player.lastHitAt >= 0 && state.tick - player.lastHitAt < 240;
+  state.events.push({
+    t: 'died',
+    seat: player.seat,
+    x: clamp(player.x, 0, ARENA_WIDTH),
+    y: player.y,
+    by: recentlyHit ? player.lastHitBy : null,
+  });
+
+  if (player.stocks > 0) player.respawnTimer = RESPAWN_TICKS;
+}
+
 function damageAndLaunch(
   state: GunMayhemState,
   target: GmPlayer,
@@ -747,7 +764,7 @@ function damageAndLaunch(
     // six seconds" gives the pickup a visible moment instead of quietly
     // reducing numbers for a while.
     target.buffs.shield = 0;
-    const knockback = (KB_BASE + target.damage * KB_PER_DAMAGE) * kbMul * SHIELD_KB_MUL;
+    const knockback = calculateKnockback(target.damage, kbMul * SHIELD_KB_MUL);
     target.vx = dirX * knockback;
     target.vy = -knockback * KB_UP_BIAS;
     target.onGround = false;
@@ -757,18 +774,23 @@ function damageAndLaunch(
 
   target.damage = Math.min(MAX_DAMAGE, target.damage + damage);
 
-  const knockback = (KB_BASE + target.damage * KB_PER_DAMAGE) * kbMul;
+  if (bySeat !== target.seat) {
+    target.lastHitBy = bySeat;
+    target.lastHitAt = state.tick;
+  }
+
+  if (target.damage >= 100) {
+    killPlayer(state, target);
+    return false;
+  }
+
+  const knockback = calculateKnockback(target.damage, kbMul);
   target.vx = dirX * knockback;
   target.vy = -knockback * KB_UP_BIAS;
   // No hitstun: a hit takes your momentum, never your controls. Knockback still
   // *replaces* velocity so every hit reads the same, but you are free to fight
   // it from the first tick — which is the whole point of dropping it.
   target.onGround = false;
-
-  if (bySeat !== target.seat) {
-    target.lastHitBy = bySeat;
-    target.lastHitAt = state.tick;
-  }
   return false;
 }
 
@@ -904,25 +926,11 @@ function stepBlastZones(state: GunMayhemState): void {
       player.x < BLAST_LEFT ||
       player.x > BLAST_RIGHT ||
       player.y > BLAST_BOTTOM ||
-      player.y < BLAST_TOP;
+      player.y < BLAST_TOP ||
+      player.damage >= 100;
     if (!out) continue;
 
-    player.active = false;
-    player.stocks -= 1;
-    player.vx = 0;
-    player.vy = 0;
-
-    // Credit the last person to hit them, if it was recent enough to count.
-    const recentlyHit = player.lastHitAt >= 0 && state.tick - player.lastHitAt < 240;
-    state.events.push({
-      t: 'died',
-      seat: player.seat,
-      x: clamp(player.x, 0, ARENA_WIDTH),
-      y: player.y,
-      by: recentlyHit ? player.lastHitBy : null,
-    });
-
-    if (player.stocks > 0) player.respawnTimer = RESPAWN_TICKS;
+    killPlayer(state, player);
   }
 }
 

@@ -1,5 +1,5 @@
 import { useMemo, type CSSProperties, type JSX } from 'react';
-import { colorFor, type RoomView } from '@mg/shared';
+import { colorFor, type GameId, type RoomView } from '@mg/shared';
 import { useStore } from '../store';
 import { useT } from '../strings';
 import { socket } from '../net/socket';
@@ -55,10 +55,13 @@ export function Paused({ room, spectating }: { room: RoomView; spectating: boole
   );
 }
 
+const CARDLESS_GAMES = new Set<GameId>(['gunmayhem', 'tanks', 'achtung', 'gravity']);
+
 /**
  * Easily accessible Mute/Unmute button for HUD overlays and match screens.
  */
-export function MuteButton({ inline = true }: { inline?: boolean }): JSX.Element | null {
+export function MuteButton({ inline = false }: { inline?: boolean }): JSX.Element | null {
+  const room = useStore((s) => s.room);
   const muted = useStore((s) => s.muted);
   const musicMuted = useStore((s) => s.musicMuted);
   const setMuted = useStore((s) => s.setMuted);
@@ -76,7 +79,23 @@ export function MuteButton({ inline = true }: { inline?: boolean }): JSX.Element
     if (!nextMuted) sfx.click();
   };
 
-  if (!inline) return null;
+  if (!inline) {
+    const inMatch = room !== null && room.phase !== 'lobby';
+    const isCardlessGame = room ? CARDLESS_GAMES.has(room.gameId) : false;
+    if (!inMatch || !isCardlessGame) return null;
+
+    return (
+      <button
+        type="button"
+        className="mutebtn"
+        onClick={toggleMute}
+        aria-label={isAllMuted ? t.unmuteAudio : t.muteAudio}
+        title={isAllMuted ? t.unmuteAudio : t.muteAudio}
+      >
+        {isAllMuted ? '🔇' : '🔊'}
+      </button>
+    );
+  }
 
   return (
     <Button

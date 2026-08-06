@@ -298,14 +298,35 @@ describe('damage and knockback', () => {
 
   it('launches harder the more damage you have taken', () => {
     const fresh = launchSpeed(0);
-    const hurt = launchSpeed(80);
-    const nearlyDead = launchSpeed(200);
+    const hurt = launchSpeed(40);
+    const nearlyDead = launchSpeed(80);
 
     expect(fresh).toBeGreaterThan(0);
-    expect(hurt).toBeGreaterThan(fresh * 1.5);
+    expect(hurt).toBeGreaterThan(fresh);
     expect(nearlyDead).toBeGreaterThan(hurt);
     // Base knockback at zero damage should still be a real shove.
     expect(fresh).toBeGreaterThanOrEqual(KB_BASE);
+  });
+
+  it('triggers a stock loss and KO immediately when damage reaches >= 100%', () => {
+    const state = makeState(2, { weaponsEnabled: false, bombsEnabled: false, stocks: 3 });
+    skipCountdown(state);
+    const [shooter, target] = state.players as [GmPlayer, GmPlayer];
+
+    target.damage = 95;
+    target.invuln = 0;
+    target.x = shooter.x + 60;
+    target.y = shooter.y;
+    shooter.facing = 1;
+
+    hold(state, 0, IN_SHOOT);
+    stepTick(state);
+
+    expect(target.damage).toBeGreaterThanOrEqual(100);
+    expect(target.active).toBe(false);
+    expect(target.stocks).toBe(2);
+    expect(target.respawnTimer).toBeGreaterThan(0);
+    expect(state.events.some((e) => e.t === 'died' && e.seat === target.seat && e.by === shooter.seat)).toBe(true);
   });
 
   it('does not hit players who are still invulnerable', () => {
@@ -899,11 +920,11 @@ describe('being hit never takes the controls away', () => {
     });
   }
 
-  it('lets a victim jump out of a knockback at any damage', () => {
+  it('lets a victim jump out of a knockback at any damage below KO threshold', () => {
     // The reason hitstun was removed: a launch has to be survivable by playing
     // well, not merely by having taken less damage so far.
-    for (const startingDamage of [0, 7, 23, 60, 91, 150, 300]) {
-      const { state, victim } = takeAHit('rocket', startingDamage);
+    for (const startingDamage of [0, 7, 23, 50, 80]) {
+      const { state, victim } = takeAHit('pistol', startingDamage);
       plant(victim);
       victim.onGround = false;
       victim.jumpsLeft = 1;

@@ -2,11 +2,9 @@ import { useEffect, useRef, useState, type CSSProperties, type JSX } from 'react
 import { TICK_RATE, type RoomView } from '@mg/shared';
 import { useStore } from '../../store';
 import { useT } from '../../strings';
-import { Button } from '../../ui/Button';
 import { MatchOver, Paused } from '../../ui/MatchOverlays';
 import { FullscreenButton } from '../../ui/FullscreenButton';
 import { Composer } from './Composer';
-import { sendSkipMeme } from './input';
 import { MemeCard } from './MemeCard';
 import { preloadMemes } from './preload';
 import { ResultCard } from './ResultCard';
@@ -78,23 +76,9 @@ export function MemesScreen({ room, mySeat }: Props): JSX.Element {
 
   let body: JSX.Element;
   if (phase === 'writing') {
-    const skipsLeft = mine?.skipsRemaining ?? 2;
-    const canSkip = mySeat >= 0 && mine?.templateId && !mine.submitted;
     body = mySeat >= 0 && mine?.templateId
       ? (
         <>
-          {canSkip && (
-            <div className="memes__skip-bar">
-              <Button
-                variant="plain"
-                size="md"
-                disabled={skipsLeft <= 0}
-                onClick={sendSkipMeme}
-              >
-                {t.memesSkip ? t.memesSkip(skipsLeft) : `Skip Meme (${skipsLeft} left)`}
-              </Button>
-            </div>
-          )}
           <Composer view={mine} />
           <WritingRoster room={room} />
         </>

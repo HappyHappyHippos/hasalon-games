@@ -10,7 +10,7 @@ import {
 import { useStore } from '../../store';
 import { useT } from '../../strings';
 import { Button } from '../../ui/Button';
-import { createDraftSender, sendSubmit, type DraftSender } from './input';
+import { createDraftSender, sendSkipMeme, sendSubmit, type DraftSender } from './input';
 import { MemeCard } from './MemeCard';
 
 export function Composer({ view }: { view: MemesPrivate }): JSX.Element {
@@ -135,6 +135,14 @@ export function Composer({ view }: { view: MemesPrivate }): JSX.Element {
         })}
         {!view.submitted && (
           <div className="memes__field-actions">
+            <Button
+              variant="plain"
+              disabled={view.skipsRemaining <= 0}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={sendSkipMeme}
+            >
+              {t.memesSkip(view.skipsRemaining)}
+            </Button>
             {texts.length < MAX_CAPTION_BOXES && (
               <Button full onClick={addBox}>{t.memesAddCaption}</Button>
             )}

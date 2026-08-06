@@ -111,7 +111,7 @@ export function Chat({ room, canGuess, reason }: Props): JSX.Element {
           type="submit"
           variant="primary"
           size="sm"
-          className="skribbl__submit"
+          className="skribbl__send"
           disabled={!canGuess || !draft.trim()}
         >
           {t.skribblSubmit}

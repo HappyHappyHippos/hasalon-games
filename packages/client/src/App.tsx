@@ -12,6 +12,7 @@ import { InstallPrompt } from './ui/InstallPrompt';
 import { OptionsMenu } from './ui/OptionsMenu';
 import { FullscreenButton } from './ui/FullscreenButton';
 import { PauseButton } from './ui/PauseButton';
+import { MuteButton } from './ui/MatchOverlays';
 import { Toast } from './ui/Toast';
 import { useVoiceMesh } from './ui/useVoice';
 import { enableKeyboardOverlay } from './ui/mobileViewport';
@@ -84,6 +85,7 @@ export function App(): JSX.Element {
       <OptionsMenu />
       <FullscreenButton />
       <PauseButton />
+      <MuteButton />
       <InstallPrompt />
 
       {!room ? <HomeScreen /> : room.phase === 'lobby' ? <LobbyScreen /> : renderGameScreen(room, mySeat)}

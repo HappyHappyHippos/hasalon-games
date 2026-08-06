@@ -34,12 +34,12 @@ export const GAME_LIST: GameMeta[] = GAME_IDS.map((id) => GAMES[id].meta);
 
 /** Polish and canonical game names across the registry. */
 export const GAME_NAMES: Record<GameId, string> = {
-  gunmayhem: 'Gun Mayhem',
-  tanks: 'Tank Trouble',
-  achtung: 'Achtung die Kurve',
-  gravity: 'Gravity Guy',
-  skribbl: 'Skribbl',
-  memes: 'Meme Machine',
+  gunmayhem: 'אנדרלמוסקטרים',
+  tanks: 'אוי טנק!',
+  achtung: 'קרב הקו',
+  gravity: 'הפוך על הפוך',
+  skribbl: 'שרבוטיאדה',
+  memes: 'אלוף הממים',
 };
 
 export function getGameName(id: GameId): string {
