@@ -21,7 +21,7 @@ import type { GameSeat } from '../../gameModule';
 import {
   ACCEL_DIST,
   ACCEL_GAIN,
-  BASE_SPEED,
+  START_SPEED,
   BUMP_ITERATIONS,
   BUMP_MAX_PUSH,
   CATCHUP_MAX_MUL,
@@ -155,7 +155,7 @@ export function resetInput(state: GravityState, playerId: string): void {
 export function speedAt(distance: number, pace: GravityConfig['pace']): number {
   const ramp = Math.min(1, distance / RAMP_DIST);
   const extra = Math.max(0, distance - RAMP_DIST) / ACCEL_DIST;
-  return (BASE_SPEED + SPEED_GAIN * ramp + ACCEL_GAIN * extra) * PACE_MUL[pace];
+  return (START_SPEED + SPEED_GAIN * ramp + ACCEL_GAIN * extra) * PACE_MUL[pace];
 }
 
 /**

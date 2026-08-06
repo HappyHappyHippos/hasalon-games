@@ -76,7 +76,7 @@ export const OP_TO = 1;
 /** `OP_CLEAR` — wipe everything drawn so far. */
 export const OP_CLEAR = 2;
 
-/** `OP_FILL, colour` — cover the whole sheet with one palette colour. */
+/** `OP_FILL, colorIndex, x, y` — flood fill bounded region starting from (x, y). */
 export const OP_FILL = 3;
 
 // ---------------------------------------------------------------------------

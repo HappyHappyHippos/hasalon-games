@@ -284,7 +284,7 @@ type DrawMessage =
   | { k: 'to'; p: number[] }
   | { k: 'clear' }
   | { k: 'undo' }
-  | { k: 'fill'; c: number }
+  | { k: 'fill'; c: number; x?: number; y?: number }
   | { k: 'pick'; w: string }
   | { k: 'guess'; g: string };
 
@@ -365,9 +365,11 @@ function draw(state: SkribblState, player: SkribblPlayer, message: DrawMessage):
       const color = Number.isFinite(requested)
         ? Math.max(0, Math.min(INK_COLORS.length - 1, Math.round(requested)))
         : 0;
+      const x = clampX(typeof message.x === 'number' && Number.isFinite(message.x) ? message.x : CANVAS_WIDTH / 2);
+      const y = clampY(typeof message.y === 'number' && Number.isFinite(message.y) ? message.y : CANVAS_HEIGHT / 2);
       state.strokeStarts.push(state.strokes.length);
-      state.strokes.push(OP_FILL, color);
-      state.inkPending.push(OP_FILL, color);
+      state.strokes.push(OP_FILL, color, x, y);
+      state.inkPending.push(OP_FILL, color, x, y);
       return;
     }
     case 'undo': {

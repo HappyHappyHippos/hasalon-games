@@ -314,34 +314,37 @@ strong,
 }
 
 .stage-carousel__btn {
-  background: var(--surface, #2a2438);
-  color: var(--text, #fff);
-  border: 2px solid var(--border, #443c53);
-  box-shadow: 0 3px 0 #000;
+  background: var(--surface, #fffdf7);
+  color: var(--ink, #14110f);
+  border: var(--outline, 3px solid #14110f);
+  box-shadow: var(--shadow-sm, 3px 3px 0 #14110f);
   border-radius: 50%;
-  width: 42px;
-  height: 42px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   flex-shrink: 0;
-  transition: transform 0.1s ease, background 0.15s ease;
+  opacity: 1;
+  touch-action: manipulation;
+  transition: transform 60ms ease, box-shadow 60ms ease, background 0.15s ease;
 }
 
 .stage-carousel__btn:hover:not(:disabled) {
-  background: var(--surface-hover, #3b334c);
+  background: var(--paper-2, #f4e8d2);
   transform: translateY(-2px);
 }
 
 .stage-carousel__btn:active:not(:disabled) {
-  transform: translateY(1px);
-  box-shadow: 0 1px 0 #000;
+  transform: translate(2px, 2px);
+  box-shadow: 1px 1px 0 var(--ink, #14110f);
 }
 
 .stage-carousel__btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+  transform: none;
 }
 
 .stage-carousel__card {
@@ -1379,20 +1382,42 @@ strong,
   transform: translateY(1px);
 }
 
+.mutebtn {
+  position: fixed;
+  z-index: 15;
+  top: calc(6px + env(safe-area-inset-top));
+  inset-inline-end: calc(120px + env(safe-area-inset-right));
+  width: 42px;
+  height: 42px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: rgba(253, 246, 232, 0.9);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  touch-action: manipulation;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.mutebtn:active {
+  transform: translateY(1px);
+}
+
 /* Only rendered on a touch device — a desktop browser already has F11.
  *
  * Fixed, and deliberately not inside `.rail`: on a phone the rail is an overlay
  * with `pointer-events: none` so it cannot swallow taps meant for the arena,
  * which also made this button unpressable on exactly the devices it exists for.
- * It sits one slot inboard of the pause button, which sits inboard of the
- * options gear — all three share this corner. */
+ * It sits inboard of mute, pause, and options buttons — all four share this corner. */
 .fullscreenbtn__wrap {
   position: fixed;
   z-index: 15;
-  /* Top corner. Never the bottom: that is where the shooting thumb lives, and
-     both weapon buttons are there. */
   top: calc(6px + env(safe-area-inset-top));
-  inset-inline-end: calc(110px + env(safe-area-inset-right));
+  inset-inline-end: calc(176px + env(safe-area-inset-right));
   display: flex;
   flex-direction: row-reverse;
   align-items: flex-start;
@@ -2151,7 +2176,7 @@ strong,
 }
 
 @media (max-width: 760px), (max-height: 560px) {
-  /* Keep a full 44px target on small screens for all three buttons. */
+  /* Keep a full 44px target on small screens for all four buttons. */
   .app--playing .options {
     width: 44px;
     height: 44px;
@@ -2162,8 +2187,14 @@ strong,
     width: 44px;
     height: 44px;
   }
+  .mutebtn {
+    inset-inline-end: calc(108px + env(safe-area-inset-right));
+    width: 44px;
+    height: 44px;
+    font-size: 19px;
+  }
   .fullscreenbtn__wrap {
-    inset-inline-end: calc(104px + env(safe-area-inset-right));
+    inset-inline-end: calc(158px + env(safe-area-inset-right));
   }
   .fullscreenbtn {
     width: 44px;
@@ -3054,10 +3085,19 @@ strong,
 .skribbl__guessbar {
   border-top: 2.5px solid var(--ink);
   padding: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 .skribbl__guess {
+  flex: 1;
+  min-width: 0;
   width: 100%;
   font-size: 16px;
+}
+.skribbl__submit {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 .skribbl__guess:disabled {
   opacity: 0.6;
@@ -3144,6 +3184,10 @@ strong,
 .skribbl__act--danger {
   background: var(--red);
   color: var(--paper);
+}
+.skribbl__act--on {
+  background: var(--yellow);
+  box-shadow: inset 0 0 0 2px var(--ink);
 }
 .skribbl__act--fill::before {
   content: '';

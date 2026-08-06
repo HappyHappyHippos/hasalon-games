@@ -5,6 +5,8 @@ import { socket } from '../../net/socket';
 import { useStore } from '../../store';
 import { useT } from '../../strings';
 
+import { Button } from '../../ui/Button';
+
 interface Props {
   room: RoomView;
   /** False for the drawer and for anyone who already got it — see below. */
@@ -105,6 +107,15 @@ export function Chat({ room, canGuess, reason }: Props): JSX.Element {
           enterKeyHint="send"
           aria-label={t.skribblGuessPlaceholder}
         />
+        <Button
+          type="submit"
+          variant="primary"
+          size="sm"
+          className="skribbl__submit"
+          disabled={!canGuess || !draft.trim()}
+        >
+          {t.skribblSubmit}
+        </Button>
       </form>
     </section>
   );

@@ -58,6 +58,7 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
 
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [size, setSize] = useState(DEFAULT_SIZE);
+  const [mode, setMode] = useState<'pen' | 'fill'>('pen');
 
   // Mirrored off the socket rather than polled off the snapshot feed — see the
   // note on `SkribblHud`. Updated whether or not anything is being painted.
@@ -114,7 +115,8 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
     input.enabled = isDrawer && phase === 'drawing';
     input.tool.color = color;
     input.tool.size = size;
-  }, [isDrawer, phase, color, size]);
+    input.tool.mode = mode;
+  }, [isDrawer, phase, color, size, mode]);
 
   // A fresh sheet whenever the drawer changes hands — and drop any ink still
   // queued from the round that just ended, so it can't land on the wrong
@@ -122,6 +124,7 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
   useEffect(() => {
     inkRef.current?.clear();
     resetInk();
+    setMode('pen');
   }, [drawerSeat]);
 
   const me = useStore((s) => s.hud.players.find((p) => p.seat === mySeat));
@@ -211,7 +214,14 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
           </div>
 
           {isDrawer && phase === 'drawing' ? (
-            <Toolbar color={color} size={size} onColor={setColor} onSize={setSize} />
+            <Toolbar
+              color={color}
+              size={size}
+              mode={mode}
+              onColor={setColor}
+              onSize={setSize}
+              onMode={setMode}
+            />
           ) : (
             <p className="skribbl__watching" style={{ color: colorFor(0) }}>
               {phase === 'drawing' ? t.skribblGuessNow : ' '}

@@ -196,7 +196,23 @@ export function OptionsMenu(): JSX.Element {
         )}
 
         <section className="options__section">
-          <h3 className="eyebrow">{t.sectionSound}</h3>
+          <div className="options__section-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+            <h3 className="eyebrow" style={{ margin: 0 }}>{t.sectionSound}</h3>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                const nextMuted = !(muted && musicMuted);
+                sfx.setMuted(nextMuted);
+                music.setMuted(nextMuted);
+                setMuted(nextMuted);
+                setMusicMuted(nextMuted);
+                if (!nextMuted) sfx.click();
+              }}
+            >
+              {muted && musicMuted ? `🔊 ${t.unmuteAudio}` : `🔇 ${t.muteAudio}`}
+            </Button>
+          </div>
           <Toggle
             label={t.soundEffects}
             checked={!muted}
@@ -302,7 +318,7 @@ export function OptionsMenu(): JSX.Element {
 
         {meta && room && (
           <section className="options__section">
-            <h3 className="eyebrow">{t.controlsFor(meta.name)}</h3>
+            <h3 className="eyebrow">{t.controlsFor(t.games[room.gameId].name)}</h3>
             <p className="muted small">{t.games[room.gameId].controls}</p>
 
             <h3 className="eyebrow">{t.howToPlay}</h3>

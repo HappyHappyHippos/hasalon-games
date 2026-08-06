@@ -3,6 +3,8 @@ import { colorFor, type RoomView } from '@mg/shared';
 import { useStore } from '../store';
 import { useT } from '../strings';
 import { socket } from '../net/socket';
+import { sfx } from '../audio';
+import { music } from '../music';
 import { Button } from './Button';
 import { Avatar } from './Avatar';
 
@@ -45,10 +47,64 @@ export function Paused({ room, spectating }: { room: RoomView; spectating: boole
             <Button variant="primary" size="lg" full onClick={() => socket.setPaused(false)}>
               {t.resume}
             </Button>
+            <MuteButton inline />
           </div>
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Easily accessible Mute/Unmute button for HUD overlays and match screens.
+ */
+export function MuteButton({ inline = false }: { inline?: boolean }): JSX.Element | null {
+  const room = useStore((s) => s.room);
+  const muted = useStore((s) => s.muted);
+  const musicMuted = useStore((s) => s.musicMuted);
+  const setMuted = useStore((s) => s.setMuted);
+  const setMusicMuted = useStore((s) => s.setMusicMuted);
+  const t = useT();
+
+  const isAllMuted = muted && musicMuted;
+
+  const toggleMute = (): void => {
+    const nextMuted = !isAllMuted;
+    sfx.setMuted(nextMuted);
+    music.setMuted(nextMuted);
+    setMuted(nextMuted);
+    setMusicMuted(nextMuted);
+    if (!nextMuted) sfx.click();
+  };
+
+  if (inline) {
+    return (
+      <Button
+        variant="ghost"
+        size="md"
+        full
+        onClick={toggleMute}
+        aria-label={isAllMuted ? t.unmuteAudio : t.muteAudio}
+        title={isAllMuted ? t.unmuteAudio : t.muteAudio}
+      >
+        {isAllMuted ? `🔊 ${t.unmuteAudio}` : `🔇 ${t.muteAudio}`}
+      </Button>
+    );
+  }
+
+  const inMatch = room !== null && room.phase !== 'lobby';
+  if (!inMatch) return null;
+
+  return (
+    <button
+      type="button"
+      className="mutebtn"
+      aria-label={isAllMuted ? t.unmuteAudio : t.muteAudio}
+      title={isAllMuted ? t.unmuteAudio : t.muteAudio}
+      onClick={toggleMute}
+    >
+      {isAllMuted ? '🔇' : '🔊'}
+    </button>
   );
 }
 

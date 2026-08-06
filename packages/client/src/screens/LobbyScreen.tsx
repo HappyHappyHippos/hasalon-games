@@ -159,22 +159,25 @@ export function LobbyScreen(): JSX.Element {
             <h2 className="eyebrow">{t.voiceHeading}</h2>
             <VoiceBar />
 
-            <div className="sticker lobby__ready">
-              <Button
-                variant={me?.ready ? 'plain' : 'primary'}
-                size="lg"
-                full
-                tone={me?.ready ? undefined : colorFor(identity.colorIndex)}
-                onClick={() => socket.setReady(!me?.ready)}
-              >
-                {me?.ready ? t.notReady : t.ready}
-              </Button>
-              {!canStart && (
-                <p className="muted small center" style={{ marginTop: '0.5rem' }}>
-                  {t.readyCount(readyPlayers.length, game.meta.minPlayers, game.meta.name)}
-                </p>
-              )}
-            </div>
+            {!isHost && (
+              <div className="sticker lobby__ready">
+                <Button
+                  variant={me?.ready ? 'plain' : 'primary'}
+                  size="lg"
+                  full
+                  tone={me?.ready ? undefined : colorFor(identity.colorIndex)}
+                  disabled={!me?.connected}
+                  onClick={() => socket.setReady(!me?.ready)}
+                >
+                  {me?.ready ? t.notReady : t.ready}
+                </Button>
+                {!canStart && (
+                  <p className="muted small center" style={{ marginTop: '0.5rem' }}>
+                    {t.readyCount(readyPlayers.length, game.meta.minPlayers, t.games[game.meta.id].name)}
+                  </p>
+                )}
+              </div>
+            )}
           </section>
 
           <section className="lobby__choice">
@@ -185,7 +188,7 @@ export function LobbyScreen(): JSX.Element {
             />
 
             <div className="sticker lobby__settings">
-              <h2 className="eyebrow">{t.gameSettings(game.meta.name)}</h2>
+              <h2 className="eyebrow">{t.gameSettings(t.games[game.meta.id].name)}</h2>
               <SettingsPanel
                 settings={room.settings}
                 isHost={isHost}
@@ -197,7 +200,7 @@ export function LobbyScreen(): JSX.Element {
         </div>
 
         <footer className="sticker lobby__foot">
-          {isHost && (
+          {isHost ? (
             <Button
               variant="primary"
               size="lg"
@@ -205,7 +208,17 @@ export function LobbyScreen(): JSX.Element {
               onClick={() => socket.start()}
               title={canStart ? undefined : t.needReady(game.meta.minPlayers)}
             >
-              {t.startGame(game.meta.name)}
+              {t.startGame(t.games[game.meta.id].name)}
+            </Button>
+          ) : (
+            <Button
+              variant={me?.ready ? 'plain' : 'primary'}
+              size="lg"
+              tone={me?.ready ? undefined : colorFor(identity.colorIndex)}
+              disabled={!me?.connected}
+              onClick={() => socket.setReady(!me?.ready)}
+            >
+              {me?.ready ? t.notReady : t.ready}
             </Button>
           )}
 
@@ -217,7 +230,7 @@ export function LobbyScreen(): JSX.Element {
         {overflow > 0 && (
           <div className="lobby__notes">
             <p className="muted small center">
-              {t.overflow(game.meta.name, game.meta.maxPlayers, overflow)}
+              {t.overflow(t.games[game.meta.id].name, game.meta.maxPlayers, overflow)}
             </p>
           </div>
         )}

@@ -63,37 +63,37 @@ export const BRAID_FRACTION = 0.3;
  */
 export const WALL_SEPARATE_PASSES = 4;
 
-export const MAX_SPEED = 190;
-export const REVERSE_SPEED = 120;
+export const MAX_SPEED = 135;
+export const REVERSE_SPEED = 85;
 /** ~120 ms to full speed: weighty, but not laggy. */
-export const ACCEL = 1600;
-export const DECEL = 2200;
+export const ACCEL = 1200;
+export const DECEL = 1600;
 /** Radians per second. */
-export const TURN_RATE = 3.2;
+export const TURN_RATE = 2.2;
 
 // ---------------------------------------------------------------------------
 // Shells
 // ---------------------------------------------------------------------------
 
 /**
- * Slowed from 520, then from 400 — still too fast to read at 520, and 400 was
- * "reads, but still flashes by" per playtest. `ARM_TICKS` and `BULLET_LIFE`
- * were re-checked against this value:
+ * Slowed to 185 (~38% reduction) for readable and tactical gunplay. `ARM_TICKS`
+ * and `BULLET_LIFE` were re-checked against this value:
  *
- * - `ARM_TICKS` (8) covers `BULLET_SPEED * ARM_TICKS * DT` ≈ 40 units before a
+ * - `ARM_TICKS` (8) covers `BULLET_SPEED * ARM_TICKS * DT` ≈ 25 units before a
  *   shell can hurt its owner, plus the `MUZZLE` offset (28) it was born at —
- *   68 units clear of the tank centre by the time it arms, well outside
+ *   53 units clear of the tank centre by the time it arms, well outside
  *   `TANK_R + BULLET_R` (26). Slowing the shell only shrinks that margin, it
  *   doesn't remove it, so `ARM_TICKS` didn't need to grow.
  * - `MAX_BOUNCES` (6) is what actually kills a shell trapped in a sealed
  *   pocket — at this speed a bounce off a `CELL`-sized loop costs roughly
- *   `CELL * TICK_RATE / BULLET_SPEED` ≈ 19 ticks, so six bounces (≈115 ticks)
+ *   `CELL * TICK_RATE / BULLET_SPEED` ≈ 31 ticks, so six bounces (≈186 ticks)
  *   land nowhere near `BULLET_LIFE` (540 ticks). Slower shells reach the
  *   bounce cap in *more* wall-clock time, not less, so the pocket guarantee
  *   only gets more comfortable as speed drops — neither constant needed to
  *   change.
  */
-export const BULLET_SPEED = 300;
+export const BULLET_SPEED = 185;
+export const SHELL_SPEED = BULLET_SPEED;
 export const BULLET_R = 6;
 export const MAX_BOUNCES = 6;
 /** A shell that has found a loop to live in still expires. */

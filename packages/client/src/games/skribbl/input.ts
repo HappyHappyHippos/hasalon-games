@@ -1,4 +1,4 @@
-import { MAX_POINTS_PER_MESSAGE, OP_BEGIN, OP_TO } from '@mg/shared/skribbl';
+import { MAX_POINTS_PER_MESSAGE, OP_BEGIN, OP_FILL, OP_TO } from '@mg/shared/skribbl';
 import { socket } from '../../net/socket';
 import type { InkSurface } from './InkSurface';
 
@@ -29,6 +29,8 @@ export interface DrawTool {
   color: number;
   /** Index into `BRUSH_SIZES`. */
   size: number;
+  /** Active tool mode: 'pen' or 'fill'. */
+  mode: 'pen' | 'fill';
 }
 
 export interface DrawInput {
@@ -41,7 +43,7 @@ export interface DrawInput {
 
 export function attachDrawInput(surface: HTMLElement, ink: InkSurface): DrawInput {
   const state: DrawInput = {
-    tool: { color: 0, size: 1 },
+    tool: { color: 0, size: 1, mode: 'pen' },
     enabled: false,
     destroy,
   };
@@ -69,13 +71,19 @@ export function attachDrawInput(surface: HTMLElement, ink: InkSurface): DrawInpu
     if (event.button !== 0) return;
     event.preventDefault();
 
-    drawing = true;
-    pointerId = event.pointerId;
-    surface.setPointerCapture?.(event.pointerId);
-
     const { x, y } = ink.toCanvas(event.clientX, event.clientY);
     lastX = Math.round(x);
     lastY = Math.round(y);
+
+    if (state.tool.mode === 'fill') {
+      ink.apply([OP_FILL, state.tool.color, lastX, lastY]);
+      socket.sendInputReliable({ k: 'fill', c: state.tool.color, x: lastX, y: lastY });
+      return;
+    }
+
+    drawing = true;
+    pointerId = event.pointerId;
+    surface.setPointerCapture?.(event.pointerId);
 
     ink.apply([OP_BEGIN, state.tool.color, state.tool.size, lastX, lastY]);
     socket.sendInput({ k: 'begin', c: state.tool.color, s: state.tool.size, x: lastX, y: lastY });

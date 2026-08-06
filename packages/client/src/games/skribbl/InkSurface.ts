@@ -97,9 +97,11 @@ export class InkSurface {
         i += 1;
       } else if (op === OP_FILL) {
         const color = INK_COLORS[ops[i + 1]!] ?? INK_COLORS[0]!;
-        this.ink.fillStyle = color;
-        this.ink.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        i += 2;
+        const hasX = i + 3 < ops.length && typeof ops[i + 2] === 'number' && typeof ops[i + 3] === 'number';
+        const x = hasX ? ops[i + 2]! : Math.floor(CANVAS_WIDTH / 2);
+        const y = hasX ? ops[i + 3]! : Math.floor(CANVAS_HEIGHT / 2);
+        this.floodFill(color, x, y);
+        i += hasX ? 4 : 2;
       } else if (op === OP_BEGIN) {
         const color = INK_COLORS[ops[i + 1]!] ?? INK_COLORS[0]!;
         const size = BRUSH_SIZES[ops[i + 2]!] ?? BRUSH_SIZES[1]!;
@@ -148,5 +150,81 @@ export class InkSurface {
     ctx.strokeStyle = 'rgba(20, 17, 15, 0.18)';
     ctx.lineWidth = 2;
     ctx.strokeRect(1, 1, CANVAS_WIDTH - 2, CANVAS_HEIGHT - 2);
+  }
+
+  /**
+   * Scanline flood fill starting at (startX, startY) with hex color.
+   */
+  private floodFill(hexColor: string, startX: number, startY: number): void {
+    const width = CANVAS_WIDTH;
+    const height = CANVAS_HEIGHT;
+
+    const x = Math.max(0, Math.min(width - 1, Math.round(startX)));
+    const y = Math.max(0, Math.min(height - 1, Math.round(startY)));
+
+    const imgData = this.ink.getImageData(0, 0, width, height);
+    const data32 = new Uint32Array(imgData.data.buffer);
+
+    const startIdx = y * width + x;
+    const targetColor32 = data32[startIdx]!;
+
+    const fillBuf = new ArrayBuffer(4);
+    const fill8 = new Uint8ClampedArray(fillBuf);
+    fill8[0] = parseInt(hexColor.slice(1, 3), 16) || 0;
+    fill8[1] = parseInt(hexColor.slice(3, 5), 16) || 0;
+    fill8[2] = parseInt(hexColor.slice(5, 7), 16) || 0;
+    fill8[3] = 255;
+    const fillColor32 = new Uint32Array(fillBuf)[0]!;
+
+    if (targetColor32 === fillColor32) return;
+
+    const stack: number[] = [x, y];
+
+    while (stack.length > 0) {
+      const cy = stack.pop()!;
+      let cx = stack.pop()!;
+
+      let idx = cy * width + cx;
+      while (cx >= 0 && data32[idx] === targetColor32) {
+        cx--;
+        idx--;
+      }
+      cx++;
+      idx++;
+
+      let spanAbove = false;
+      let spanBelow = false;
+
+      while (cx < width && data32[idx] === targetColor32) {
+        data32[idx] = fillColor32;
+
+        if (cy > 0) {
+          const aboveIdx = idx - width;
+          const matchAbove = data32[aboveIdx] === targetColor32;
+          if (!spanAbove && matchAbove) {
+            stack.push(cx, cy - 1);
+            spanAbove = true;
+          } else if (spanAbove && !matchAbove) {
+            spanAbove = false;
+          }
+        }
+
+        if (cy < height - 1) {
+          const belowIdx = idx + width;
+          const matchBelow = data32[belowIdx] === targetColor32;
+          if (!spanBelow && matchBelow) {
+            stack.push(cx, cy + 1);
+            spanBelow = true;
+          } else if (spanBelow && !matchBelow) {
+            spanBelow = false;
+          }
+        }
+
+        cx++;
+        idx++;
+      }
+    }
+
+    this.ink.putImageData(imgData, 0, 0);
   }
 }

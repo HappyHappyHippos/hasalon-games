@@ -429,7 +429,7 @@ describe('ink', () => {
     applyInput(state, drawer.id, { k: 'begin', c: 0, s: 1, x: 1, y: 1 });
     makeSnapshot(state, 0);
     applyInput(state, drawer.id, { k: 'fill', c: 4 });
-    expect(makeSnapshot(state, 1).ink).toEqual([OP_FILL, 4]);
+    expect(makeSnapshot(state, 1).ink).toEqual([OP_FILL, 4, 600, 450]);
 
     applyInput(state, drawer.id, { k: 'undo' });
     const replay = makeSnapshot(state, 2).ink;

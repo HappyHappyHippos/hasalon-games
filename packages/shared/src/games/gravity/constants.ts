@@ -47,7 +47,8 @@ export const SURFACE_EPS = 0.01;
 export const GRAVITY = 4000;
 export const TERMINAL_VY = 500;
 
-export const BASE_SPEED = 300;
+export const BASE_SPEED = 380;
+export const START_SPEED = BASE_SPEED;
 /** Added on top of `BASE_SPEED` once the ramp is complete. */
 export const SPEED_GAIN = 260;
 /** Distance over which the speed ramps from base to base + gain. */

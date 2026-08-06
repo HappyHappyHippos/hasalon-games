@@ -76,6 +76,7 @@ export function StageCarousel({ value, disabled, onChange }: Props): JSX.Element
             strokeWidth="3.5"
             strokeLinecap="round"
             strokeLinejoin="round"
+            aria-hidden="true"
           >
             <polyline points="15 18 9 12 15 6" />
           </svg>
@@ -120,6 +121,7 @@ export function StageCarousel({ value, disabled, onChange }: Props): JSX.Element
             strokeWidth="3.5"
             strokeLinecap="round"
             strokeLinejoin="round"
+            aria-hidden="true"
           >
             <polyline points="9 18 15 12 9 6" />
           </svg>

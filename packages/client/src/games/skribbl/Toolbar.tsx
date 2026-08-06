@@ -7,8 +7,10 @@ import { useT } from '../../strings';
 interface Props {
   color: number;
   size: number;
+  mode: 'pen' | 'fill';
   onColor: (index: number) => void;
   onSize: (index: number) => void;
+  onMode: (mode: 'pen' | 'fill') => void;
 }
 
 /**
@@ -18,7 +20,7 @@ interface Props {
  * one fewer piece of state to hold and to get out of step, and it behaves
  * exactly the way people expect a whiteboard pen to.
  */
-export function Toolbar({ color, size, onColor, onSize }: Props): JSX.Element {
+export function Toolbar({ color, size, mode, onColor, onSize, onMode }: Props): JSX.Element {
   const t = useT();
 
   return (
@@ -36,6 +38,7 @@ export function Toolbar({ color, size, onColor, onSize }: Props): JSX.Element {
             onClick={() => {
               sfx.click();
               onColor(index);
+              onMode('pen');
             }}
           />
         ))}
@@ -53,6 +56,7 @@ export function Toolbar({ color, size, onColor, onSize }: Props): JSX.Element {
             onClick={() => {
               sfx.click();
               onSize(index);
+              onMode('pen');
             }}
           >
             {/* Scaled down from canvas units so the dot reads as the real nib. */}
@@ -67,11 +71,11 @@ export function Toolbar({ color, size, onColor, onSize }: Props): JSX.Element {
       <div className="skribbl__acts">
         <button
           type="button"
-          className="skribbl__act skribbl__act--fill"
+          className={`skribbl__act skribbl__act--fill${mode === 'fill' ? ' skribbl__act--on' : ''}`}
           style={{ '--fill-color': INK_COLORS[color] } as CSSProperties}
           onClick={() => {
             sfx.click();
-            socket.sendInputReliable({ k: 'fill', c: color });
+            onMode(mode === 'fill' ? 'pen' : 'fill');
           }}
         >
           {t.skribblFill}

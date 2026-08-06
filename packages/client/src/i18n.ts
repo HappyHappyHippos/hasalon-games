@@ -164,6 +164,8 @@ const he = {
   soundEffects: 'אפקטים',
   musicLabel: 'מוזיקה',
   musicVolume: 'עוצמת המוזיקה',
+  muteAudio: 'השתקת שמע',
+  unmuteAudio: 'ביטול השתקת שמע',
   sectionControls: 'שליטה',
   onScreenControls: 'כפתורים על המסך',
   touchAuto: 'אוטומטי',
@@ -198,6 +200,7 @@ const he = {
   // Game names stay as they are — they are proper nouns in both languages.
   games: {
     achtung: {
+      name: 'אכטונג די קורבה',
       tagline: 'להחזיר את החוש האומנותי מכיתה ג',
       controls: 'חצים ימינה ושמאלה, או A ו-D',
       rules: [
@@ -209,6 +212,7 @@ const he = {
       ],
     },
     gunmayhem: {
+      name: 'גאן מייהם',
       tagline: 'מלא יריות ומלא צחוקים',
       controls: 'חצים או WASD לתזוזה · למעלה לקפיצה · למטה לצניחה · J ירי · K פצצה',
       rules: [
@@ -222,6 +226,7 @@ const he = {
       ],
     },
     skribbl: {
+      name: 'סקריבל',
       tagline: 'תקשקשו על המסך בזמן שמקשקשים עם החברים',
       controls: 'ציירו עם העכבר או האצבע · הקלידו ניחוש בצ׳אט',
       rules: [
@@ -233,6 +238,7 @@ const he = {
       ],
     },
     memes: {
+      name: 'מכונת הממים',
       tagline: 'כותבים יחד, צוחקים אחד על השני',
       controls: 'כתבו כיתוב · הצביעו 👍 😐 👎',
       rules: [
@@ -244,6 +250,7 @@ const he = {
       ],
     },
     tanks: {
+      name: 'טנק טראבל',
       tagline: 'לירות מעבר לפינה, בדרך כלל על עצמכם',
       controls: 'חצים או WASD לנהיגה · M או רווח לירי',
       rules: [
@@ -257,6 +264,7 @@ const he = {
       ],
     },
     gravity: {
+      name: 'גראביטי גאי',
       tagline: 'כפתור אחד. לרוץ זה חובה, ליפול זה בחירה',
       controls: 'רווח, חץ למעלה, או נגיעה במסך כדי להפוך כיוון',
       rules: [
@@ -268,7 +276,7 @@ const he = {
         'הראשון שמגיע למספר הסיבובים שנקבע מנצח במשחק.',
       ],
     },
-  } satisfies Record<GameId, { tagline: string; controls: string; rules: string[] }>,
+  } satisfies Record<GameId, { name: string; tagline: string; controls: string; rules: string[] }>,
 
   // -------------------------------------------------------------------------
   // Settings panels
@@ -341,6 +349,7 @@ const he = {
   skribblUndo: 'בטלו',
   skribblClear: 'נקו הכל',
   skribblFill: 'מילוי',
+  skribblSubmit: 'שלח',
   // Settings
   skribblWordLanguage: 'שפת המילים',
   skribblDrawTime: 'זמן ציור',
@@ -541,6 +550,8 @@ const en: Dict = {
   soundEffects: 'Sound effects',
   musicLabel: 'Music',
   musicVolume: 'Music volume',
+  muteAudio: 'Mute sound',
+  unmuteAudio: 'Unmute sound',
   sectionControls: 'Controls',
   onScreenControls: 'On-screen controls',
   touchAuto: 'Auto',
@@ -571,6 +582,7 @@ const en: Dict = {
 
   games: {
     achtung: {
+      name: 'Achtung die Kurve',
       tagline: "Draw a line. Don't touch anything.",
       controls: 'Left and right arrows, or A and D',
       rules: [
@@ -582,6 +594,7 @@ const en: Dict = {
       ],
     },
     gunmayhem: {
+      name: 'Gun Mayhem',
       tagline: 'Shoot your friends off the stage.',
       controls: 'Arrows or WASD to move · Up to jump · Down to drop · J shoot · K bomb',
       rules: [
@@ -595,6 +608,7 @@ const en: Dict = {
       ],
     },
     skribbl: {
+      name: 'Skribbl',
       tagline: 'One draws. Everyone else guesses.',
       controls: 'Draw with the mouse or a finger · type your guess in the chat',
       rules: [
@@ -606,6 +620,7 @@ const en: Dict = {
       ],
     },
     memes: {
+      name: 'Meme Machine',
       tagline: 'Write together. Laugh at each other.',
       controls: 'Write a caption · vote 👍 😐 👎',
       rules: [
@@ -617,6 +632,7 @@ const en: Dict = {
       ],
     },
     tanks: {
+      name: 'Tank Trouble',
       tagline: 'Shoot round corners. Mostly at yourself.',
       controls: 'Arrows or WASD to drive · M or Space to shoot',
       rules: [
@@ -630,6 +646,7 @@ const en: Dict = {
       ],
     },
     gravity: {
+      name: 'Gravity Guy',
       tagline: 'One button. Falling is optional; running is not.',
       controls: 'Space, Up, or tap anywhere to flip',
       rules: [
@@ -708,6 +725,7 @@ const en: Dict = {
   skribblUndo: 'Undo',
   skribblClear: 'Clear',
   skribblFill: 'Fill',
+  skribblSubmit: 'Send / Submit',
   // Settings
   skribblWordLanguage: 'Word language',
   skribblDrawTime: 'Drawing time',

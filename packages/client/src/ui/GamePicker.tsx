@@ -30,7 +30,7 @@ export function GamePicker({ selected, canChoose, onSelect }: Props): JSX.Elemen
             type="button"
             role="radio"
             aria-checked={isSelected}
-            disabled={!canChoose && !isSelected}
+            disabled={false}
             className={`gamecard${isSelected ? ' gamecard--on' : ''}`}
             style={
               {
@@ -39,7 +39,7 @@ export function GamePicker({ selected, canChoose, onSelect }: Props): JSX.Elemen
               } as CSSProperties
             }
             onClick={() => {
-              if (isSelected) return;
+              if (!canChoose || isSelected) return;
               sfx.click();
               onSelect(id);
             }}
@@ -48,7 +48,7 @@ export function GamePicker({ selected, canChoose, onSelect }: Props): JSX.Elemen
               <BoxArt />
             </span>
             <span className="gamecard__body">
-              <span className="gamecard__name">{game.meta.name}</span>
+              <span className="gamecard__name">{t.games[id].name}</span>
               <span className="gamecard__tagline">{t.games[id].tagline}</span>
               <span className="gamecard__players">
                 {t.playersRange(game.meta.minPlayers, game.meta.maxPlayers)}
