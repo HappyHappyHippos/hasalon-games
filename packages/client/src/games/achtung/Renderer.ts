@@ -1,4 +1,3 @@
-import { getImage } from '../../game/images';
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
@@ -13,13 +12,14 @@ import {
   type TurnDir,
 } from '@mg/shared/achtung';
 import { DT, SNAPSHOT_EVERY, TICK_MS } from '@mg/shared';
+import { clock } from '../../net/clock';
 import { feed } from '../../net/feed';
 import { isPredicting } from '../../net/playbackMode';
 import { CanvasStage } from '../../game/CanvasStage';
 import { drawHat } from '../../game/appearance';
 import { bracket, lerp, shortestAngle } from '../../game/interpolation';
-import { advanceCurve, ticksAhead } from './advance';
-import { localInput } from './input';
+import { advanceCurve, ticksAhead, type TurnSource } from './advance';
+import { localInput, turnAt } from './input';
 import { trailOps, type Point } from './trail';
 
 /**
@@ -378,8 +378,8 @@ export class AchtungRenderer {
 
       const isLocal = player.s === this.context.mySeat;
       const inverted = player.fx.includes('invert');
-      const turn = isLocal
-        ? ((inverted ? -localInput.turn : localInput.turn) as TurnDir)
+      const turn: TurnSource = isLocal
+        ? this.localTurnAt(latest.serverAt, inverted)
         : inferTurn(previousSnap, player, turnRate);
 
       const path = advanceCurve(base, turn, player.v, turnRate, ticks);
@@ -388,6 +388,28 @@ export class AchtungRenderer {
     }
 
     return { snap, heads, paths };
+  }
+
+  /**
+   * The local steering, replayed across the extrapolation window.
+   *
+   * The snapshot at `serverAt` already reflects everything the server had
+   * received by then, which is everything sent before roughly one uplink ago.
+   * So extrapolated tick `i` — which stands for server time
+   * `serverAt + i * TICK_MS` — should be steered the way the player was steering
+   * at `serverAt + i * TICK_MS - uplink`, translated onto our own clock.
+   *
+   * Half the *minimum* round trip is the uplink estimate, for the same reason
+   * `clock` uses the min sample for its offset: the floor is the real path and
+   * anything above it is queueing on one particular packet.
+   */
+  private localTurnAt(serverAt: number, inverted: boolean): TurnSource {
+    const uplink = clock.minRttMs / 2;
+    const startedAt = clock.toClientTime(serverAt, performance.now()) - uplink;
+    return (tick: number): TurnDir => {
+      const turn = turnAt(startedAt + tick * DT * 1000);
+      return (inverted ? -turn : turn) as TurnDir;
+    };
   }
 
   /**
@@ -619,18 +641,13 @@ export class AchtungRenderer {
       ctx.save();
       ctx.translate(pickup.x, pickup.y);
 
-      const img = getImage(`/powerups/powerup_${pickup.kind}.png`);
-      if (img) {
-        ctx.beginPath();
-        ctx.arc(2.5, 2.5, radius, 0, Math.PI * 2);
-        ctx.fillStyle = INK;
-        ctx.fill();
-
-        ctx.drawImage(img, -radius, -radius, radius * 2, radius * 2);
-        ctx.restore();
-        continue;
-      }
-
+      // A sticker on the floor: the scope colour as the fill, a hard ink
+      // outline, and its offset shadow solid and unblurred — the same
+      // vocabulary as every card in the lobby.
+      //
+      // No image variant. Achtung's kinds are `speedSelf`, `thickOthers`,
+      // `clearAll` and friends; `public/powerups/` holds the Tank Trouble set,
+      // so a `/powerups/powerup_<kind>.png` lookup here can only ever 404.
       ctx.beginPath();
       ctx.arc(2.5, 2.5, radius, 0, Math.PI * 2);
       ctx.fillStyle = INK;

@@ -36,6 +36,7 @@ import {
   MINE_PROXIMITY_R,
   MINI_HIT_R,
   MUZZLE,
+  PICKUP_INSET,
   PICKUP_R,
   POWERUP_EVERY,
   RAPID_COOLDOWN_MUL,
@@ -51,8 +52,14 @@ import {
   WALL_SEPARATE_PASSES,
 } from './constants';
 import { marchBullet } from './ballistics';
-import { cellCentre } from './maze';
-import { resolveTankWalls, separateTanks, stepTank, type TankBody } from './physics';
+import { arenaHeight, arenaWidth, cellCentre } from './maze';
+import {
+  insideObstacle,
+  resolveTankWalls,
+  separateTanks,
+  stepTank,
+  type TankBody,
+} from './physics';
 import {
   POWERUP_KINDS,
   buffsForSnapshot,
@@ -63,8 +70,8 @@ import {
   spendCharge,
   tickBuffs,
 } from './powerups';
-import { makeRng, mixSeed, nextInt, pick } from './rng';
-import { TANK_STAGES, TANK_STAGE_IDS } from './stages';
+import { makeRng, mixSeed, nextInt, nextRange, pick } from './rng';
+import { TANK_STAGES, getTankStage, stageMaze } from './stages';
 import {
   IN_BACK,
   IN_FIRE,
@@ -125,16 +132,8 @@ export function createState(seats: GameSeat[], config: TanksConfig, seed: number
     rng,
     matchSeed: seed >>> 0,
     arenaSeed: 0,
-    maze: {
-      cols: 13.333333333333334,
-      rows: 7.5,
-      vWalls: new Uint8Array(0),
-      hWalls: new Uint8Array(0),
-      spawns: [],
-      stageId: 'alien_planet',
-      obstacles: TANK_STAGES.alien_planet.obstacles,
-      spawnsPos: TANK_STAGES.alien_planet.spawns,
-    },
+    // Replaced by `startRound` below; a placeholder only so the state is whole.
+    maze: stageMaze(TANK_STAGES.alien_planet),
     players,
     bullets: [],
     pickups: [],
@@ -158,23 +157,7 @@ function startRound(state: TanksState): void {
   state.powerupTimer = POWERUP_EVERY;
 
   state.arenaSeed = mixSeed(state.matchSeed, state.round);
-
-  const selectedStageId =
-    state.config.stageId === 'random' || !TANK_STAGES[state.config.stageId]
-      ? TANK_STAGE_IDS[Math.abs(state.arenaSeed) % TANK_STAGE_IDS.length]!
-      : state.config.stageId;
-
-  const stage = TANK_STAGES[selectedStageId];
-  state.maze = {
-    cols: 13.333333333333334,
-    rows: 7.5,
-    vWalls: new Uint8Array(0),
-    hWalls: new Uint8Array(0),
-    spawns: [],
-    stageId: stage.id,
-    obstacles: stage.obstacles,
-    spawnsPos: stage.spawns,
-  };
+  state.maze = stageMaze(getTankStage(state.config.stageId, state.arenaSeed));
 
   for (const player of state.players) resetToSpawn(state, player);
 }
@@ -394,14 +377,16 @@ function fire(state: TanksState, player: TankPlayerState): void {
   else if (shotgun) bulletRadius = SHOTGUN_R;
 
   for (const angle of angles) {
+    // Every shell of a spread counts against the six-shell cap.
     if (liveShells(state, player.seat) >= MAX_SHELLS) break;
     const cos = Math.cos(angle);
     const sin = Math.sin(angle);
+    const muzzle = muzzlePoint(state, player, cos, sin);
     state.bullets.push({
       id: state.nextBulletId,
       owner: player.seat,
-      x: player.x + cos * MUZZLE,
-      y: player.y + sin * MUZZLE,
+      x: muzzle.x,
+      y: muzzle.y,
       vx: cos * baseSpeed,
       vy: sin * baseSpeed,
       radius: bulletRadius,
@@ -430,9 +415,50 @@ function fire(state: TanksState, player: TankPlayerState): void {
   state.events.push({ t: 'fire', seat: player.seat, heavy });
 }
 
+/**
+ * Where a shell is born, in front of the hull but never inside a wall.
+ *
+ * `resolveTankWalls` parks a hull `TANK_CLEAR` from an obstacle face, which is
+ * less than `MUZZLE` — so a tank pressed against a wall and firing into it used
+ * to spawn its shell *inside* the box. `marchObstaclesBullet` only tests the
+ * faces a shell approaches from outside, so that shell sailed straight through
+ * the wall instead of bouncing back.
+ *
+ * Falling back to the hull's centre is safe: the centre is always at least
+ * `TANK_CLEAR` clear of every box, and `ARM_TICKS` already stops a shell hurting
+ * the tank that fired it before it has travelled.
+ */
+export function muzzlePoint(
+  state: TanksState,
+  player: TankPlayerState,
+  cos: number,
+  sin: number,
+): { x: number; y: number } {
+  // Walk back down the barrel to the furthest point that is still clear,
+  // rather than collapsing straight to the hull centre. Firing while nosed into
+  // a wall is completely ordinary, and on the static stages — where the boxes
+  // trace the artwork and corridors are whatever the art drew rather than a
+  // clean `CELL` — the muzzle sits inside a box often enough that the
+  // difference is visible: a shell born at the centre appears to come out of
+  // the tank's back.
+  for (let reach = MUZZLE; reach > 0; reach -= BULLET_R) {
+    const x = player.x + cos * reach;
+    const y = player.y + sin * reach;
+    if (!insideObstacle(state.maze, x, y, BULLET_R)) return { x, y };
+  }
+  return { x: player.x, y: player.y };
+}
+
+/**
+ * Shells in flight for a seat.
+ *
+ * Mines are excluded: they are charge-limited already and live for `MINE_LIFE`,
+ * so counting them here would let three laid mines lock out half the shell
+ * budget for twenty seconds with no way to clear it.
+ */
 function liveShells(state: TanksState, seat: number): number {
   let n = 0;
-  for (const bullet of state.bullets) if (bullet.owner === seat) n += 1;
+  for (const bullet of state.bullets) if (bullet.owner === seat && !bullet.mine) n += 1;
   return n;
 }
 
@@ -449,8 +475,16 @@ function stepBullets(state: TanksState): void {
 
     if (bullet.mine) {
       if (bullet.arm <= 0) {
+        // Only an enemy sets a mine off — the same protection `ARM_TICKS` gives
+        // a shell's owner. Without it, laying a mine and not immediately driving
+        // clear of `MINE_PROXIMITY_R` was suicide, and turning to aim first cost
+        // more than the arming delay allows. The blast below still catches the
+        // owner if someone else steps on it.
         const triggerTank = state.players.find(
-          (p) => p.alive && Math.hypot(p.x - bullet.x, p.y - bullet.y) <= MINE_PROXIMITY_R,
+          (p) =>
+            p.alive &&
+            p.seat !== bullet.owner &&
+            Math.hypot(p.x - bullet.x, p.y - bullet.y) <= MINE_PROXIMITY_R,
         );
         if (triggerTank) {
           state.events.push({ t: 'bounce', x: bullet.x, y: bullet.y });
@@ -479,10 +513,10 @@ function stepBullets(state: TanksState): void {
     }
 
     if (bullet.homing) {
-      const enemies = state.players.filter((p) => p.alive && p.seat !== bullet.owner);
       let nearest: TankPlayerState | null = null;
       let minDist = Infinity;
-      for (const enemy of enemies) {
+      for (const enemy of state.players) {
+        if (!enemy.alive || enemy.seat === bullet.owner) continue;
         const d = Math.hypot(enemy.x - bullet.x, enemy.y - bullet.y);
         if (d < minDist) {
           minDist = d;
@@ -572,23 +606,40 @@ function stepPickups(state: TanksState): void {
 }
 
 /**
- * Every cell is reachable by construction, so a pickup only has to avoid
- * landing on top of another one.
+ * Somewhere a tank can actually drive to, and not on top of another pickup.
+ *
+ * The two arena kinds need different sampling. A generated maze has every cell
+ * reachable by construction, so a cell centre is always fine. A static stage has
+ * no cell lattice at all — `cols`/`rows` are the arena expressed in cells and
+ * are *fractional*, which made `nextInt(0, cols - 1)` overshoot the grid and
+ * drop pickups outside the arena — so it samples the playable rectangle and
+ * rejects anything inside an obstacle. Either way an unreachable pickup would
+ * sit there for the rest of the round holding one of the `MAX_POWERUPS` slots.
  */
 function spawnPickup(state: TanksState): void {
   const maze = state.maze;
+  const stage = !!maze.obstacles && maze.obstacles.length > 0;
   for (let attempt = 0; attempt < 12; attempt += 1) {
-    const cx = nextInt(state.rng, 0, maze.cols - 1);
-    const cy = nextInt(state.rng, 0, maze.rows - 1);
-    const centre = cellCentre(cx, cy);
-    const clash = state.pickups.some(
-      (p) => Math.hypot(p.x - centre.x, p.y - centre.y) < CELL * 0.9,
-    );
+    let x: number;
+    let y: number;
+    if (stage) {
+      x = nextRange(state.rng, PICKUP_INSET, arenaWidth(maze) - PICKUP_INSET);
+      y = nextRange(state.rng, PICKUP_INSET, arenaHeight(maze) - PICKUP_INSET);
+      if (insideObstacle(maze, x, y, PICKUP_R)) continue;
+    } else {
+      const centre = cellCentre(
+        nextInt(state.rng, 0, Math.floor(maze.cols) - 1),
+        nextInt(state.rng, 0, Math.floor(maze.rows) - 1),
+      );
+      x = centre.x;
+      y = centre.y;
+    }
+    const clash = state.pickups.some((p) => Math.hypot(p.x - x, p.y - y) < CELL * 0.9);
     if (clash) continue;
     state.pickups.push({
       id: state.nextPickupId,
-      x: centre.x,
-      y: centre.y,
+      x,
+      y,
       kind: pick(state.rng, POWERUP_KINDS),
     });
     state.nextPickupId += 1;

@@ -13,7 +13,7 @@
  * iterations a tick and cannot miss a wall however fast the shell travels.
  */
 
-import { CELL } from './constants';
+import { CELL, STAGE_H, STAGE_W } from './constants';
 import { hasHWall, hasVWall } from './maze';
 import type { Maze, TankBullet } from './types';
 
@@ -126,6 +126,20 @@ function clamp(value: number, min: number, max: number): number {
   return value < min ? min : value > max ? max : value;
 }
 
+/**
+ * The same march against a static stage, where collision is a handful of solid
+ * boxes rather than a lattice of zero-thickness segments.
+ *
+ * Each iteration takes the nearest *entry* face the shell is approaching — the
+ * arena edge or a box side — and reflects there. As with the lattice march the
+ * crossed axis is **assigned** to the face's own coordinate rather than
+ * integrated onto it, so a reflection cannot leave the shell a hair past the
+ * wall it just bounced off.
+ *
+ * Only entry faces are tested, which means a shell that somehow starts *inside*
+ * a box flies out of it rather than being trapped. `sim.ts:fire` is what keeps
+ * that from happening in the first place, by never birthing a shell in geometry.
+ */
 function marchObstaclesBullet(
   maze: Maze,
   bullet: TankBullet,
@@ -136,9 +150,9 @@ function marchObstaclesBullet(
   let guard = 64;
 
   const minX = 0;
-  const maxX = 1280;
+  const maxX = STAGE_W;
   const minY = 0;
-  const maxY = 720;
+  const maxY = STAGE_H;
 
   while (remaining > 1e-9 && guard > 0) {
     guard -= 1;

@@ -146,3 +146,58 @@ describe('one clock for everyone', () => {
     expect(gap).toBeGreaterThan(4);
   });
 });
+
+describe('steering across the window', () => {
+  /**
+   * The Android bug this shape of `advanceCurve` exists to fix.
+   *
+   * A player turning right for a while presses left. The base snapshot is still
+   * rotating right — the server has not seen the press yet — and the old code
+   * pasted the *new* turn flat across the whole extrapolation window. That gave
+   * the head a one-off angular kick to the left and left its derivative bending
+   * right for a full round trip, which reads as the curve briefly going the
+   * wrong way.
+   *
+   * The check is on the swept angle rather than on position: once the player has
+   * asked for left, no drawn tick may sweep further right than the one before
+   * it.
+   */
+  function sweepPerTick(turn: TurnDir | ((tick: number) => TurnDir), ticks: number): number[] {
+    const path = advanceCurve({ x: 0, y: 0, angle: 0 }, turn, SPEED, TURN_RATE, ticks);
+    const deltas: number[] = [];
+    for (let i = 1; i < path.length; i += 1) deltas.push(path[i]!.angle - path[i - 1]!.angle);
+    return deltas;
+  }
+
+  it('never bends against a press that has already happened', () => {
+    // Right for the first three ticks of the window, left from then on — the
+    // press landed three ticks after the snapshot was authored.
+    const pressedAtTick = 3;
+    const deltas = sweepPerTick((tick) => (tick < pressedAtTick ? 1 : -1), 10);
+
+    expect(deltas.slice(0, pressedAtTick).every((d) => d > 0)).toBe(true);
+    expect(deltas.slice(pressedAtTick).every((d) => d < 0)).toBe(true);
+  });
+
+  it('is what a constant turn could not express', () => {
+    // The old behaviour, for contrast: one turn for the whole window means the
+    // pre-press ticks are drawn bending the way the player is no longer asking
+    // for, which is the reversal itself.
+    const replayed = sweepPerTick((tick) => (tick < 3 ? 1 : -1), 10);
+    const flat = sweepPerTick(-1, 10);
+
+    expect(flat.every((d) => d < 0)).toBe(true);
+    expect(replayed[0]).toBeGreaterThan(0);
+    expect(flat[0]).toBeLessThan(0);
+    // ...and the two disagree about where the head ends up, by more than a line
+    // width, which is why it was visible rather than merely wrong.
+    const a = advanceCurve({ x: 0, y: 0, angle: 0 }, (t: number) => (t < 3 ? 1 : -1), SPEED, TURN_RATE, 10).at(-1)!;
+    const b = advanceCurve({ x: 0, y: 0, angle: 0 }, -1, SPEED, TURN_RATE, 10).at(-1)!;
+    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(4);
+  });
+
+  it('still accepts a bare direction, for remote curves', () => {
+    expect(sweepPerTick(1, 4).every((d) => d > 0)).toBe(true);
+    expect(sweepPerTick(0, 4).every((d) => d === 0)).toBe(true);
+  });
+});

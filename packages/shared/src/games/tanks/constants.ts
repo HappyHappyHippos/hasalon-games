@@ -18,6 +18,20 @@ export const MAX_PLAYERS = 8;
 export const CELL = 96;
 
 /**
+ * The static stages' arena, in arena units — the resolution the backdrop art
+ * and every hitbox in `stages.ts` are drawn against.
+ *
+ * `STAGE_COLS`/`STAGE_ROWS` exist only because `Maze` still measures itself in
+ * cells: a stage has no lattice, so these are the arena expressed in the unit
+ * the renderer and the snapshot already speak. They are deliberately *not*
+ * integers, and nothing may treat them as a cell count.
+ */
+export const STAGE_W = 1280;
+export const STAGE_H = 720;
+export const STAGE_COLS = STAGE_W / CELL;
+export const STAGE_ROWS = STAGE_H / CELL;
+
+/**
  * Half the drawn thickness of a wall.
  *
  * Collision treats a wall as a zero-thickness segment on the cell lattice, so
@@ -34,9 +48,15 @@ export const WALL_HALF = 5;
  * left over after each kept its distance from the walls
  * (`CELL - 2 * TANK_CLEAR`) — a geometrically unsatisfiable pair of
  * constraints that `separateTanks`/`resolveTankWalls` fought over forever.
- * At 20 the corridor has room for both.
+ * At 20 the corridor has room for both, and 17 only widens that margin.
+ *
+ * Shrunk again from 20 after playtests: on the static stages the corridors are
+ * whatever the artwork drew rather than a clean `CELL`, and a smaller hull is
+ * what makes the tight ones passable. Everything else here that depends on hull
+ * size (`TANK_CLEAR`, `MUZZLE`, `MINI_HIT_R`, `PICKUP_INSET`) is derived from
+ * it, so this is the only number to change.
  */
-export const TANK_R = 20;
+export const TANK_R = 17;
 /** How close a tank's centre may get to a wall segment. */
 export const TANK_CLEAR = TANK_R + WALL_HALF;
 
@@ -119,6 +139,13 @@ export const MUZZLE = TANK_R + BULLET_R + 2;
 export const POWERUP_EVERY = seconds(6);
 export const MAX_POWERUPS = 3;
 export const PICKUP_R = 18;
+/**
+ * How far from the arena edge a pickup may be dropped on a static stage.
+ *
+ * A hull cannot get closer than `TANK_CLEAR` to the boundary, so anything
+ * inside that band would be drawn half off the arena and be awkward to reach.
+ */
+export const PICKUP_INSET = TANK_CLEAR + PICKUP_R;
 
 export const SHIELD_TICKS = seconds(10);
 export const SPEED_TICKS = seconds(7);

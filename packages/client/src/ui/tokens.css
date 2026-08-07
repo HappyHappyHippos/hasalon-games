@@ -49,6 +49,20 @@
  * framed by a chunky black bezel. These are the only dark tokens.
  */
 :root {
+  /* Fixed in-match chrome: the gear, pause and maximize buttons.
+   *
+   * They are `position: fixed` to the viewport but read as living inside each
+   * game's header card (`.rail__head`, `.memes__top`, `.skribbl__top`), so they
+   * have to be centred on it. Every one of those cards is `min-height: 56px`
+   * inside a container padded 12px down from the safe area, so the card's
+   * middle is at 40px and a 38px button starts 19px above that.
+   *
+   * `--chrome-gutter` is the horizontal room those cards must leave clear:
+   * three 38px buttons at 8/52/96px plus a little air. It used to be 148px,
+   * sized for a fourth button that no longer exists. */
+  --chrome-top: 21px;
+  --chrome-gutter: 140px;
+
   --screen-bezel: var(--ink);
   --screen-bg: #12141c;
 }

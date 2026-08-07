@@ -6,6 +6,69 @@ import type { TurnDir } from '@mg/shared/achtung';
  */
 export const localInput = { turn: 0 as TurnDir };
 
+/**
+ * When the local steering last changed, as a short timeline.
+ *
+ * This exists because of one specific Android symptom: press left while turning
+ * right and the curve visibly bends *right* for a moment before coming round.
+ *
+ * The cause is that `advanceCurve` used to paste the current turn flat across
+ * the whole extrapolation window, on top of a snapshot that was still rotating
+ * the old way. So the drawn heading was
+ *
+ *     θ(t) = θ₀ + turnRate·t·oldTurn   (the base, still bending the old way)
+ *          + turnRate·window·newTurn   (a constant offset from the window)
+ *
+ * — an instant angular kick the new way, and then a *derivative* that was still
+ * the old way for a full round trip. On a half-screen control every direction
+ * change swaps the sign, which is exactly the case that reads as a reversal, and
+ * it scales with RTT, which is why it is a phone symptom and invisible on a LAN.
+ *
+ * Keeping the timeline lets the extrapolation replay what the player actually
+ * did: the part of the window before the press keeps the old turn — matching
+ * what the server really did with it — and only the tail after the press gets
+ * the new one. Same idea as Gun Mayhem's input replay, at a fraction of the
+ * machinery, because a curve's only input is one number.
+ */
+interface Steer {
+  /** Client `performance.now()` at which this became the local turn. */
+  at: number;
+  turn: TurnDir;
+}
+
+const history: Steer[] = [{ at: 0, turn: 0 }];
+
+/** Enough to cover the extrapolation window plus a slow link's worth of slack. */
+const HISTORY_MS = 1200;
+
+function recordTurn(turn: TurnDir, at: number): void {
+  history.push({ at, turn });
+  // Keep one entry older than the window so a sample from before the first
+  // change still resolves rather than falling off the front.
+  let stale = 0;
+  while (stale + 1 < history.length && history[stale + 1]!.at < at - HISTORY_MS) stale += 1;
+  if (stale > 0) history.splice(0, stale);
+}
+
+/**
+ * What the local turn was at a given client time.
+ *
+ * Times in the future of the newest entry answer with the current turn, which
+ * is what a caller extrapolating past the last press wants.
+ */
+export function turnAt(at: number): TurnDir {
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    if (history[i]!.at <= at) return history[i]!.turn;
+  }
+  return history[0]!.turn;
+}
+
+/** Dropped on unmount, and between rounds, so a new curve starts clean. */
+export function resetTurnHistory(): void {
+  history.length = 0;
+  history.push({ at: 0, turn: 0 });
+}
+
 const LEFT_KEYS = new Set(['ArrowLeft', 'KeyA']);
 const RIGHT_KEYS = new Set(['ArrowRight', 'KeyD']);
 
@@ -44,6 +107,7 @@ export function attachInput(
     const turn: TurnDir = left === right ? 0 : left ? -1 : 1;
     if (turn === localInput.turn) return;
     localInput.turn = turn;
+    recordTurn(turn, performance.now());
     onChange(turn);
   };
 
@@ -92,11 +156,22 @@ export function attachInput(
     update();
   };
 
+  /**
+   * Once a thumb has picked a side it keeps it until it crosses well past the
+   * middle. Re-classifying on the bare midline meant a thumb resting near it
+   * flipped left/right on sub-pixel drift, which on a curve reads as a stutter
+   * in exactly the same place as the reversal above.
+   */
+  const SWITCH_MARGIN = 0.08;
+
   const onPointerMove = (event: PointerEvent): void => {
-    if (!touches.has(event.pointerId)) return;
+    const held = touches.get(event.pointerId);
+    if (!held) return;
     const rect = surface.getBoundingClientRect();
-    const side = event.clientX - rect.left < rect.width / 2 ? 'left' : 'right';
-    if (touches.get(event.pointerId) !== side) {
+    const fraction = (event.clientX - rect.left) / rect.width;
+    const side =
+      fraction < 0.5 - SWITCH_MARGIN ? 'left' : fraction > 0.5 + SWITCH_MARGIN ? 'right' : held;
+    if (held !== side) {
       touches.set(event.pointerId, side);
       update();
     }
@@ -129,6 +204,7 @@ export function attachInput(
       surface.removeEventListener('pointerup', onPointerUp);
       surface.removeEventListener('pointercancel', onPointerUp);
       localInput.turn = 0;
+      resetTurnHistory();
     },
   };
 }

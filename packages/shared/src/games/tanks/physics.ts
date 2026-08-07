@@ -10,7 +10,18 @@
  * because the predictor has a snapshot rather than a `TankPlayerState`.
  */
 
-import { ACCEL, CELL, DECEL, MAX_SPEED, REVERSE_SPEED, TANK_CLEAR, TURN_RATE } from './constants';
+import {
+  ACCEL,
+  CELL,
+  DECEL,
+  MAX_SPEED,
+  REVERSE_SPEED,
+  STAGE_H,
+  STAGE_W,
+  TANK_CLEAR,
+  TANK_R,
+  TURN_RATE,
+} from './constants';
 import { hasHWall, hasVWall } from './maze';
 import type { Maze } from './types';
 
@@ -88,17 +99,24 @@ export function stepTank(
  */
 export function resolveTankWalls(body: TankBody, maze: Maze, clear: number = TANK_CLEAR): void {
   if (maze.obstacles && maze.obstacles.length > 0) {
-    const minX = clear;
-    const maxX = 1280 - clear;
-    const minY = clear;
-    const maxY = 720 - clear;
+    // A stage obstacle is a solid box, not a zero-thickness lattice segment, so
+    // its own extent already accounts for the wall's thickness. Adding
+    // `WALL_HALF` on top — which is the only difference between `TANK_CLEAR`
+    // and `TANK_R` — would inflate every box by 5 units on all four sides and
+    // push the arena edge 5 units inward, which is a wall you can feel and
+    // cannot see. `TANK_CLEAR` stays correct for the lattice branch below.
+    const hull = clear === TANK_CLEAR ? TANK_R : clear;
+    const minX = hull;
+    const maxX = STAGE_W - hull;
+    const minY = hull;
+    const maxY = STAGE_H - hull;
     if (body.x < minX) body.x = minX;
     if (body.x > maxX) body.x = maxX;
     if (body.y < minY) body.y = minY;
     if (body.y > maxY) body.y = maxY;
 
     for (const box of maze.obstacles) {
-      resolveCircleBox(body, box, clear);
+      resolveCircleBox(body, box, hull);
     }
     return;
   }
@@ -154,6 +172,29 @@ export function resolveCircleBox(
   const push = (clear - d) / d;
   body.x += dx * push;
   body.y += dy * push;
+}
+
+/**
+ * Is `(x, y)` inside any of the stage's obstacles, allowing `margin` of slack?
+ *
+ * `margin` inflates every box, so a positive value answers "is this point solid
+ * *or too close to solid to be usable*" — which is what both callers want: a
+ * shell must not be born inside geometry, and a pickup must not be spawned
+ * where a hull can never reach it.
+ */
+export function insideObstacle(maze: Maze, x: number, y: number, margin = 0): boolean {
+  if (!maze.obstacles) return false;
+  for (const box of maze.obstacles) {
+    if (
+      x >= box.x - margin &&
+      x <= box.x + box.w + margin &&
+      y >= box.y - margin &&
+      y <= box.y + box.h + margin
+    ) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /** Separate overlapping tanks, each giving half the overlap. Seat order, for determinism. */

@@ -1,7 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import type { GameSeat } from '../../gameModule';
-import { ARM_TICKS, COUNTDOWN_TICKS, MAX_SHELLS, SHOT_COOLDOWN, TANK_R } from './constants';
-import { applyInput, createState, defaultConfig, matchWinner, resetInput, stepTick } from './sim';
+import {
+  ARM_TICKS,
+  COUNTDOWN_TICKS,
+  LASER_BOUNCES,
+  MAX_SHELLS,
+  MINE_ARM_TICKS,
+  MINE_PROXIMITY_R,
+  MUZZLE,
+  SHOTGUN_PELLETS,
+  SHOT_COOLDOWN,
+  STAGE_H,
+  STAGE_W,
+  TANK_R,
+  WALL_SEPARATE_PASSES,
+} from './constants';
+import {
+  applyInput,
+  createState,
+  defaultConfig,
+  matchWinner,
+  muzzlePoint,
+  resetInput,
+  stepTick,
+} from './sim';
+import { insideObstacle, resolveTankWalls } from './physics';
+import { TANK_STAGES, TANK_STAGE_IDS } from './stages';
 import { IN_BACK, IN_FIRE, IN_FWD, IN_TRIGHT, type TanksConfig, type TanksState } from './types';
 
 function seats(count: number): GameSeat[] {
@@ -111,7 +135,14 @@ describe('determinism', () => {
 
     expect(state.round).toBe(2);
     expect(state.arenaSeed).not.toBe(first);
-    expect(state.maze.stageId).toBeTruthy();
+
+    // `toBeTruthy` on `stageId` passed on every code path, including a hardcoded
+    // stage. Pin the actual claim instead: the round's arena is the one the new
+    // arena seed selects, and it is a real stage with hitboxes in it.
+    const expectedId = TANK_STAGE_IDS[Math.abs(state.arenaSeed) % TANK_STAGE_IDS.length]!;
+    expect(state.maze.stageId).toBe(expectedId);
+    expect(state.maze.obstacles).toEqual(TANK_STAGES[expectedId].obstacles);
+    expect(state.maze.obstacles!.length).toBeGreaterThan(0);
   });
 });
 
@@ -384,7 +415,7 @@ describe('static stages and expanded powerups', () => {
     run(state, 1);
     const laserBullet = state.bullets.find((b) => b.laser);
     expect(laserBullet).toBeDefined();
-    expect(laserBullet!.maxBounces).toBe(8);
+    expect(laserBullet!.maxBounces).toBe(LASER_BOUNCES);
 
     // Shotgun
     state.bullets = [];
@@ -393,7 +424,7 @@ describe('static stages and expanded powerups', () => {
     hold(state, 0, IN_FIRE);
     run(state, 1);
     const shotgunPellets = state.bullets.filter((b) => b.shotgun);
-    expect(shotgunPellets.length).toBe(5);
+    expect(shotgunPellets.length).toBe(SHOTGUN_PELLETS);
 
     // Homing
     state.bullets = [];
@@ -413,5 +444,126 @@ describe('static stages and expanded powerups', () => {
     const mineBullet = state.bullets.find((b) => b.mine);
     expect(mineBullet).toBeDefined();
     expect(mineBullet!.arm).toBeGreaterThan(0);
+  });
+
+  it('does not blow up the tank that laid the mine', () => {
+    const state = makeState(2, { stageId: 'israel', powerupsEnabled: false });
+    skipCountdown(state);
+
+    // Park the other tank far away so only the owner is ever in range.
+    state.players[1]!.x = STAGE_W - 100;
+    state.players[1]!.y = STAGE_H - 100;
+
+    state.players[0]!.buffs.mine = 1;
+    hold(state, 0, IN_FIRE);
+    run(state, 1);
+    hold(state, 0, 0);
+    expect(state.bullets.some((b) => b.mine)).toBe(true);
+
+    // Sit on it, well past arming. An enemy would set it off; the owner must not.
+    run(state, MINE_ARM_TICKS + 60);
+    expect(state.players[0]!.alive).toBe(true);
+
+    // An enemy driving onto it still detonates it.
+    state.players[1]!.x = state.players[0]!.x;
+    state.players[1]!.y = state.players[0]!.y + MINE_PROXIMITY_R * 0.5;
+    run(state, 1);
+    expect(state.players[1]!.alive).toBe(false);
+  });
+
+  it('does not let a laid mine eat the shell budget', () => {
+    const state = makeState(2, { stageId: 'israel', powerupsEnabled: false });
+    skipCountdown(state);
+
+    state.players[0]!.buffs.mine = 1;
+    hold(state, 0, IN_FIRE);
+    run(state, 1);
+    hold(state, 0, 0);
+    expect(state.bullets.filter((b) => b.mine).length).toBe(1);
+
+    // The mine is still lying there; a full magazine of shells must still fit.
+    for (let i = 0; i < MAX_SHELLS; i += 1) {
+      state.players[0]!.cooldown = 0;
+      hold(state, 0, IN_FIRE);
+      run(state, 1);
+      hold(state, 0, 0);
+    }
+    expect(state.bullets.filter((b) => !b.mine).length).toBe(MAX_SHELLS);
+  });
+
+  it('never births a shell inside a stage obstacle', () => {
+    const state = makeState(2, { stageId: 'israel', powerupsEnabled: false });
+    skipCountdown(state);
+    const boxes = state.maze.obstacles!;
+
+    // Drive the tank flush against every face of every box and fire into it.
+    let fired = 0;
+    for (const box of boxes) {
+      for (const [angle, x, y] of [
+        [0, box.x - 1, box.y + box.h / 2],
+        [Math.PI, box.x + box.w + 1, box.y + box.h / 2],
+        [Math.PI / 2, box.x + box.w / 2, box.y - 1],
+        [-Math.PI / 2, box.x + box.w / 2, box.y + box.h + 1],
+      ] as const) {
+        // Boxes derived from the artwork butt up against each other, so a face
+        // shared with a neighbour has no outside: the point one unit clear of
+        // this box is one unit *inside* that one. A tank can never occupy it —
+        // it is pushed out of a legal position every tick and cannot tunnel —
+        // so placing one there tests nothing except the resolver's behaviour
+        // deep inside geometry it is never given.
+        if (insideObstacle(state.maze, x, y)) continue;
+
+        const player = state.players[0]!;
+        player.x = x;
+        player.y = y;
+        player.angle = angle;
+        player.speed = 0;
+        // Settle the same way `stepBodies` does. One pass is not the game's
+        // contract: the stage boxes are dense and adjacent, so resolving
+        // against one box can push the hull into its neighbour, and it takes
+        // the alternating passes to converge.
+        for (let pass = 0; pass < WALL_SEPARATE_PASSES; pass += 1) {
+          resolveTankWalls(player, state.maze);
+        }
+        fired += 1;
+
+        // Asked of `muzzlePoint` directly rather than inferred from a fired
+        // shell. `stepShooting` runs before `stepBullets`, so a shell marches
+        // within the tick it is born — and firing point blank into a wall,
+        // which is the whole scenario here, is exactly when it reflects. Once
+        // it has, rewinding `x - vx * DT` walks *back along the reflected
+        // velocity*, into the wall, and reports a birth point the shell never
+        // had.
+        const born = muzzlePoint(state, player, Math.cos(angle), Math.sin(angle));
+        expect(insideObstacle(state.maze, born.x, born.y)).toBe(false);
+        expect(Math.hypot(born.x - player.x, born.y - player.y)).toBeLessThanOrEqual(MUZZLE + 1e-6);
+      }
+    }
+
+    // The skip above is only sound while it stays a minority: if a change to
+    // the derived boxes made most faces shared, this test would pass by
+    // testing almost nothing.
+    expect(fired).toBeGreaterThan(boxes.length * 3);
+  });
+
+  it('only drops pickups a tank can reach', () => {
+    const state = makeState(2, { stageId: 'israel' });
+    skipCountdown(state);
+
+    const seen = new Set<number>();
+    for (let i = 0; i < 60 * 240; i += 1) {
+      stepTick(state);
+      for (const pickup of state.pickups) {
+        if (seen.has(pickup.id)) continue;
+        seen.add(pickup.id);
+        expect(pickup.x).toBeGreaterThanOrEqual(0);
+        expect(pickup.x).toBeLessThanOrEqual(STAGE_W);
+        expect(pickup.y).toBeGreaterThanOrEqual(0);
+        expect(pickup.y).toBeLessThanOrEqual(STAGE_H);
+        expect(insideObstacle(state.maze, pickup.x, pickup.y)).toBe(false);
+      }
+      if (state.phase === 'matchOver') break;
+    }
+    expect(seen.size).toBeGreaterThan(0);
   });
 });

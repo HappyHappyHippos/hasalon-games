@@ -21,7 +21,7 @@ import { sfx } from '../../audio';
 import { prefersReducedMotion } from '../../ui/motion';
 import { TanksPredictor, advanceTank, ticksBehind } from './predictor';
 import { getImage } from '../../game/images';
-import { TANK_STAGES, type TankBody } from '@mg/shared/tanks';
+import { TANK_STAGES, stageMaze, type TankBody } from '@mg/shared/tanks';
 
 const FLOOR = '#1c1a24';
 const LETTERBOX = '#100f16';
@@ -207,10 +207,11 @@ export interface TanksRenderContext {
 /**
  * The Tank Trouble renderer.
  *
- * The arena is regenerated locally from three numbers in the snapshot rather
- * than being sent: `generateMaze` is deterministic, so `az`/`aw`/`ah` is the
- * whole map. Memoised on those three, because a new maze arrives once a round
- * and rebuilding it every frame would be the most expensive thing here.
+ * The arena is rebuilt locally rather than being sent: the snapshot names the
+ * stage and `TANK_STAGES` holds its hitboxes, so `stageId` plus the round's
+ * arena seed is the whole map. Memoised on those, because a new arena arrives
+ * once a round and rebuilding it every frame would be the most expensive thing
+ * here.
  */
 export class TanksRenderer {
   private stage: CanvasStage | null = null;
@@ -289,21 +290,12 @@ export class TanksRenderer {
 
   private mazeFor(snap: TanksSnapshot): Maze {
     const stageId = snap.stageId ?? 'alien_planet';
-    const key = `${snap.az}:${snap.aw}:${snap.ah}:${stageId}`;
+    const key = `${snap.az}:${stageId}`;
     if (this.maze && this.mazeKey === key) return this.maze;
 
-    const stageDef = TANK_STAGES[stageId] ?? TANK_STAGES.alien_planet;
-    this.maze = {
-      cols: snap.aw,
-      rows: snap.ah,
-      vWalls: new Uint8Array(0),
-      hWalls: new Uint8Array(0),
-      spawns: [],
-      stageId,
-      obstacles: stageDef.obstacles,
-      spawnsPos: stageDef.spawns,
-    };
+    this.maze = stageMaze(TANK_STAGES[stageId] ?? TANK_STAGES.alien_planet);
     this.mazeKey = key;
+    // A new arena means every smoothed position is about to teleport.
     this.smoothers.clear();
     this.predictor.reset();
     return this.maze;
@@ -346,6 +338,20 @@ export class TanksRenderer {
     const stageId = maze.stageId ?? 'alien_planet';
     const stageDef = TANK_STAGES[stageId];
     const imgLoaded = stageDef && !!getImage(stageDef.backdropUrl);
+
+    // A backdrop is decoration over a complete drawing, never the drawing
+    // itself — see the note at the top of `game/images.ts`. Until it loads (and
+    // for ever, if it 404s) the obstacles have to be drawn from their hitboxes,
+    // or the arena reads as empty while shells and hulls bounce off nothing.
+    if (!imgLoaded && stageDef) {
+      for (const pass of [0, 1]) {
+        ctx.fillStyle = pass === 0 ? WALL_SHADOW : WALL;
+        const offset = pass === 0 ? SHADOW_OFFSET : 0;
+        for (const box of stageDef.obstacles) {
+          ctx.fillRect(box.x + offset, box.y + offset, box.w, box.h);
+        }
+      }
+    }
 
     if (!imgLoaded) {
       for (const pass of [0, 1]) {
@@ -449,10 +455,16 @@ export class TanksRenderer {
       }
 
       const radius = bullet.h === 1 ? 10 : bullet.l === 1 ? 4 : bullet.p === 1 ? 4 : 6;
-      const color = bullet.l === 1 ? '#ff3366' : bullet.hm === 1 ? '#33ccff' : bullet.p === 1 ? '#ff9900' : bullet.h === 1 ? '#ff9f43' : '#ffe296';
+      // The plain shell is black. It used to be a pale cream (#ffe296), which
+      // on the desert and snow stages sat a few percent off the ground colour
+      // and was genuinely hard to see — the one projectile every player fires
+      // constantly was the least legible thing on the screen. The special
+      // shells keep their identity colours; those already contrast.
+      const plain = bullet.h !== 1 && bullet.l !== 1 && bullet.p !== 1 && bullet.hm !== 1;
+      const color = bullet.l === 1 ? '#ff3366' : bullet.hm === 1 ? '#33ccff' : bullet.p === 1 ? '#ff9900' : bullet.h === 1 ? '#ff9f43' : '#14101a';
 
       if (!this.reduced) {
-        ctx.strokeStyle = bullet.l === 1 ? 'rgba(255, 51, 102, 0.5)' : 'rgba(255, 226, 150, 0.35)';
+        ctx.strokeStyle = bullet.l === 1 ? 'rgba(255, 51, 102, 0.5)' : plain ? 'rgba(20, 16, 26, 0.35)' : 'rgba(255, 226, 150, 0.35)';
         ctx.lineWidth = radius;
         ctx.lineCap = 'round';
         ctx.beginPath();
@@ -463,6 +475,17 @@ export class TanksRenderer {
 
       ctx.fillStyle = color;
       circle(ctx, x, y, radius);
+
+      // ...and a light rim, so black still reads against the dark lattice
+      // arena and the night-time stages, where the fill alone would vanish the
+      // same way the cream did on sand.
+      if (plain) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
   }
 
@@ -609,10 +632,15 @@ export class TanksRenderer {
 
     // Barrel — tapered, so the aim direction stays the clearest thing on the
     // sprite. Pointing +x, same as the hull before rotation.
+    //
+    // Length chosen so the muzzle tip lands at `TANK_R * 1.10`: collision is a
+    // circle of `TANK_R`, and at the old `0.95` the tip reached `TANK_R * 1.39`
+    // and sat visibly inside every wall the tank drove up to. A little proud of
+    // the hull is what a tank looks like; a third of a hull proud is a bug.
     const barrelBaseHalf = TANK_R * 0.16;
     const barrelTipHalf = TANK_R * 0.09;
     const barrelStart = turretR * 0.7;
-    const barrelEnd = barrelStart + TANK_R * 0.95;
+    const barrelEnd = barrelStart + TANK_R * 0.66;
     const muzzleR = TANK_R * 0.12;
 
     ctx.fillStyle = palette.barrel;

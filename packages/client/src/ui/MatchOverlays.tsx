@@ -1,10 +1,8 @@
 import { useMemo, type CSSProperties, type JSX } from 'react';
-import { colorFor, type GameId, type RoomView } from '@mg/shared';
+import { colorFor, type RoomView } from '@mg/shared';
 import { useStore } from '../store';
 import { useT } from '../strings';
 import { socket } from '../net/socket';
-import { sfx } from '../audio';
-import { music } from '../music';
 import { Button } from './Button';
 import { Avatar } from './Avatar';
 
@@ -47,7 +45,6 @@ export function Paused({ room, spectating }: { room: RoomView; spectating: boole
             <Button variant="primary" size="lg" full onClick={() => socket.setPaused(false)}>
               {t.resume}
             </Button>
-            <MuteButton inline />
           </div>
         )}
       </div>
@@ -55,61 +52,20 @@ export function Paused({ room, spectating }: { room: RoomView; spectating: boole
   );
 }
 
-const CARDLESS_GAMES = new Set<GameId>(['gunmayhem', 'tanks', 'achtung', 'gravity', 'memes', 'skribbl']);
-
-/**
- * Easily accessible Mute/Unmute button for HUD overlays and match screens.
+/*
+ * There is deliberately no floating audio-mute button here any more.
+ *
+ * It used to sit at a fixed corner in every game, next to the microphone toggle
+ * in the rail — two round buttons a few pixels apart, one muting the music and
+ * one muting your voice, with nothing on either to say which. On a phone it was
+ * worse than ambiguous: `.mutebtn` and the fullscreen button resolved to the
+ * same coordinates, so it read as one button drawn twice.
+ *
+ * Muting the music is a settings-shaped decision, made once, so it lives in the
+ * options menu's Sound section (`OptionsMenu.tsx`). Muting your microphone is a
+ * mid-conversation decision, so `VoiceBar` stays on screen — in all six games
+ * now, which is what this change was for.
  */
-export function MuteButton({ inline = false }: { inline?: boolean }): JSX.Element | null {
-  const room = useStore((s) => s.room);
-  const muted = useStore((s) => s.muted);
-  const musicMuted = useStore((s) => s.musicMuted);
-  const setMuted = useStore((s) => s.setMuted);
-  const setMusicMuted = useStore((s) => s.setMusicMuted);
-  const t = useT();
-
-  const isAllMuted = muted && musicMuted;
-
-  const toggleMute = (): void => {
-    const nextMuted = !isAllMuted;
-    sfx.setMuted(nextMuted);
-    music.setMuted(nextMuted);
-    setMuted(nextMuted);
-    setMusicMuted(nextMuted);
-    if (!nextMuted) sfx.click();
-  };
-
-  if (!inline) {
-    const inMatch = room !== null && room.phase !== 'lobby';
-    const isCardlessGame = room ? CARDLESS_GAMES.has(room.gameId) : false;
-    if (!inMatch || !isCardlessGame) return null;
-
-    return (
-      <button
-        type="button"
-        className="mutebtn"
-        onClick={toggleMute}
-        aria-label={isAllMuted ? t.unmuteAudio : t.muteAudio}
-        title={isAllMuted ? t.unmuteAudio : t.muteAudio}
-      >
-        {isAllMuted ? '🔇' : '🔊'}
-      </button>
-    );
-  }
-
-  return (
-    <Button
-      variant="ghost"
-      size="md"
-      full
-      onClick={toggleMute}
-      aria-label={isAllMuted ? t.unmuteAudio : t.muteAudio}
-      title={isAllMuted ? t.unmuteAudio : t.muteAudio}
-    >
-      {isAllMuted ? `🔊 ${t.unmuteAudio}` : `🔇 ${t.muteAudio}`}
-    </Button>
-  );
-}
 
 export function MatchOver({
   room,

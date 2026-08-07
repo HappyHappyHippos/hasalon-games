@@ -39,8 +39,14 @@ export const DROP_Y = 0.55;
  * timer is the delay before the double jump comes out. Kept short rather
  * than instant so a thumb resting on the stick does not auto-bhop forever;
  * `jumpsLeft` running out after the air jump is what actually stops it.
+ *
+ * Raised from 160 after phone playtests: a thumb flicking up to jump was
+ * spending its air jump before the player had decided to, so the double came
+ * out as one long hop rather than two. Deliberately here rather than in
+ * `DOUBLE_JUMP_DELAY_TICKS` — that is the shared sim floor and would slow
+ * keyboard players too, and the complaint was specifically about the stick.
  */
-export const HOLD_REJUMP_MS = 160;
+export const HOLD_REJUMP_MS = 190;
 export const REARM_RELEASE_MS = 50;
 
 export interface StickState {

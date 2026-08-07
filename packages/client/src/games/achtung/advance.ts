@@ -21,6 +21,9 @@
  * re-extrapolates from the newest snapshot, so there is no drift to reconcile
  * and no correction logic. That is also why Achtung needs no input sequence or
  * `ack` to make this work, unlike Gun Mayhem's replay-based predictor.
+ *
+ * It does, however, need the local steering *timeline* rather than just the
+ * current value — see `TurnSource` below and the long note in `input.ts`.
  */
 import { DT } from '@mg/shared';
 import { advanceMotion, type Motion, type TurnDir } from '@mg/shared/achtung';
@@ -52,6 +55,21 @@ export function ticksAhead(now: number, serverAt: number): number {
 }
 
 /**
+ * How a curve is steered across the extrapolation window.
+ *
+ * A bare `TurnDir` means "this, the whole way", which is right for a remote
+ * curve: `inferTurn` recovers one steering value from the last two snapshots
+ * and there is nothing better to say about the future of somebody else's thumb.
+ *
+ * A function is asked per whole tick, `0` being the tick that starts at the
+ * snapshot instant, and is what the *local* curve uses so a direction change
+ * lands at the moment the player made it rather than smeared across the window.
+ * Without it the drawn curve keeps bending the old way for a full round trip
+ * after the press — see `input.ts`.
+ */
+export type TurnSource = TurnDir | ((tick: number) => TurnDir);
+
+/**
  * Simulate one curve forward by `ticks`.
  *
  * Whole ticks go through the sim's own `advanceMotion`, in the sim's own order
@@ -67,17 +85,18 @@ export function ticksAhead(now: number, serverAt: number): number {
  */
 export function advanceCurve(
   base: Motion,
-  turn: TurnDir,
+  turn: TurnSource,
   speed: number,
   turnRate: number,
   ticks: number,
 ): Motion[] {
   const motion: Motion = { x: base.x, y: base.y, angle: base.angle };
   const path: Motion[] = [{ ...motion }];
+  const turnFor = typeof turn === 'function' ? turn : () => turn;
 
   const whole = Math.floor(ticks);
   for (let i = 0; i < whole; i++) {
-    advanceMotion(motion, turn, speed, turnRate);
+    advanceMotion(motion, turnFor(i), speed, turnRate);
     path.push({ ...motion });
   }
 

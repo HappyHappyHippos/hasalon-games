@@ -1140,7 +1140,7 @@ strong,
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding-inline-end: calc(148px + env(safe-area-inset-right));
+  padding-inline-end: calc(var(--chrome-gutter) + env(safe-area-inset-right));
 }
 
 .rail__round {
@@ -1369,7 +1369,7 @@ strong,
 .pausebtn {
   position: fixed;
   z-index: 15;
-  top: calc(8px + env(safe-area-inset-top));
+  top: calc(var(--chrome-top) + env(safe-area-inset-top));
   inset-inline-end: calc(52px + env(safe-area-inset-right));
   width: 38px;
   height: 38px;
@@ -1391,37 +1391,12 @@ strong,
   transform: translateY(1px);
 }
 
-.mutebtn {
-  position: fixed;
-  z-index: 15;
-  top: calc(8px + env(safe-area-inset-top));
-  inset-inline-end: calc(96px + env(safe-area-inset-right));
-  width: 38px;
-  height: 38px;
-  border: 2px solid var(--ink);
-  border-radius: 999px;
-  background: rgba(253, 246, 232, 0.9);
-  box-shadow: var(--shadow-sm);
-  color: var(--ink);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0;
-  touch-action: manipulation;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.mutebtn:active {
-  transform: translateY(1px);
-}
-
 /* Only rendered on a touch device — a desktop browser already has F11.
  *
  * Fixed, and deliberately not inside `.rail`: on a phone the rail is an overlay
  * with `pointer-events: none` so it cannot swallow taps meant for the arena,
  * which also made this button unpressable on exactly the devices it exists for.
- * It sits inboard of mute, pause, and options buttons — all four share this corner. */
+ * It sits inboard of the pause and options buttons — all three share this corner. */
 .fullscreenbtn__wrap {
   position: fixed;
   z-index: 15;
@@ -2183,7 +2158,7 @@ strong,
    biggest button on the pad — mid-match it always moves to the top corner,
    the same row as the maximize and pause buttons, on every screen size. */
 .app--playing .options {
-  top: calc(8px + env(safe-area-inset-top));
+  top: calc(var(--chrome-top) + env(safe-area-inset-top));
   bottom: auto;
   inset-inline-end: calc(8px + env(safe-area-inset-right));
   opacity: 0.5;
@@ -2209,14 +2184,8 @@ strong,
     height: 38px;
     font-size: 15px;
   }
-  .mutebtn {
-    inset-inline-end: calc(96px + env(safe-area-inset-right));
-    width: 38px;
-    height: 38px;
-    font-size: 16px;
-  }
   .app--playing .fullscreenbtn__wrap {
-    top: calc(8px + env(safe-area-inset-top));
+    top: calc(var(--chrome-top) + env(safe-area-inset-top));
     bottom: auto;
     inset-inline-end: calc(96px + env(safe-area-inset-right));
   }
@@ -2734,13 +2703,6 @@ strong,
   .settings {
     grid-template-columns: 1fr;
   }
-  .number-stepper__button {
-    touch-action: manipulation;
-    min-width: 44px;
-    min-height: 44px;
-    z-index: 1;
-    flex-shrink: 0;
-  }
 }
 
 /* Every major room card sits on one mobile measure. Keeping the gutter on the
@@ -2848,7 +2810,7 @@ strong,
   align-items: center;
   gap: 14px;
   padding: 10px 16px;
-  padding-inline-end: calc(148px + env(safe-area-inset-right));
+  padding-inline-end: calc(var(--chrome-gutter) + env(safe-area-inset-right));
   background: var(--surface);
   border: var(--outline);
   border-radius: var(--radius);
@@ -3358,7 +3320,7 @@ strong,
     min-height: 50px;
     max-height: 50px;
     padding: 6px 10px;
-    padding-inline-end: calc(148px + env(safe-area-inset-right));
+    padding-inline-end: calc(var(--chrome-gutter) + env(safe-area-inset-right));
     gap: 8px;
   }
   .skribbl__clock {
@@ -3432,12 +3394,14 @@ strong,
 }
 
 .memes__top {
-  position: sticky;
-  top: 0;
-  z-index: 5;
+  /* Deliberately not `position: sticky`. It is a flex child of a column that
+     never scrolls, so sticky does nothing — but the `z-index` it needed let it
+     paint over `.memes__phase`, which is exactly how the composer ended up
+     hidden behind it on a laptop. */
+  flex: none;
   min-height: 56px;
   padding: 7px 10px;
-  padding-inline-end: calc(148px + env(safe-area-inset-right));
+  padding-inline-end: calc(var(--chrome-gutter) + env(safe-area-inset-right));
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -3489,7 +3453,11 @@ strong,
   min-height: 0;
   overflow-y: auto;
   display: grid;
-  align-content: center;
+  /* Never `center`. Centred grid content taller than its track overflows in
+     both directions, and the half above the start edge cannot be scrolled to —
+     it is simply clipped, under the header. `start` keeps the overflow on one
+     side, where the scrollbar can reach it. */
+  align-content: start;
   animation: meme-deal 180ms cubic-bezier(0.22, 1.35, 0.4, 1) both;
 }
 
@@ -3518,7 +3486,7 @@ strong,
   margin: auto;
   display: grid;
   grid-template-columns: minmax(280px, 1.4fr) minmax(260px, 0.8fr);
-  align-items: center;
+  align-items: start;
   gap: clamp(16px, 3vw, 34px);
 }
 .memes__preview { min-width: 0; display: grid; place-items: center; }
@@ -3787,12 +3755,25 @@ strong,
 
 @media (max-width: 760px), (max-height: 560px) {
   .memes { padding: calc(6px + env(safe-area-inset-top)) calc(6px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left)); gap: 6px; }
-  .memes__top { min-height: 50px; padding: 4px 8px; padding-inline-end: calc(148px + env(safe-area-inset-right)); }
+  .memes__top { min-height: 50px; padding: 4px 8px; padding-inline-end: calc(var(--chrome-gutter) + env(safe-area-inset-right)); }
   .memes__clock { width: 38px; height: 38px; flex-basis: 38px; }
   .memes__phase { align-content: start; }
-  .memes__composer { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 9px; }
-  .memes__preview { height: 26dvh; }
-  .memes__preview .meme-card { width: min(100%, calc(26dvh * var(--meme-aspect))); height: 100%; }
+  /* One column, and it must *fit*: the caption fields take the height they
+     need and the preview takes what is left. A fixed `26dvh` preview was the
+     other way round, and on a short phone it pushed the submit button below
+     the fold — so writing a caption meant scrolling inside a panel that gave
+     no sign it could scroll. `min-height: 0` is what lets the preview actually
+     give way; without it a grid row refuses to shrink below its content. */
+  .memes__composer {
+    grid-template-rows: minmax(90px, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr);
+    align-content: stretch;
+    height: 100%;
+    min-height: 0;
+    gap: 9px;
+  }
+  .memes__preview { min-height: 0; height: 100%; }
+  .memes__preview .meme-card { max-width: min(100%, calc(100% * var(--meme-aspect))); max-height: 100%; height: auto; width: auto; }
   .memes__fields { padding: 8px 10px; gap: 6px; }
   .memes__fields h2 { font-size: 18px; }
   .memes__field textarea { min-height: 58px; font-size: 16px; }
@@ -3808,12 +3789,17 @@ strong,
 
 @media (max-height: 560px) and (orientation: landscape) {
   .memes { height: 100dvh; min-height: 0; overflow: hidden; }
-  .memes__phase { overflow: hidden; padding-inline-end: 7px; padding-block-end: 7px; }
+  /* Scrollable, not hidden. The composer is compressed hard below so it
+     normally fits — but `overflow: hidden` on the one box that can overflow
+     means anything that does not fit is *clipped and unreachable*, and what it
+     clipped was the submit button. A scrollbar of last resort is far better
+     than a caption you cannot send, and this is the outer box, so it is still
+     one scroller rather than one nested in another. */
+  .memes__phase { overflow-y: auto; padding-inline-end: 7px; padding-block-end: 7px; }
   .memes__composer {
-    height: 100%;
     min-height: 0;
     grid-template-columns: minmax(240px, 1.15fr) minmax(280px, 0.85fr);
-    align-items: stretch;
+    align-items: start;
   }
   .memes__preview {
     height: 100%;
@@ -3825,11 +3811,11 @@ strong,
     width: min(100%, calc((100dvh - 96px - env(safe-area-inset-top) - env(safe-area-inset-bottom)) * var(--meme-aspect)));
     box-shadow: var(--shadow-sm);
   }
+  /* No scroller here. `.memes__phase` is already one, and a scroll container
+     nested inside a scroll container is how a landscape phone ended up needing
+     two separate drags to reach the submit button. */
   .memes__fields {
     min-height: 0;
-    max-height: 100%;
-    overflow-y: auto;
-    overscroll-behavior: contain;
     padding: 4px 8px;
     gap: 3px;
   }
@@ -3840,12 +3826,16 @@ strong,
     min-height: 28px;
   }
   .memes__field textarea {
-    min-height: 44px;
-    padding: 6px 8px;
+    min-height: 36px;
+    padding: 5px 8px;
   }
   .memes__field small {
     display: none;
   }
+  /* The meme is on screen next to these boxes, so the "write a caption"
+     heading is the cheapest thing to give up for a submit button that fits. */
+  .memes__fields h2 { display: none; }
+  .memes__nudge { font-size: 12px; }
   .memes__roster { display: none; }
   .memes__stage { height: 100%; grid-template-columns: minmax(0, 1fr) minmax(250px, 0.75fr); align-items: center; }
   .memes__stage > .eyebrow { display: none; }
@@ -3895,8 +3885,8 @@ strong,
   }
   .gamecard { gap: 6px; padding: 7px; box-shadow: var(--shadow-sm); }
   .gamecard__name { font-size: 15px; }
-  .gamecard__tagline { display: block; }
-  .gamecard__players { display: none; font-size: 10px; letter-spacing: 0; }
+  /* The tagline/players swap comes from the (max-height: 560px) arm above,
+     which this query is a subset of. */
   .gamecard__badge { top: -8px; inset-inline-end: -5px; padding: 3px 6px; font-size: 9px; }
 }
 

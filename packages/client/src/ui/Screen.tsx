@@ -5,7 +5,6 @@ import { useT } from '../strings';
 import { MatchOver, Paused } from './MatchOverlays';
 import { VoiceBar } from './VoiceBar';
 import { useHasTouch } from './useTouchControls';
-import { FullscreenButton } from './FullscreenButton';
 
 interface Props {
   room: RoomView;
@@ -58,14 +57,6 @@ export function Screen({
         <VoiceBar compact />
         <NetBadge />
       </aside>
-
-      {/*
-        Outside the rail, and fixed rather than laid out. On a phone the rail is
-        an overlay with `pointer-events: none` so it cannot eat taps meant for
-        the arena — which also made this button, sitting inside it, impossible
-        to press on exactly the devices it exists for.
-      */}
-      <FullscreenButton />
 
       <div className={`screenbox${paperArena ? ' screenbox--paper' : ''}`}>
         <canvas ref={canvasRef} className="screenbox__canvas" />

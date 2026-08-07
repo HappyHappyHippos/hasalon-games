@@ -14,7 +14,7 @@ import { Toolbar } from './Toolbar';
 import { WordBanner } from './WordBanner';
 import { WordPicker } from './WordPicker';
 import { MatchOver, Paused } from '../../ui/MatchOverlays';
-import { FullscreenButton } from '../../ui/FullscreenButton';
+import { VoiceBar } from '../../ui/VoiceBar';
 
 interface Props {
   room: RoomView;
@@ -181,6 +181,11 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
             </p>
           )}
         </div>
+
+        {/* Memes and Skribbl build their own chrome rather than using `Screen`,
+            which is the only reason they were the two games with no microphone
+            toggle on the surface. */}
+        <VoiceBar compact />
       </header>
 
       <div className="skribbl__body">
@@ -233,7 +238,6 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
         <Chat room={room} canGuess={!isDrawer && !guessed && phase === 'drawing'} reason={guessReason} />
       </div>
 
-      <FullscreenButton />
 
       {/*
         The overlays every game needs, wherever it puts its canvas. Skribbl does
