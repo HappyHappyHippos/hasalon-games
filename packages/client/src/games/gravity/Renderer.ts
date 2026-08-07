@@ -14,6 +14,7 @@ import {
 import { CanvasStage } from '../../game/CanvasStage';
 import { drawFace, drawHat } from '../../game/appearance';
 import { PositionSmoother } from '../../game/PositionSmoother';
+import { RemoteBodies } from '../../game/RemoteBodies';
 import { feed } from '../../net/feed';
 import { sfx } from '../../audio';
 import { prefersReducedMotion } from '../../ui/motion';
@@ -69,6 +70,19 @@ export class GravityRenderer {
    * feeding the same point on screen.
    */
   private readonly smoother = new PositionSmoother();
+  /**
+   * The same for everyone else, who are extrapolated to the present rather than
+   * predicted from local input — so their drawn position steps on every
+   * snapshot by however wrong the previous guess was.
+   *
+   * `TERMINAL_VY` is 500, so a flip swings vertical velocity by up to 1000 and
+   * a landing by up to 500. Ordinary falling is already modelled by
+   * `advanceRunner`, which runs real `stepRunner` ticks, so what is left to
+   * absorb is small. 300 sits above that residual and below the smallest real
+   * event, which keeps flips crisp — sliding into a flip is exactly the
+   * floatiness Gun Mayhem's note warns about.
+   */
+  private readonly remotes = new RemoteBodies(300);
   private wasPredicting = false;
   private reduced = false;
 
@@ -88,6 +102,7 @@ export class GravityRenderer {
     this.stage.attach();
     this.predictor.reset();
     this.smoother.reset();
+    this.remotes.clear();
     this.wasPredicting = false;
     const loop = (now: number): void => {
       this.frame(now);
@@ -101,6 +116,7 @@ export class GravityRenderer {
     this.stage.detach();
     this.predictor.reset();
     this.smoother.reset();
+    this.remotes.clear();
     this.wasPredicting = false;
   }
 
@@ -128,14 +144,28 @@ export class GravityRenderer {
     // runner's catch-up multiplier differs from 1, and that drift gets yanked
     // back to the true position on every snapshot — which is exactly what read
     // as juddering.
+    this.remotes.beginFrame(entry.serverAt);
+
     const bodies = new Map<number, RunnerBody | null>();
     for (const player of snap.players) {
-      bodies.set(
-        player.s,
-        player.s === this.context.mySeat
-          ? this.predictor.update(now, track, player, player.sp, controllable)
-          : advanceRunner(player, track, behind, player.sp, controllable),
-      );
+      if (player.s === this.context.mySeat) {
+        bodies.set(player.s, this.predictor.update(now, track, player, player.sp, controllable));
+        continue;
+      }
+
+      const body = advanceRunner(player, track, behind, player.sp, controllable);
+      if (!body) {
+        // Out of the round. Their next appearance is a fresh spawn, not a
+        // continuation of where they died.
+        this.remotes.forget(player.s);
+        bodies.set(player.s, null);
+        continue;
+      }
+
+      // Horizontal speed is the same every tick, so only `vy` distinguishes a
+      // flip or a landing from ordinary falling.
+      const drawn = this.remotes.draw(player.s, body.x, body.y, { vx: 0, vy: body.vy }, now);
+      bodies.set(player.s, { ...body, x: drawn.x, y: drawn.y });
     }
 
     // The local body is predicted from a different clock than everyone else's
@@ -218,6 +248,7 @@ export class GravityRenderer {
     this.trackKey = snap.tz;
     this.predictor.reset();
     this.smoother.reset();
+    this.remotes.clear();
     this.wasPredicting = false;
     return this.track;
   }

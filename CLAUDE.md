@@ -219,6 +219,34 @@ game's `sim.test.ts`/`physics.test.ts` pins this down with a same-seed,
 same-input-log, byte-identical-output test — if you touch tick logic, that
 test is the one that catches drift.
 
+**Remote bodies are smoothed through one shared rule** (`game/RemoteBodies.ts`),
+used by Gun Mayhem, Tank Trouble and Gravity Guy. Every frame re-extrapolates
+everyone from the newest snapshot, so on the frame a new one lands their drawn
+position steps by however wrong the last guess was — thirty times a second. The
+rule has two halves and both matter: **slide across ordinary drift**, and
+**snap on a velocity event** (a jump, a landing, a gravity flip, a tank hitting
+a wall). Smoothing the events too is what made jumping feel floaty in Gun
+Mayhem; smoothing nothing is what made Tank Trouble and Gravity Guy stutter —
+Tanks had per-seat smoothers wired up but passed `jumped` as
+`mine && predictor.resynced`, so for every remote seat it was a no-op.
+
+The event threshold **scales with how much server time the snapshot skipped**.
+It is a rate in disguise: a 500-unit velocity change across one 33 ms interval
+is a knockback, and across a 250 ms hole it is just gravity. Comparing the raw
+numbers meant every packet-loss burst was classified as an event, snapped to,
+and the whole missing stretch landed in one frame — the "freeze then teleport"
+players report. Achtung deliberately has none of this: its head is joined to a
+persistent trail, and sliding the head would detach it from its own line.
+
+Three test files pin the three things "lag" turns out to mean, all over a
+simulated 114 ms Israeli link (`net/lagHarness.ts`): `net/inputLatency.test.ts`
+(press to pixel, which must not scale with distance — currently 0–17 ms
+predicted against 133–167 ms unpredicted), `net/gameLag.test.ts` (per-frame
+stutter at 144 Hz, tracking error, and recovery across a 250 ms hole) and
+`game/RemoteBodies.test.ts` (the slide/snap rule itself). Measure at a refresh
+rate that is **not** 60 Hz — at 60 Hz one tick and one frame cover the same
+ground, which is exactly the rate at which quantised motion is invisible.
+
 Client-side, snapshots never touch React state directly (`net/feed.ts`'s
 `SnapshotFeed`, module-level, not a store) — pushing 30 Hz updates through
 React would re-render the tree 30x/sec for no benefit. Canvas renderers read

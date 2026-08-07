@@ -34,6 +34,10 @@ export const gravityModule: GameModule = {
       'First to the target number of rounds wins the match.',
     ],
     touchSupported: true,
+    // Every snapshot carries the whole world, so a socket that is too backed
+    // up to keep up is better served by skipping this frame than by falling
+    // further behind on every one. The exception is the drained event queue —
+    // see the longer note in gunmayhem/module.ts.
     droppableSnapshots: true,
   },
 

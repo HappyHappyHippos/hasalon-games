@@ -24,6 +24,7 @@ import { CanvasStage } from '../../game/CanvasStage';
 import { drawFace, drawHat, hatRise } from '../../game/appearance';
 import { bracket, lerp } from '../../game/interpolation';
 import { PositionSmoother } from '../../game/PositionSmoother';
+import { RemoteBodies } from '../../game/RemoteBodies';
 import { isPredicting, predictsSelf } from '../../net/playbackMode';
 import { advancePlayer, ticksBehind } from './advance';
 import { GunMayhemPredictor } from './predictor';
@@ -103,25 +104,12 @@ export class GunMayhemRenderer {
    * the newest snapshot is, so the moment a new one lands their drawn position
    * steps by however far the previous guess was wrong. That step is the whole
    * visible cost of drawing the present instead of the past, and this is what
-   * turns it into a slide.
+   * turns it into a slide — except where the step is a real event, which it
+   * snaps to instead. `VELOCITY_EVENT` is 260: above what a couple of ticks of
+   * gravity and friction account for, well below a jump (`AIR_JUMP_VELOCITY`
+   * is -720).
    */
-  private remoteSmoothers = new Map<number, PositionSmoother>();
-  /**
-   * Each seat's velocity as of the last snapshot, so a correction can be told
-   * apart from an event.
-   *
-   * Extrapolation cannot know about a button press. When someone double jumps
-   * we are busy drawing them falling, and the snapshot that finally says
-   * otherwise arrives as a large, sudden change. Handing that to the smoother
-   * makes the jump *slide* upward over ~80 ms, which reads as floaty and wrong
-   * — worse than simply starting late. A jump that begins 70 ms late but
-   * crisply is much closer to right, so a discontinuity this size is snapped to
-   * and only ordinary drift is smoothed. Same distinction the local predictor
-   * draws with `VELOCITY_RESYNC`.
-   */
-  private remoteVelocity = new Map<number, { vx: number; vy: number }>();
-  /** `serverAt` of the snapshot the remote bodies were last drawn from. */
-  private lastRemoteAt = 0;
+  private remotes = new RemoteBodies(260);
   /**
    * Where each seat was actually drawn last frame.
    *
@@ -165,10 +153,8 @@ export class GunMayhemRenderer {
     this.stage.attach();
     this.predictor.reset();
     this.smoother.reset();
-    this.remoteSmoothers.clear();
-    this.remoteVelocity.clear();
+    this.remotes.clear();
     this.drawnBySeat.clear();
-    this.lastRemoteAt = 0;
     this.wasPredicting = false;
     const loop = (now: number): void => {
       this.frame(now);
@@ -182,10 +168,8 @@ export class GunMayhemRenderer {
     this.stage.detach();
     this.predictor.reset();
     this.smoother.reset();
-    this.remoteSmoothers.clear();
-    this.remoteVelocity.clear();
+    this.remotes.clear();
     this.drawnBySeat.clear();
-    this.lastRemoteAt = 0;
     this.wasPredicting = false;
   }
 
@@ -473,8 +457,7 @@ export class GunMayhemRenderer {
     // A new snapshot is the only thing that moves a predicted remote character
     // for a reason that is not motion. Between snapshots their extrapolation is
     // continuous, so smoothing every frame would fight the movement itself.
-    const snapshotChanged = latestAt !== this.lastRemoteAt;
-    this.lastRemoteAt = latestAt;
+    this.remotes.beginFrame(latestAt);
 
     for (const player of delayed.players) {
       const isLocal = player.s === this.context.mySeat;
@@ -541,28 +524,18 @@ export class GunMayhemRenderer {
         // interpolated out of the past. The interpolated path needs none of
         // this: it only ever draws positions the server actually reported, so
         // there is nothing to be wrong about and nothing to absorb.
-        let smoother = this.remoteSmoothers.get(player.s);
-        if (!smoother) {
-          smoother = new PositionSmoother();
-          this.remoteSmoothers.set(player.s, smoother);
-        }
-
         // Only smooth what the extrapolation could plausibly have got wrong on
         // its own. A jump, a knockback or a landing all arrive as a velocity
         // step no guess could have contained; sliding into those is what made
-        // jumping feel broken. Snapping resets the smoother so the new position
-        // is taken at face value.
-        let smooth = snapshotChanged;
-        if (snapshotChanged) {
-          const before = this.remoteVelocity.get(player.s);
-          if (before && isVelocityEvent(before, player)) {
-            smoother.reset();
-            smooth = false;
-          }
-          this.remoteVelocity.set(player.s, { vx: player.vx, vy: player.vy });
-        }
-
-        const drawn = smoother.apply(body.x, body.y, now, smooth);
+        // jumping feel broken. `RemoteBodies` owns that distinction — Tank
+        // Trouble and Gravity Guy need exactly the same rule.
+        const drawn = this.remotes.draw(
+          player.s,
+          body.x,
+          body.y,
+          { vx: player.vx, vy: player.vy },
+          now,
+        );
         body = { ...body, x: drawn.x, y: drawn.y };
       }
 
@@ -1279,25 +1252,6 @@ export class GunMayhemRenderer {
  * already between the top of the head and the damage label, which short hats
  * fit inside for free.
  */
-/**
- * Whether a snapshot's velocity change is something extrapolation could have
- * produced by itself, or something that happened *to* the player.
- *
- * Gravity and friction change velocity gradually and predictably, and a guess
- * that ran a few ticks on stale buttons lands close. A jump, a landing, or a
- * shot connecting all reverse or replace velocity outright within one tick.
- * The threshold sits above what a couple of ticks of ordinary acceleration can
- * account for and well below a jump (`AIR_JUMP_VELOCITY` is -720).
- */
-const VELOCITY_EVENT = 260;
-
-function isVelocityEvent(
-  before: { vx: number; vy: number },
-  now: { vx: number; vy: number },
-): boolean {
-  return Math.hypot(now.vx - before.vx, now.vy - before.vy) > VELOCITY_EVENT;
-}
-
 function hatClearance(hatIndex: number): number {
   return Math.max(0, hatRise(hatIndex, PLAYER_HALF_W) - 7);
 }

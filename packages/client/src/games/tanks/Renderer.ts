@@ -16,6 +16,7 @@ import {
 } from '@mg/shared/tanks';
 import { CanvasStage } from '../../game/CanvasStage';
 import { PositionSmoother } from '../../game/PositionSmoother';
+import { RemoteBodies } from '../../game/RemoteBodies';
 import { feed } from '../../net/feed';
 import { sfx } from '../../audio';
 import { prefersReducedMotion } from '../../ui/motion';
@@ -222,7 +223,17 @@ export class TanksRenderer {
   private mazeKey = '';
 
   private readonly predictor = new TanksPredictor();
-  private readonly smoothers = new Map<number, PositionSmoother>();
+  /** Absorbs the jump when the local tank changes which clock it is drawn from. */
+  private readonly smoother = new PositionSmoother();
+  /**
+   * The same for everyone else, who are extrapolated rather than predicted.
+   *
+   * `MAX_SPEED` is 135 and `ACCEL` is 1200, so a couple of ticks of ordinary
+   * acceleration accounts for about 40 units of velocity change. A tank driving
+   * into a wall loses all 135 at once, which is the smallest event worth
+   * snapping to; 90 sits between the two.
+   */
+  private readonly remotes = new RemoteBodies(90);
   private readonly paletteCache = new Map<number, TankPalette>();
 
   private shake = 0;
@@ -254,7 +265,8 @@ export class TanksRenderer {
     this.stage?.detach();
     this.stage = null;
     this.predictor.reset();
-    this.smoothers.clear();
+    this.smoother.reset();
+    this.remotes.clear();
   }
 
   // -------------------------------------------------------------------------
@@ -296,7 +308,8 @@ export class TanksRenderer {
     this.maze = stageMaze(TANK_STAGES[stageId] ?? TANK_STAGES.alien_planet);
     this.mazeKey = key;
     // A new arena means every smoothed position is about to teleport.
-    this.smoothers.clear();
+    this.smoother.reset();
+    this.remotes.clear();
     this.predictor.reset();
     return this.maze;
   }
@@ -499,6 +512,10 @@ export class TanksRenderer {
     const behind = ticksBehind(now, serverAt);
     const controllable = snap.phase === 'playing' && !this.context.paused;
 
+    // Once per frame, not once per tank: the smoothing rule keys off whether
+    // this frame is the first to see a newer snapshot.
+    this.remotes.beginFrame(serverAt);
+
     for (const player of snap.players) {
       const mine = player.s === this.context.mySeat;
       const body: TankBody | null = mine
@@ -506,12 +523,28 @@ export class TanksRenderer {
         : advanceTank(player, maze, behind, controllable);
 
       if (!body) {
+        // A wreck is where the server put it, and the next life starts from a
+        // fresh spawn — neither is a position to slide out of.
+        if (mine) this.smoother.reset();
+        else this.remotes.forget(player.s);
         this.drawWreck(ctx, player.x, player.y, player.a, player.s);
         continue;
       }
 
-      const smoother = this.smootherFor(player.s);
-      const drawn = smoother.apply(body.x, body.y, now, mine && this.predictor.resynced);
+      // The local tank is predicted at `now`; everyone else is extrapolated to
+      // it. Both move for reasons that are not motion — a resync for one, a new
+      // snapshot for the other — and both are absorbed rather than stepped.
+      const drawn = mine
+        ? this.smoother.apply(body.x, body.y, now, this.predictor.resynced)
+        : this.remotes.draw(
+            player.s,
+            body.x,
+            body.y,
+            // A tank's velocity is a scalar along its heading; the smoothing
+            // rule wants it as a vector so a hard turn counts as a change too.
+            { vx: Math.cos(body.angle) * body.speed, vy: Math.sin(body.angle) * body.speed },
+            now,
+          );
       this.drawTank(ctx, drawn.x, drawn.y, body.angle, player.s, player.bf);
     }
   }
@@ -677,14 +710,6 @@ export class TanksRenderer {
     return palette;
   }
 
-  private smootherFor(seat: number): PositionSmoother {
-    let smoother = this.smoothers.get(seat);
-    if (!smoother) {
-      smoother = new PositionSmoother();
-      this.smoothers.set(seat, smoother);
-    }
-    return smoother;
-  }
 
   // -------------------------------------------------------------------------
 

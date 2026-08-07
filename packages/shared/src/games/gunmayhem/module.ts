@@ -34,8 +34,17 @@ export const gunMayhemModule: GameModule = {
       'Lose all your stocks and you are out. Last one standing wins the round.',
     ],
     touchSupported: true,
-    // Every snapshot is the whole world; skipping one for a backed-up socket
-    // costs that player nothing the next one doesn't immediately restore.
+    // Positions, stocks and damage are re-sent in full every time, so skipping
+    // one for a backed-up socket costs that player nothing the next one does
+    // not immediately restore — which is the right trade against falling
+    // further behind with every frame.
+    //
+    // Not *quite* nothing, and worth knowing: `snapshot()` also drains the
+    // event queue, and events appear in exactly one snapshot. A player whose
+    // socket is skipped misses that batch of hit sparks, kill effects and
+    // sounds permanently. Cosmetic — the world state itself is unaffected —
+    // but it is why this flag is about the world being self-contained rather
+    // than the whole payload being redundant.
     droppableSnapshots: true,
   },
 
