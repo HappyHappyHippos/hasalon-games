@@ -18,15 +18,13 @@ import { RemoteBodies } from '../../game/RemoteBodies';
 import { feed } from '../../net/feed';
 import { sfx } from '../../audio';
 import { prefersReducedMotion } from '../../ui/motion';
+import { cameraFor } from './camera';
 import { GravityPredictor, advanceRunner, ticksBehind } from './predictor';
 
 const LETTERBOX = '#0a0d14';
 const BAND = '#1d2438';
 const SOLID_EDGE = '#8f8778';
 const INK = '#14110f';
-
-/** Where the camera holds the pack, as a fraction across the view. */
-const CAMERA_ANCHOR = 0.34;
 
 /** Distance in world units for one full limb-swing cycle. */
 const RUN_STRIDE = 80;
@@ -188,7 +186,9 @@ export class GravityRenderer {
       sfx.flip(mine ? mine.g === 1 : true);
     }
 
-    const cameraX = this.cameraFor(snap, bodies, track);
+    // Deliberately not given `bodies`: the camera is shared by everyone, so it
+    // is built from the snapshot alone. See camera.ts.
+    const cameraX = cameraFor(snap, track, behind, controllable);
 
     ctx.save();
     ctx.translate(-cameraX, 0);
@@ -212,34 +212,6 @@ export class GravityRenderer {
     }
 
     ctx.restore();
-  }
-
-  /**
-   * The camera is a pure function of the snapshot.
-   *
-   * Following the leader's *server* x rather than a locally smoothed one keeps
-   * every client's view of the track identical, so nobody can be shown a gap a
-   * moment before or after anyone else. No smoothing is added here for the
-   * same reason: any local easing would be state that depends on this
-   * client's own frame history, so two clients watching the same leader could
-   * end up looking at very slightly different windows onto the track — a
-   * camera that is a pure function of the snapshot alone can never diverge.
-   * The only fix applied is a clamp, since `lead` unclamped can scroll the
-   * view past the end of the track and show empty space beyond `track.width`.
-   */
-  private cameraFor(
-    snap: GravitySnapshot,
-    bodies: Map<number, RunnerBody | null>,
-    track: Track,
-  ): number {
-    let lead = 0;
-    for (const player of snap.players) {
-      const body = bodies.get(player.s);
-      const x = body ? body.x : player.x;
-      if (player.al === 1 && x > lead) lead = x;
-    }
-    const maxCamera = Math.max(0, track.width - VIEW_WIDTH);
-    return Math.min(maxCamera, Math.max(0, lead - VIEW_WIDTH * CAMERA_ANCHOR));
   }
 
   private trackFor(snap: GravitySnapshot): Track {
