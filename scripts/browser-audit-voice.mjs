@@ -83,7 +83,8 @@ async function waitForHttp(url) {
     try {
       const response = await fetch(url);
       if (response.ok) return response;
-    } catch {}
+      // Server not up yet; keep polling until the deadline below.
+    } catch { /* retry */ }
     await sleep(100);
   }
   throw new Error(`Timed out waiting for ${url}`);
@@ -172,13 +173,13 @@ async function waitForValue(browser, expression, label, timeoutMs = 15_000) {
   let appState = null;
   try {
     voiceState = await browser.evaluate(`typeof window.mgVoiceDiagnostics === 'function' ? window.mgVoiceDiagnostics() : null`);
-  } catch {}
+  } catch { /* diagnostics are best effort; the throw below is the real report */ }
   try {
     appState = await browser.evaluate(`(() => {
       const state = window.mgStore?.getState();
       return state ? { status: state.status, error: state.error, roomCode: state.room?.code ?? null } : null;
     })()`);
-  } catch {}
+  } catch { /* diagnostics are best effort; the throw below is the real report */ }
   throw new Error(
     `Timed out waiting for ${label}; last=${JSON.stringify(lastValue)} app=${JSON.stringify(appState)} voice=${JSON.stringify(voiceState)} browserErrors=${JSON.stringify(browser.errors)}`,
   );

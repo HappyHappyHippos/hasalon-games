@@ -1,9 +1,15 @@
 # Restores "git push is the deploy" on a self-hosted box.
+#
+# The `test` job runs on branches and pull requests too, not just `main`.
+# CLAUDE.md says anything touching game feel gets played on the `dev` Railway
+# environment before it reaches production — which is worth a lot less if
+# nothing has typechecked, linted or built the branch first.
 name: Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
+  pull_request:
   workflow_dispatch:
 
 # Two deploys racing would have them fighting over the same working copy and
@@ -23,16 +29,27 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run typecheck
-      # ~45s of this is app.test.ts driving real WebSockets. Worth it: it is
+      - run: npm run lint
+      # Nothing else builds on the way to `main` — the Dockerfile builds on the
+      # box, after this job has already passed — so without this a build break
+      # is only found at deploy time.
+      - run: npm run build
+      # ~60s of this is app.test.ts driving real WebSockets. Worth it: it is
       # the only thing here that exercises the wire protocol end to end.
+      # `npm run test:unit` is the ~35s subset for a local loop.
       - run: npm test
 
   deploy:
     needs: test
-    # Off until the box exists. Set the repository variable DEPLOY_ENABLED to
-    # `true` once the secrets below are in place; until then this job skips
-    # cleanly rather than failing every push on a missing host.
-    if: vars.DEPLOY_ENABLED == 'true'
+    # Two gates, and both matter. Branch pushes and pull requests stop after
+    # `test` — only `main` ever deploys. And it stays off until the box exists:
+    # set the repository variable DEPLOY_ENABLED to `true` once the secrets
+    # below are in place; until then this skips cleanly rather than failing
+    # every push on a missing host.
+    if: |
+      vars.DEPLOY_ENABLED == 'true'
+      && github.ref == 'refs/heads/main'
+      && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - name: Build and restart on the box

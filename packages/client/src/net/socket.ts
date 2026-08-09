@@ -422,12 +422,12 @@ class GameSocket {
         store.setSecret((data as Secret | null) ?? null);
         store.setMemesPrivate(null);
         return;
+      // No hidden state; their `privateFor` returns null and the server never
+      // sends this. `undefined` is "no room yet", which clears the same way.
       case 'achtung':
       case 'gravity':
       case 'gunmayhem':
       case 'tanks':
-      // No hidden state; their `privateFor` returns null and the server never
-      // sends this. Falling through to the same clear as "no room" is correct.
       case undefined:
         store.setSecret(null);
         store.setMemesPrivate(null);

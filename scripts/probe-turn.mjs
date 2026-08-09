@@ -66,7 +66,8 @@ async function waitForHttp(url) {
     try {
       const response = await fetch(url);
       if (response.ok) return response;
-    } catch {}
+      // Server not up yet; keep polling until the deadline below.
+    } catch { /* retry */ }
     await sleep(100);
   }
   throw new Error(`Timed out waiting for ${url}`);

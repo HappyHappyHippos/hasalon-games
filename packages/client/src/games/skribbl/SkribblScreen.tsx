@@ -97,7 +97,8 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
       ink.stop();
       inkRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Mount-once on purpose: the ink surface outlives every re-render, and
+    // rebuilding it would wipe the drawing.
   }, []);
 
   const drawerSeat = view?.drawerSeat ?? -1;
