@@ -1,26 +1,22 @@
-import { ARENA_HEIGHT, ARENA_WIDTH, type Level, type LevelId } from '@mg/shared/gunmayhem';
+import { ARENA_HEIGHT, ARENA_WIDTH, type LevelId } from '@mg/shared/gunmayhem';
 import { getImage } from '../../game/images';
 
 /**
- * Stage set dressing.
+ * Stage set dressing: the painted backdrop behind a Gun Mayhem level.
  *
- * Three levels that were previously distinguishable only by their palette now
- * each get scenery: The Salon is somebody's living room, Rooftops is a city at
- * night, Towers is a spire above the clouds.
+ * Every level ships a painted backdrop at
+ * `public/stages/gun_mayhem_stage_<levelId>.png`, drawn over the procedural sky
+ * and under the platforms. `getImage` loads it lazily and returns null until it
+ * has arrived, so `drawBackdrop` reports whether it actually painted anything —
+ * the renderer falls back to the procedural parallax bands and outlined
+ * platforms for the frames before the image lands, and on any level whose file
+ * is missing or fails to decode.
  *
- * All of it is drawn *behind* the platforms and deliberately low contrast —
- * scenery that competes with four players and a dozen bullets is scenery that
- * makes the game harder to read.
- *
- * ## Optional background images
- *
- * `backdropUrl` points at an optional painted backdrop per level. It is layered
- * over the procedural sky and under this scenery, and `getImage` returns null
- * until (and unless) it loads — so a missing file costs nothing but the
- * procedural look. See `game/images.ts`.
+ * That fallback is the whole error-handling story here: a 404 or a corrupt file
+ * is not an error, it just means the stage renders procedurally. Same contract
+ * as `music.ts` — one attempt, never retried, degrade quietly. See
+ * `game/images.ts`.
  */
-
-
 
 /** Where a level's painted stage image asset lives. */
 export function backdropUrl(id: LevelId): string {
@@ -28,15 +24,13 @@ export function backdropUrl(id: LevelId): string {
 }
 
 /**
- * Blit the painted backdrop for this level, if it has loaded.
+ * Blit the painted backdrop for this level.
+ *
+ * Returns false when the image has not loaded, which is the caller's signal to
+ * draw the procedural stage instead.
  */
-export function drawBackdrop(
-  ctx: CanvasRenderingContext2D,
-  id: LevelId,
-  _now: number,
-): boolean {
-  const url = backdropUrl(id);
-  const image = getImage(url);
+export function drawBackdrop(ctx: CanvasRenderingContext2D, id: LevelId): boolean {
+  const image = getImage(backdropUrl(id));
   if (!image) return false;
 
   ctx.save();
@@ -45,6 +39,3 @@ export function drawBackdrop(
   ctx.restore();
   return true;
 }
-
-/** Scenery for a level, drawn behind the platforms. */
-export function drawScenery(_ctx: CanvasRenderingContext2D, _level: Level, _now: number): void {}

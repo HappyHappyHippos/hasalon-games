@@ -18,13 +18,7 @@ import {
 } from './constants';
 import { NO_MODS, type MoveMods } from './physics';
 import { nextInt, nextRange, pick, type RngState } from '../achtung/rng';
-import type {
-  GmBuffKind,
-  GmBuffs,
-  GmPlayer,
-  GmPowerupKind,
-  GunMayhemState,
-} from './types';
+import type { GmBuffs, GmPlayer, GmPowerupKind, GunMayhemState } from './types';
 
 /**
  * Gun Mayhem's powerups.
@@ -174,15 +168,6 @@ export function applyPowerup(player: GmPlayer, kind: GmPowerupKind): void {
       player.buffs[kind] = BUFF_TICKS;
       return;
   }
-}
-
-/** Buff kinds currently active on a player, for the HUD and the renderer. */
-export function activeBuffs(player: GmPlayer): GmBuffKind[] {
-  const out: GmBuffKind[] = [];
-  for (const kind of Object.keys(player.buffs) as GmBuffKind[]) {
-    if (player.buffs[kind] > 0) out.push(kind);
-  }
-  return out;
 }
 
 function clamp(value: number, min: number, max: number): number {

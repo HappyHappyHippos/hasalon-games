@@ -34,7 +34,7 @@ import { prefersReducedMotion } from '../../ui/motion';
 import { advancePlayer, ticksBehind } from './advance';
 import { GunMayhemPredictor } from './predictor';
 import { DeathFx, LocalShotFx } from './localFx';
-import { backdropUrl, drawBackdrop, drawScenery } from './stageArt';
+import { drawBackdrop } from './stageArt';
 import { drawSlash, drawWeapon, muzzleX, recoilStrength } from './weaponArt';
 
 const INK = '#14110f';
@@ -144,6 +144,12 @@ export class GunMayhemRenderer {
 
   private raf = 0;
   private level: Level = getLevel('candyland');
+  /**
+   * Whether this frame's painted backdrop actually drew. Set by
+   * `drawBackground` and read by `drawPlatforms` immediately after, so both
+   * halves of the stage agree on whether they are painting or falling back.
+   */
+  private backdropLoaded = false;
   private seenEventTick = -1;
   private particles: Particle[] = [];
   private floaters: FloatingText[] = [];
@@ -350,15 +356,16 @@ export class GunMayhemRenderer {
     ctx.fillStyle = wash;
     ctx.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT * 0.7);
 
-    // An optional painted backdrop goes over the sky and under everything else.
-    // It is decoration: when it has not loaded — which is the normal case unless
-    // assets have been dropped into `public/stages` — the procedural bands below
-    // carry the stage on their own, exactly as they always did.
-    const hasBackdrop = drawBackdrop(ctx, this.level.id, now);
+    // The painted backdrop goes over the sky and under everything else. Every
+    // level has one, but it loads lazily — so for the first frames of a match,
+    // and forever if the file is missing, the procedural stage below carries it.
+    // `drawPlatforms` reads this too: outlined platforms are part of the same
+    // fallback, and drawing neither is what leaves a stage with no floor.
+    this.backdropLoaded = drawBackdrop(ctx, this.level.id);
 
     // Two slow parallax bands so the stage has depth without stealing focus.
     // Skipped under a backdrop, which already supplies the depth.
-    if (!hasBackdrop) {
+    if (!this.backdropLoaded) {
       const drift = Math.sin(now / 6000) * 18;
       ctx.fillStyle = palette.far;
       ctx.beginPath();
@@ -370,21 +377,20 @@ export class GunMayhemRenderer {
       ctx.beginPath();
       ctx.ellipse(640 + drift * 0.5, 780, 620, 210, 0, 0, Math.PI * 2);
       ctx.fill();
-
-      drawScenery(ctx, this.level, now);
     }
   }
 
   private drawPlatforms(): void {
     const { ctx } = this.stage;
     const palette = this.level.palette;
-    const url = backdropUrl(this.level.id);
-    const isImageStage = url.includes('gun_mayhem_stage_');
+    // The painted stage draws its own platforms, so these are only for the
+    // frames before it loads. See `drawBackground`.
+    const painted = this.backdropLoaded;
     const isDebugHitboxes =
       typeof window !== 'undefined' && window.location.search.includes('debugHitboxes');
 
     for (const platform of this.level.platforms) {
-      if (!isImageStage) {
+      if (!painted) {
         ctx.fillStyle = palette.platform;
         roundRect(ctx, platform.x, platform.y, platform.w, platform.h, 5);
         ctx.fill();
@@ -401,7 +407,7 @@ export class GunMayhemRenderer {
       }
 
       // Dashes under one-way ledges: the visual language for "you can pass".
-      if (platform.oneWay && !isImageStage) {
+      if (platform.oneWay && !painted) {
         ctx.save();
         ctx.globalAlpha = 0.5;
         ctx.strokeStyle = palette.platformTop;
@@ -806,7 +812,7 @@ export class GunMayhemRenderer {
     // and damage readout would each give away exactly where they are.
     if (!remoteHidden) {
       if ((player.bf?.shield ?? 0) > 0) this.drawShieldBubble(body, now);
-      this.drawBuffGlyphs(player, body, lift, now);
+      this.drawBuffGlyphs(player, body);
       this.drawNameplate(player, body, lift);
     }
   }
@@ -947,12 +953,7 @@ export class GunMayhemRenderer {
    * Deliberately on the canvas and not in the React HUD: these timers change
    * every tick, and the zustand store is only for slow-changing data.
    */
-  private drawBuffGlyphs(
-    player: GmSnapshotPlayer,
-    body: DrawnPlayer,
-    lift: number,
-    now: number,
-  ): void {
+  private drawBuffGlyphs(player: GmSnapshotPlayer, body: DrawnPlayer): void {
     const active = player.bf ? (Object.keys(player.bf) as GmBuffKind[]) : [];
     const hasJetpack = player.jp > 0;
     if (active.length === 0 && !hasJetpack) return;
@@ -982,8 +983,6 @@ export class GunMayhemRenderer {
       ctx.fillText(def.icon, x, y + 0.5);
     });
     ctx.restore();
-    void lift;
-    void now;
   }
 
   private drawNameplate(player: GmSnapshotPlayer, body: DrawnPlayer, lift: number): void {
@@ -1279,7 +1278,6 @@ export class GunMayhemRenderer {
           break;
       }
     }
-    void now;
   }
 
   /**

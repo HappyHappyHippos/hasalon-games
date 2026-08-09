@@ -14,17 +14,6 @@ export const PLAYER_COLORS = [
   '#ff6482',
 ] as const;
 
-export const COLOR_NAMES = [
-  'Red',
-  'Green',
-  'Blue',
-  'Yellow',
-  'Orange',
-  'Purple',
-  'Cyan',
-  'Pink',
-] as const;
-
 export function colorFor(colorIndex: number): string {
   return PLAYER_COLORS[colorIndex % PLAYER_COLORS.length]!;
 }

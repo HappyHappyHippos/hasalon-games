@@ -113,7 +113,6 @@ export const TURN_RATE = 2.2;
  *   change.
  */
 export const BULLET_SPEED = 185;
-export const SHELL_SPEED = BULLET_SPEED;
 export const BULLET_R = 6;
 export const MAX_BOUNCES = 6;
 /** A shell that has found a loop to live in still expires. */

@@ -17,7 +17,6 @@ export const ROWS = 7;
 export const TRACK_HEIGHT = ROWS * TILE;
 
 export const CHUNK_COLS = 8;
-export const CHUNK_WIDTH = CHUNK_COLS * TILE;
 
 /**
  * Long enough that nobody reaches the end of an ordinary round, short enough

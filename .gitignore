@@ -6,3 +6,10 @@ dist/
 .DS_Store
 .vite/
 coverage/
+
+# Throwaway test bots and probes. CLAUDE.md's "one browser tab plus a
+# scratch ws bot" recipe tells you to write these at the repo root and delete
+# them afterwards; this is so the ones you forget stay out of `git status`.
+*.tmp.mjs
+*.tmp.ts
+*.tmp.js

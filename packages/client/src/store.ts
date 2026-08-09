@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { isFaceIndex, isHatIndex } from '@mg/shared';
-import type { ErrorCode, GameConfig, GameId, Identity, RoomView } from '@mg/shared';
+import type { ErrorCode, Identity, RoomView } from '@mg/shared';
 import type { MemesPrivate, MemesStageEntry } from '@mg/shared/memes';
 import { isLang, type Lang } from './i18n';
 import { DEFAULT_MUSIC_VOLUME } from './music';
@@ -417,16 +417,3 @@ export function selectMySeat(state: AppState): number {
   return state.room.players.find((p) => p.id === state.playerId)?.seat ?? -1;
 }
 
-export function selectIsHost(state: AppState): boolean {
-  if (!state.room || !state.playerId) return false;
-  return state.room.hostId === state.playerId;
-}
-
-/** Settings narrowed to the game currently selected, or null on a mismatch. */
-export function selectSettings<T extends GameId>(
-  room: RoomView | null,
-  gameId: T,
-): Extract<GameConfig, { game: T }> | null {
-  if (!room || room.gameId !== gameId || room.settings.game !== gameId) return null;
-  return room.settings as Extract<GameConfig, { game: T }>;
-}
