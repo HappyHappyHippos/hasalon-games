@@ -866,8 +866,11 @@ strong,
   line-height: 1;
 }
 
-/* The one thing a guest has to do in the lobby, directly under the code and
-   above the fold on a phone. Teal so it reads as the action bar it replaced. */
+/* The one thing a guest has to do in the lobby. Teal so it reads as the
+   action bar it replaced. On a phone (below) it's pulled up to the second
+   thing on screen, right under who's here — the mobile media query is what
+   actually puts it above the fold; on a laptop there's room enough that its
+   position in the card doesn't matter as much. */
 .lobby__ready {
   display: flex;
   flex-direction: column;
@@ -899,6 +902,17 @@ strong,
   grid-template-columns: minmax(240px, 320px) 1fr;
   gap: 18px;
   align-items: start;
+}
+
+/* `.lobby__head` (the room code) sits between `.lobby__people` and
+   `.lobby__choice` in the markup — that's the order a single mobile column
+   needs (who's here, ready, players, mic, *then* the code, then the rest) —
+   but on the two-column desktop grid it still reads as a banner above both.
+   `order` doesn't touch the DOM, so the mobile media query below only has to
+   cancel it, not re-derive the position. */
+.lobby__grid > .lobby__head {
+  grid-column: 1 / -1;
+  order: -1;
 }
 
 .lobby__people {
@@ -1026,6 +1040,16 @@ strong,
   place-items: center;
   font-weight: 800;
   font-size: 14px;
+}
+
+/* Groups the mic heading and `VoiceBar` into one flex item so mobile's
+   `order` can move "microphone" as a single unit (see the mobile media
+   query). Same gap as `.lobby__people`'s own so nesting it doesn't change
+   the spacing the two elements already had as direct children. */
+.lobby__voice {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .lobby__choice {
@@ -2878,6 +2902,25 @@ strong,
   .lobby__grid,
   .picker {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* One column now, so the desktop banner trick above (`order: -1` pulling
+     the room code above both grid tracks) isn't needed — cancel it and let
+     the code fall back to where it sits in the markup: after who's here /
+     ready / players / mic, before the game picker. */
+  .lobby__grid > .lobby__head {
+    order: 0;
+  }
+  /* [P0] Ready first: the reflex is "arrive, hit ready," not "arrive, read
+     the roster, scroll to find ready" — so on a phone it jumps to right
+     under who's here, above the actual player list. `.lobby__people-head`
+     gets a lower order than `.lobby__ready` so it stays first; `ul.people`
+     and `.lobby__voice` are untouched and keep their relative order (list,
+     then mic) after it. */
+  .lobby__people-head {
+    order: -2;
+  }
+  .lobby__ready {
+    order: -1;
   }
   .gamecard__tagline {
     display: block;

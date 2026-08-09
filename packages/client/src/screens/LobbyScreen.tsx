@@ -73,21 +73,12 @@ export function LobbyScreen(): JSX.Element {
   return (
     <main className="lobby">
       <div className="lobby__inner">
-        <header className="sticker lobby__head">
-          <div>
-            <p className="eyebrow">{t.roomCode}</p>
-            <p className="lobby__code" dir="ltr">
-              {room.code}
-            </p>
-          </div>
-          <Button onClick={() => void copyLink()}>{copied ? t.copied : t.copyInvite}</Button>
-        </header>
-
         <div className="lobby__grid">
           <section className="sticker lobby__people">
-            <h2 className="eyebrow">
+            <h2 className="eyebrow lobby__people-head">
               {t.whosHere} <span className="muted">{t.outOf(room.players.length, 8)}</span>
             </h2>
+
             <ul className="people">
               {room.players.map((player) => (
                 <li
@@ -161,8 +152,10 @@ export function LobbyScreen(): JSX.Element {
               ))}
             </ul>
 
-            <h2 className="eyebrow">{t.voiceHeading}</h2>
-            <VoiceBar />
+            <div className="lobby__voice">
+              <h2 className="eyebrow">{t.voiceHeading}</h2>
+              <VoiceBar />
+            </div>
 
             <div className="sticker lobby__ready">
               <Button
@@ -182,6 +175,16 @@ export function LobbyScreen(): JSX.Element {
               )}
             </div>
           </section>
+
+          <header className="sticker lobby__head">
+            <div>
+              <p className="eyebrow">{t.roomCode}</p>
+              <p className="lobby__code" dir="ltr">
+                {room.code}
+              </p>
+            </div>
+            <Button onClick={() => void copyLink()}>{copied ? t.copied : t.copyInvite}</Button>
+          </header>
 
           <section className="lobby__choice">
             <GamePicker
