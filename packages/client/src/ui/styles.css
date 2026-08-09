@@ -2262,13 +2262,17 @@ strong,
 
 .options__panel {
   width: min(528px, 100%);
+  /* Percentage of the overlay's *content* box, which already has the
+     safe-area reservation subtracted — the same thing `.overlay__card` does,
+     and the reason none of the other overlays ever ran under a camera cutout.
+     This used to be followed by a `calc(100dvh - …)` override, which was the
+     bug: viewport units know nothing about the padding above, so the panel was
+     allowed to be taller than the box it sits in. `.overlay` centres its child,
+     and a centred item taller than its container overflows *equally on both
+     sides* — so the excess went up under the notch, where it could not be
+     scrolled back into view. Never size this panel off the viewport; size it
+     off its parent. */
   max-height: calc(100% - 12px);
-  /* The dvh fallback above ignores the notch/punch-hole reservation the
-     `.options__overlay` padding makes (issue: settings overlapped the camera
-     bump) — a tall panel (this menu has six sections) filled the raw viewport
-     height and ran up under the cutout. Subtracting the safe-area insets here
-     keeps it inside the same safe box the overlay already computes. */
-  max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   gap: 18px;
   padding: 28px;
   /* A second hard colour offset gives the menu the same playful sticker depth
@@ -2425,6 +2429,16 @@ strong,
 @media (max-height: 560px) {
   .overlay {
     padding: 6px;
+  }
+  /* `.overlay` and `.options__overlay` are both single class selectors, so this
+     `padding: 6px` shorthand — later in the file — silently beat the
+     safe-area padding on the options overlay whenever it applied. A phone held
+     in landscape for a match is exactly `max-height: 560px` and *not*
+     `max-width: 760px` (it is ~812 wide), so it matched here and nowhere else,
+     and the menu ran under the side camera cutout. Restate the reservation:
+     6px when there is no cutout, the cutout's own width when there is. */
+  .options__overlay {
+    padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
   }
   .overlay__card,
   .options__panel {
@@ -2777,8 +2791,12 @@ strong,
     padding: 16px 14px;
     gap: 12px;
     box-shadow: var(--shadow), 6px 6px 0 var(--violet);
-    max-height: calc(100dvh - 16px);
-    max-height: calc(100vh - 16px);
+    /* No `max-height` here on purpose. This block used to set
+       `100dvh` then `100vh` — and the second one wins, so every phone got the
+       *large* viewport height, above the visible one and with no safe-area
+       subtraction at all. That is what pushed the panel under the camera bump
+       on a phone while desktop looked fine. The base rule's `100%` is already
+       correct and already smaller; it needs no help here. */
   }
   .options__head .overlay__title {
     font-size: 22px;
