@@ -20,6 +20,16 @@ export const HATS = [
   'headband',
   'halo',
   'beanie',
+  'beret',
+  'birthday',
+  'cowboy',
+  'kids',
+  'normal',
+  'pilot',
+  'pirate',
+  'rabbi_hat',
+  'santa',
+  'university',
 ] as const;
 
 export const FACES = [

@@ -50,7 +50,19 @@ export function hatRise(hatIndex: number, r: number): number {
       return r * 0.98;
     case 'tophat':
     case 'beanie':
+    case 'beret':
+    case 'pilot':
+    case 'pirate':
+    case 'normal':
       return r * 1.05;
+    case 'cowboy':
+    case 'kids':
+    case 'rabbi_hat':
+    case 'university':
+      return r * 1.2;
+    case 'birthday':
+    case 'santa':
+      return r * 1.5;
   }
 }
 
@@ -76,6 +88,27 @@ export function drawHat(
 
   // The top of the head, where everything below sits.
   const top = -r;
+
+  const customImg = getImage(`/hats/${hat}.png`);
+  if (customImg) {
+    let hatW = r * 2.1;
+    let hatH = (hatW * customImg.height) / customImg.width;
+    let offsetY = top - hatH + r * 0.3;
+
+    if (hat === 'santa' || hat === 'birthday') {
+      hatW = r * 2.2;
+      hatH = (hatW * customImg.height) / customImg.width;
+      offsetY = top - hatH + r * 0.35;
+    } else if (hat === 'cowboy' || hat === 'pirate' || hat === 'rabbi_hat' || hat === 'university') {
+      hatW = r * 2.5;
+      hatH = (hatW * customImg.height) / customImg.width;
+      offsetY = top - hatH + r * 0.4;
+    }
+
+    ctx.drawImage(customImg, -hatW / 2, offsetY, hatW, hatH);
+    ctx.restore();
+    return;
+  }
 
   switch (hat) {
     case 'cap': {
