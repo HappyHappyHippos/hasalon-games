@@ -621,11 +621,11 @@ strong,
    what varies by variant, width follows. */
 .logo {
   display: block;
-  height: 98px;
+  height: 84px;
   width: auto;
 }
 .logo--sm {
-  height: 52px;
+  height: 46px;
 }
 
 .couch {
@@ -2770,7 +2770,7 @@ strong,
    laptop window that happens to be 500px tall should not get a shrunken logo. */
 @media (max-width: 760px) {
   .logo {
-    height: 74px;
+    height: 64px;
   }
   .lobby__code {
     font-size: 34px;
