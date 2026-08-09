@@ -54,7 +54,6 @@ export function hatRise(hatIndex: number, r: number): number {
     case 'pirate':
       return r * 1.05;
     case 'cowboy':
-    case 'rabbi_hat':
     case 'university':
       return r * 1.2;
     case 'birthday':
@@ -100,7 +99,7 @@ export function drawHat(
       hatW = r * 2.8;
       hatH = (hatW * customImg.height) / customImg.width;
       offsetY = top - hatH + r * 0.45;
-    } else if (hat === 'university' || hat === 'rabbi_hat' || hat === 'cowboy') {
+    } else if (hat === 'university' || hat === 'cowboy') {
       hatW = r * 2.2;
       hatH = (hatW * customImg.height) / customImg.width;
       offsetY = top - hatH + r * 0.35;

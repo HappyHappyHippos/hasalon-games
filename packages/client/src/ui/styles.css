@@ -2416,12 +2416,13 @@ strong,
   flex: none;
   display: grid;
   place-items: center;
-  width: 82px;
-  height: 82px;
+  width: 110px;
+  height: 140px;
   border: var(--outline);
   border-radius: var(--radius-sm);
   background: var(--paper);
   box-shadow: var(--shadow-sm);
+  overflow: visible;
 }
 
 .appearance__arrows {

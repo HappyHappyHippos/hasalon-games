@@ -75,7 +75,7 @@ export function AppearancePicker({ colorIndex, hat, face, takenColors, onChange 
       </div>
 
       <div className="appearance__preview">
-        <Avatar colorIndex={colorIndex} hat={hat} face={face} size={72} />
+        <Avatar colorIndex={colorIndex} hat={hat} face={face} size={96} />
       </div>
 
       <div className="appearance__arrows">

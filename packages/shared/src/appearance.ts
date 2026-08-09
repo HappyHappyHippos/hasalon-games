@@ -24,7 +24,6 @@ export const HATS = [
   'birthday',
   'cowboy',
   'pirate',
-  'rabbi_hat',
   'santa',
   'university',
 ] as const;
