@@ -897,7 +897,9 @@ strong,
 
 .people {
   list-style: none;
-  margin: 0 0 8px;
+  /* A little air above the first card and below the last, not just between
+     them — the list used to sit flush against the heading above it. */
+  margin: 8px 0;
   padding: 0;
   display: flex;
   flex-direction: column;
