@@ -944,6 +944,7 @@ strong,
   border: 2.5px solid var(--ink);
   border-radius: var(--radius-sm);
   padding: 8px 10px;
+  box-shadow: var(--shadow-sm);
 }
 /* The self row carries the appearance picker instead of a plain avatar, and the
    picker is intrinsically ~200px wide — on a 375px phone that left the name

@@ -153,7 +153,6 @@ export function LobbyScreen(): JSX.Element {
             </ul>
 
             <div className="lobby__voice">
-              <h2 className="eyebrow">{t.voiceHeading}</h2>
               <VoiceBar />
             </div>
 

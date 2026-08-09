@@ -139,7 +139,6 @@ const he = {
   voiceListening: 'אפשר לשמוע את החדר',
   voiceDeafen: 'השתיקו את החדר',
   voiceUndeafen: 'החזירו את השמע',
-  voiceHeading: 'צ׳אט קולי',
   voiceJoin: 'הפעילו מיקרופון',
   voiceMute: 'השתיקו אותי',
   voiceUnmute: 'בטלו השתקה',
@@ -542,7 +541,6 @@ const en: Dict = {
   padBomb: 'BOMB',
   padFlip: 'FLIP',
 
-  voiceHeading: 'Voice chat',
   voiceListening: 'You can hear the room',
   voiceDeafen: 'Mute room audio',
   voiceUndeafen: 'Turn hearing back on',
