@@ -617,50 +617,21 @@ strong,
    Logo & avatars
    ========================================================================== */
 
+/* `logo.png` is the wordmark art at its own aspect ratio (~3.5:1) — height is
+   what varies by variant, width follows. */
 .logo {
-  display: flex;
-  align-items: center;
-  gap: 14px;
+  display: block;
+  height: 84px;
+  width: auto;
+}
+.logo--sm {
+  height: 46px;
 }
 
 .couch {
   width: 76px;
   height: 57px;
   flex: none;
-}
-.logo--sm .couch {
-  width: 44px;
-  height: 33px;
-}
-
-.logo__text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1;
-}
-
-.logo__word {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 54px;
-  letter-spacing: 0.01em;
-}
-.logo--sm .logo__word {
-  font-size: 30px;
-}
-
-.logo__latin {
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 13px;
-  letter-spacing: 0.34em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  margin-top: 6px;
-}
-.logo--sm .logo__latin {
-  font-size: 10px;
-  margin-top: 3px;
 }
 
 .avatar {
@@ -2793,12 +2764,8 @@ strong,
 /* Everything below is about a *narrow* screen rather than a short one — a wide
    laptop window that happens to be 500px tall should not get a shrunken logo. */
 @media (max-width: 760px) {
-  .logo__word {
-    font-size: 42px;
-  }
-  .couch {
-    width: 58px;
-    height: 44px;
+  .logo {
+    height: 64px;
   }
   .lobby__code {
     font-size: 34px;

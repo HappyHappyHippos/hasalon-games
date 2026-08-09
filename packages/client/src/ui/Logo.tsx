@@ -5,25 +5,11 @@ interface Props {
 }
 
 /**
- * הסלון — "the living room".
- *
- * The Hebrew is the wordmark; "hasalon" rides underneath for anyone who can't
- * read it. The `dir="rtl"` is belt-and-braces: an isolated Hebrew word already
- * lays out correctly, but pinning the direction means punctuation added later
- * can't quietly jump to the wrong end.
+ * הסלון — "the living room". The real wordmark art, not a redraw — `logo.png`
+ * is `hasalon_logo_full.png` (design's source) trimmed to its own bounds.
  */
 export function Logo({ size = 'lg' }: Props): JSX.Element {
-  return (
-    <div className={`logo logo--${size}`}>
-      <Couch />
-      <div className="logo__text">
-        <span className="logo__word" dir="rtl" lang="he">
-          הסלון
-        </span>
-        <span className="logo__latin">hasalon</span>
-      </div>
-    </div>
-  );
+  return <img className={`logo logo--${size}`} src="/logo.png" alt="הסלון — hasalon" />;
 }
 
 /** The house mark: a fat two-seater, drawn in the same ink as everything else. */
