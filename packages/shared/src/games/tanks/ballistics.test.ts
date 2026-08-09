@@ -3,6 +3,7 @@ import { DT } from '../../engine';
 import { marchBullet } from './ballistics';
 import { BULLET_SPEED, CELL, MAX_BOUNCES } from './constants';
 import { generateMaze, hIndex, vIndex } from './maze';
+import { TANK_STAGES, stageMaze } from './stages';
 import type { Maze, TankBullet } from './types';
 
 /** An open room with a sealed border and nothing inside it. */
@@ -128,6 +129,41 @@ describe('marchBullet', () => {
 
     expect(hits).toHaveLength(1);
     expect(hits[0]!.x).toBeCloseTo(CELL * 5, 6);
+  });
+
+  /**
+   * The face a shell turns at and the face a hull stops at have to be the same
+   * one, or the arena has two different shapes depending on what you point at
+   * it. `physics.test.ts` drives a tank into this exact wall; this fires at it.
+   */
+  it('reflects off the same stage face a tank is stopped at', () => {
+    const maze = stageMaze(TANK_STAGES.israel);
+    // The south-west wall's silhouette is y 544..608 at x 104..288.
+    const upward = bullet({ x: 260, y: 690, vx: 0, vy: -BULLET_SPEED });
+    const hits: Array<{ x: number; y: number }> = [];
+    for (let i = 0; i < 40 && upward.bounces === 0; i += 1) {
+      marchBullet(maze, upward, DT, (x, y) => hits.push({ x, y }));
+    }
+    expect(upward.vy).toBe(BULLET_SPEED);
+    expect(hits[0]!.y).toBeCloseTo(608, 6);
+
+    const downward = bullet({ x: 260, y: 470, vx: 0, vy: BULLET_SPEED });
+    hits.length = 0;
+    for (let i = 0; i < 40 && downward.bounces === 0; i += 1) {
+      marchBullet(maze, downward, DT, (x, y) => hits.push({ x, y }));
+    }
+    expect(downward.vy).toBe(-BULLET_SPEED);
+    expect(hits[0]!.y).toBeCloseTo(544, 6);
+  });
+
+  it('cannot fly through the wall front the boxes used to leave hollow', () => {
+    // A shell fired along the middle of the Jungle wall's front face — the band
+    // the old top-face-only box did not cover — must not be able to traverse it.
+    const maze = stageMaze(TANK_STAGES.jungle);
+    const b = bullet({ x: 320, y: 480, vx: BULLET_SPEED, vy: 0, maxBounces: 0 });
+    for (let i = 0; i < 60 && b.bounces === 0; i += 1) marchBullet(maze, b, DT);
+    expect(b.bounces).toBe(1);
+    expect(b.x).toBeCloseTo(348, 6);
   });
 
   it('is deterministic', () => {

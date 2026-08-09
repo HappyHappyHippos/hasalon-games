@@ -48,3 +48,47 @@ export class LocalShotFx {
  * like anyway.
  */
 const MATCH_WINDOW_MS = 600;
+
+/**
+ * Guarantees a death produces exactly one explosion, however many
+ * `requestAnimationFrame` passes the snapshot reporting it stays "latest".
+ *
+ * Deaths do not have the shot/local-prediction problem `LocalShotFx` solves —
+ * the client never predicts its own death, so there is nothing to reconcile
+ * against an earlier local play (see `physics.ts`: prediction stops the
+ * moment a player is not in control, which knockback into a death always is).
+ * What they share is the underlying hazard `LocalShotFx` was written for:
+ * `Renderer.consumeEvents` only runs on a new snapshot tick, but that gate
+ * lives on the renderer itself, coupled to canvas draw calls, and is not
+ * something a unit test can exercise on its own. This is the same guarantee,
+ * pulled out as a pure, independently-testable second line of defence, keyed
+ * on the death itself (seat + the tick it happened on) rather than on tick
+ * bookkeeping.
+ */
+export class DeathFx {
+  /** Keys already played, oldest first, so the set cannot grow unbounded. */
+  private seen = new Set<string>();
+  private order: string[] = [];
+
+  /** True the first time this death is seen; false on every repeat. */
+  consume(seat: number, tick: number): boolean {
+    const key = `${seat}:${tick}`;
+    if (this.seen.has(key)) return false;
+    this.seen.add(key);
+    this.order.push(key);
+    // A match never has enough seats or deaths in flight at once to approach
+    // this — it exists only so a very long round can't leak memory.
+    if (this.order.length > MAX_TRACKED_DEATHS) {
+      const oldest = this.order.shift();
+      if (oldest !== undefined) this.seen.delete(oldest);
+    }
+    return true;
+  }
+
+  reset(): void {
+    this.seen.clear();
+    this.order = [];
+  }
+}
+
+const MAX_TRACKED_DEATHS = 32;

@@ -74,6 +74,53 @@ describe('stickToBits', () => {
     ).toBeTruthy();
   });
 
+  // Issue #34: mobile playtesting wanted the hold/re-jump delay a little longer
+  // still, so these pin the tuned value (280ms) directly rather than only via
+  // the exported constant, so a future edit to HOLD_REJUMP_MS that regresses
+  // the "tiny bit longer" intent gets caught.
+  describe('touch hold/re-jump delay (issue #34 tuning)', () => {
+    it('a short upward flick still jumps, well under the delay', () => {
+      const state = newStickState();
+      // Flick up...
+      expect(stickToBits({ x: 0, y: -1 }, state, 0) & IN_JUMP).toBeTruthy();
+      // ...and let go almost immediately, long before the re-arm timer fires.
+      expect(stickToBits({ x: 0, y: 0 }, state, 40) & IN_JUMP).toBeFalsy();
+    });
+
+    it('a held thumb does not spend the air jump before the tuned delay elapses', () => {
+      const state = newStickState();
+      expect(stickToBits({ x: 0, y: -1 }, state, 0) & IN_JUMP).toBeTruthy();
+      // Sample repeatedly through the whole hold window: the bit must never
+      // drop early, or the "second" jump comes out merged with the first.
+      for (const t of [50, 100, 150, 200, HOLD_REJUMP_MS - 1]) {
+        expect(stickToBits({ x: 0, y: -1 }, state, t) & IN_JUMP).toBeTruthy();
+      }
+    });
+
+    it('releasing below the line re-arms immediately, even mid-hold', () => {
+      const state = newStickState();
+      stickToBits({ x: 0, y: -1 }, state, 0);
+      stickToBits({ x: 0, y: -1 }, state, 100);
+      // Dip below JUMP_OFF well before HOLD_REJUMP_MS: re-arms right away,
+      // it does not wait out the timer.
+      expect(stickToBits({ x: 0, y: -0.1 }, state, 120) & IN_JUMP).toBeFalsy();
+      expect(stickToBits({ x: 0, y: -1 }, state, 130) & IN_JUMP).toBeTruthy();
+    });
+
+    it('holding through the tuned delay produces the second, air, jump', () => {
+      const state = newStickState();
+      stickToBits({ x: 0, y: -1 }, state, 0);
+      // Still one continuous hold right up to the delay: no second edge yet.
+      expect(stickToBits({ x: 0, y: -1 }, state, HOLD_REJUMP_MS - 5) & IN_JUMP).toBeTruthy();
+      // Past it: the latch drops for the release window...
+      expect(stickToBits({ x: 0, y: -1 }, state, HOLD_REJUMP_MS + 5) & IN_JUMP).toBeFalsy();
+      // ...then rises again — the rising edge the sim reads as the air jump.
+      expect(
+        stickToBits({ x: 0, y: -1 }, state, HOLD_REJUMP_MS + REARM_RELEASE_MS + 5) & IN_JUMP,
+      ).toBeTruthy();
+    });
+  });
+
   it('never asks to jump and drop at once', () => {
     for (const y of [-1, -0.4, 0, 0.4, 1]) {
       const bits = stickToBits({ x: 0, y }, newStickState(), 0);

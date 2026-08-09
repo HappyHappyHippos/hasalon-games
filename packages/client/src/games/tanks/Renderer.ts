@@ -352,6 +352,12 @@ export class TanksRenderer {
     const stageDef = TANK_STAGES[stageId];
     const imgLoaded = stageDef && !!getImage(stageDef.backdropUrl);
 
+    // Read off the maze rather than the stage definition, so what is drawn is
+    // by construction the array the server collides against — a stage box is
+    // the wall's full drawn silhouette (see `stages.ts`), and the whole point
+    // of that convention is that nobody derives a second shape from it.
+    const boxes = maze.obstacles ?? [];
+
     // A backdrop is decoration over a complete drawing, never the drawing
     // itself — see the note at the top of `game/images.ts`. Until it loads (and
     // for ever, if it 404s) the obstacles have to be drawn from their hitboxes,
@@ -360,7 +366,7 @@ export class TanksRenderer {
       for (const pass of [0, 1]) {
         ctx.fillStyle = pass === 0 ? WALL_SHADOW : WALL;
         const offset = pass === 0 ? SHADOW_OFFSET : 0;
-        for (const box of stageDef.obstacles) {
+        for (const box of boxes) {
           ctx.fillRect(box.x + offset, box.y + offset, box.w, box.h);
         }
       }
@@ -392,7 +398,7 @@ export class TanksRenderer {
       ctx.strokeStyle = 'rgba(74, 222, 128, 0.9)';
       ctx.fillStyle = 'rgba(74, 222, 128, 0.2)';
       ctx.lineWidth = 2;
-      for (const box of stageDef.obstacles) {
+      for (const box of boxes) {
         ctx.fillRect(box.x, box.y, box.w, box.h);
         ctx.strokeRect(box.x, box.y, box.w, box.h);
       }

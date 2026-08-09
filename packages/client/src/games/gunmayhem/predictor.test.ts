@@ -290,6 +290,71 @@ describe('GunMayhemPredictor', () => {
     expect(shots).toBe(3);
   });
 
+  it('refuses to predict a shot while the pistol is reloading', () => {
+    // 10 rounds at a 13-tick cooldown empty the magazine on tick 117; the real
+    // sim then holds fire for `PISTOL_RELOAD_TICKS` (72 ticks) before the
+    // eleventh round fires on tick 189. Sampling well inside that window is
+    // where the bug showed up: with no reload gate the predictor kept
+    // "firing" on cooldown alone, recoiling and flashing for shots the server
+    // was silently dropping.
+    const TICKS = 160;
+    const r = run(TICKS, () => IN_SHOOT);
+    const predictor = new GunMayhemPredictor();
+
+    for (const tick of [125, 140, 155]) {
+      const body = predictedAt(predictor, r, tick)!;
+      const truth = r.snapshots[tick]!;
+      expect(body.vx).toBeCloseTo(truth.vx, 0);
+      expect(body.x).toBeCloseTo(truth.x, 1);
+      expect(predictor.consumeShot()).toBeNull();
+    }
+  });
+
+  it('fires again once the reload finishes', () => {
+    // Walking the predictor across the tick-189 boundary — where the real
+    // magazine refills and the eleventh round fires — should rediscover that
+    // shot and land on the server's own arithmetic afterward, exactly like any
+    // other predicted shot.
+    const TICKS = 210;
+    const r = run(TICKS, () => IN_SHOOT);
+    const predictor = new GunMayhemPredictor();
+
+    let shots = 0;
+    for (let tick = 180; tick < TICKS; tick++) {
+      predictedAt(predictor, r, tick);
+      if (predictor.consumeShot()) shots += 1;
+    }
+    expect(shots).toBeGreaterThanOrEqual(1);
+
+    const body = predictedAt(predictor, r, TICKS - 1)!;
+    const truth = r.snapshots[TICKS - 1]!;
+    expect(body.vx).toBeCloseTo(truth.vx, 0);
+    expect(body.x).toBeCloseTo(truth.x, 1);
+  });
+
+  it('reseeds the reload timer from the snapshot rather than trusting stale local state', () => {
+    // `rl` is authoritative and rebuilt fresh every `update()` call, the same
+    // way `cd`/`cy`/`jb` already are — a snapshot that lands mid-reload has to
+    // gate the very next replayed tick, not just shots the predictor already
+    // knew about from its own earlier replays.
+    const predictor = new GunMayhemPredictor();
+
+    // First call: an ordinary, non-reloading snapshot, so the predictor is not
+    // simply refusing to fire on the very first call it ever sees.
+    gmInput.history.push({ seq: 1, bits: 0, at: 0 });
+    predictor.update(TICK_MS, level, bare({ w: 'pistol', am: 5, rl: 0, cd: 0, ack: 0 }), true);
+
+    // Second call: a fresh snapshot reporting the magazine mid-reload, with an
+    // unacknowledged shot input sitting right behind it.
+    gmInput.reset();
+    gmInput.history.push({ seq: 2, bits: IN_SHOOT, at: TICK_MS });
+    const reloading = bare({ w: 'pistol', am: 0, rl: 40, cd: 0, ack: 1 });
+    const body = predictor.update(2 * TICK_MS, level, reloading, true)!;
+
+    expect(predictor.consumeShot()).toBeNull();
+    expect(body.vx).toBeCloseTo(0, 0);
+  });
+
   it('gives the same answer whatever the refresh rate', () => {
     // Reconciling per frame used to make correction strength a property of the
     // monitor. Rebuilding from the snapshot cannot: the frame rate decides how

@@ -24,9 +24,16 @@ export function WordPicker({ choices, dir, secondsLeft }: Props): JSX.Element {
   const tiers = [t.skribblEasy, t.skribblMedium, t.skribblHard];
 
   return (
-    <div className="overlay overlay--solid skribbl__pickwrap">
+    <div
+      className="overlay overlay--solid skribbl__pickwrap"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="skribbl-pick-prompt"
+    >
       <div className="skribbl__pick">
-        <p className="eyebrow">{t.skribblPickPrompt}</p>
+        <p className="eyebrow" id="skribbl-pick-prompt">
+          {t.skribblPickPrompt}
+        </p>
         <div className="skribbl__cards">
           {choices.map((word, index) => (
             <button

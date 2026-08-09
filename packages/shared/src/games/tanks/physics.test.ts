@@ -4,7 +4,11 @@ import {
   ACCEL,
   CELL,
   MAX_SPEED,
+  PICKUP_INSET,
+  PICKUP_R,
   REVERSE_SPEED,
+  STAGE_H,
+  STAGE_W,
   TANK_CLEAR,
   TANK_R,
   TURN_RATE,
@@ -13,6 +17,7 @@ import {
 import { generateMaze, hIndex, vIndex } from './maze';
 import {
   NO_TANK_MODS,
+  insideObstacle,
   resolveTankWalls,
   separateTanks,
   stepTank,
@@ -20,7 +25,8 @@ import {
   type TankBody,
   type TankMoveInput,
 } from './physics';
-import type { Maze } from './types';
+import { TANK_STAGES, TANK_STAGE_IDS, stageMaze } from './stages';
+import type { Maze, ObstacleBox } from './types';
 
 /** An open room with a sealed border. */
 function room(cols = 5, rows = 4): Maze {
@@ -387,6 +393,138 @@ describe('separateTanks + resolveTankWalls — adversarial convergence', () => {
 function cellCentre(cx: number, cy: number): { x: number; y: number } {
   return { x: (cx + 0.5) * CELL, y: (cy + 0.5) * CELL };
 }
+
+describe('static stage geometry', () => {
+  /** Centre-to-box distance, which is what `resolveCircleBox` keeps ≥ `TANK_R`. */
+  function distanceToBox(b: TankBody, box: ObstacleBox): number {
+    const px = Math.max(box.x, Math.min(box.x + box.w, b.x));
+    const py = Math.max(box.y, Math.min(box.y + box.h, b.y));
+    return Math.hypot(b.x - px, b.y - py);
+  }
+
+  /**
+   * A stage box is the wall's whole drawn silhouette — the sunlit top face *and*
+   * the front face extruded below it (see `stages.ts`). So the two approaches
+   * that used to differ are the ones worth driving: down onto the top edge, and
+   * up into the bottom edge, which is the front face's foot. Before the boxes
+   * traced the silhouette, the second one let a tank park inside the painted
+   * wall; the arena looked solid and drove hollow.
+   */
+  it('stops a tank at every face of every box, on every stage', () => {
+    for (const id of TANK_STAGE_IDS) {
+      const stage = TANK_STAGES[id];
+      const maze = stageMaze(stage);
+      for (const box of stage.obstacles) {
+        const approaches = [
+          { x: box.x + box.w / 2, y: box.y - 60, angle: Math.PI / 2 },
+          { x: box.x + box.w / 2, y: box.y + box.h + 60, angle: -Math.PI / 2 },
+          { x: box.x - 60, y: box.y + box.h / 2, angle: 0 },
+          { x: box.x + box.w + 60, y: box.y + box.h / 2, angle: Math.PI },
+        ];
+        for (const start of approaches) {
+          // A run-up that begins off the arena, or already inside a neighbouring
+          // box, tests the resolver rather than this box's face. Boxes derived
+          // from a painting butt up against each other, so both happen.
+          if (start.x < TANK_R || start.x > STAGE_W - TANK_R) continue;
+          if (start.y < TANK_R || start.y > STAGE_H - TANK_R) continue;
+          if (insideObstacle(maze, start.x, start.y, TANK_R)) continue;
+
+          const b = body({ x: start.x, y: start.y, angle: start.angle });
+          run(b, maze, 90, input({ fwd: true }));
+          // A hair of tolerance for the same reason as the lattice test above:
+          // the push-out lands exactly on the clearance, and asserting equality
+          // on a float asserts the rounding.
+          expect(distanceToBox(b, box)).toBeGreaterThan(TANK_R - 0.01);
+        }
+      }
+    }
+  });
+
+  it('spawns every seat in the open, on every stage', () => {
+    for (const id of TANK_STAGE_IDS) {
+      const stage = TANK_STAGES[id];
+      const maze = stageMaze(stage);
+      for (const spawn of stage.spawns) {
+        expect(insideObstacle(maze, spawn.x, spawn.y, TANK_R)).toBe(false);
+      }
+    }
+  });
+
+  /**
+   * `sim.ts:spawnPickup` samples the playable rectangle and rejects anything
+   * inside geometry, giving up after twelve tries. That is only a sane budget
+   * while most of the arena is open: a stage boxed so densely that (say) a tenth
+   * of it were free would silently stop dropping powerups rather than fail
+   * loudly. So pin the property the retry count depends on, not the retry count.
+   *
+   * Israel is much the tightest at ~29% free; the rest sit between 54% and 66%.
+   */
+  it('leaves most of every stage free for a pickup to land in', () => {
+    for (const id of TANK_STAGE_IDS) {
+      const maze = stageMaze(TANK_STAGES[id]);
+      let free = 0;
+      let total = 0;
+      for (let y = PICKUP_INSET; y <= STAGE_H - PICKUP_INSET; y += 8) {
+        for (let x = PICKUP_INSET; x <= STAGE_W - PICKUP_INSET; x += 8) {
+          total += 1;
+          if (!insideObstacle(maze, x, y, PICKUP_R)) free += 1;
+        }
+      }
+      expect(free / total, id).toBeGreaterThan(0.2);
+    }
+  });
+
+  /**
+   * Israel is the stage the boxes were re-derived for, so pin a few of them
+   * against the painting rather than against the list — coordinates a reader can
+   * check by opening `tank_stage_israel.png` and looking.
+   */
+  it('matches the Israel artwork at the coordinates that were wrong', () => {
+    const maze = stageMaze(TANK_STAGES.israel);
+
+    // Painted wall that the old top-face-only boxes left hollow: the front face
+    // under the north-west L, and under the north wall by the laundry line.
+    expect(insideObstacle(maze, 264, 96)).toBe(true);
+    expect(insideObstacle(maze, 780, 90)).toBe(true);
+
+    // Open sand the old list claimed: a strip east of the north-west L's
+    // vertical arm, the gap north of the long central wall, and the pocket east
+    // of the south-west wall's end.
+    expect(insideObstacle(maze, 335, 66)).toBe(false);
+    expect(insideObstacle(maze, 890, 270)).toBe(false);
+    expect(insideObstacle(maze, 302, 542)).toBe(false);
+
+    // The fountain is a built structure with a raised stone basin, so it is
+    // solid on purpose — unlike the barrels, crates and palms around it, which
+    // are scatter and stay drivable.
+    expect(insideObstacle(maze, 796, 200)).toBe(true);
+    expect(insideObstacle(maze, 73, 620)).toBe(false); // the south-west palm
+  });
+
+  it('keeps a tank out of the Israel wall front it used to drive into', () => {
+    const maze = stageMaze(TANK_STAGES.israel);
+    // The south-west wall runs y 544..608 at x 104..288: top face on top, front
+    // face below it. Coming down stops at its top edge, coming up at its foot.
+    const fromAbove = body({ x: 260, y: 470, angle: Math.PI / 2 });
+    run(fromAbove, maze, 90, input({ fwd: true }));
+    expect(fromAbove.y).toBeCloseTo(544 - TANK_R, 1);
+
+    const fromBelow = body({ x: 260, y: 690, angle: -Math.PI / 2 });
+    run(fromBelow, maze, 90, input({ fwd: true }));
+    expect(fromBelow.y).toBeCloseTo(608 + TANK_R, 1);
+  });
+
+  it('keeps a tank out of the Jungle wall front it used to drive into', () => {
+    const maze = stageMaze(TANK_STAGES.jungle);
+    // Same shape, the other stage whose boxes were the top face alone: this wall
+    // is y 436..496, and 468 — the old box's foot — is painted wall.
+    expect(insideObstacle(maze, 456, 480)).toBe(true);
+
+    const fromBelow = body({ x: 456, y: 560, angle: -Math.PI / 2 });
+    run(fromBelow, maze, 90, input({ fwd: true }));
+    expect(fromBelow.y).toBeCloseTo(496 + TANK_R, 1);
+  });
+});
 
 describe('wrapAngle', () => {
   it('keeps angles in (-π, π]', () => {

@@ -916,15 +916,36 @@ strong,
   gap: 8px;
 }
 
+/* Explicit grid ownership: avatar, name/meta text and the badge cluster each
+   get their own cell, so a long name or an extra badge can never slide under
+   or on top of a neighbour — the worst it can do is claim more of its own
+   column, and .person__text is the only one allowed to shrink. */
 .person {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'avatar text badges';
   align-items: center;
-  gap: 10px;
+  column-gap: 10px;
   background: var(--paper);
   border: 2.5px solid var(--ink);
   border-radius: var(--radius-sm);
   padding: 8px 10px;
 }
+/* The self row carries the appearance picker instead of a plain avatar, and the
+   picker is intrinsically ~200px wide — on a 375px phone that left the name
+   40px and truncated a four-letter name to two. Stack it instead: picker on its
+   own row, name and badges under it, where they get the full width. */
+.person--self {
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'avatar avatar'
+    'text badges';
+  row-gap: 6px;
+}
+.person--self .person__avatar {
+  justify-content: center;
+}
+
 .person--ready {
   background: #eafaf0;
 }
@@ -932,11 +953,24 @@ strong,
   opacity: 0.55;
 }
 
+.person__avatar {
+  grid-area: avatar;
+  display: flex;
+  align-items: center;
+  /* The self row swaps in the appearance picker, which is wider than a plain
+     avatar (chevrons flanking the preview) — min-width: 0 lets its own
+     internals be the thing that negotiates space, not this cell. */
+  min-width: 0;
+}
+
 .person__text {
+  grid-area: text;
   display: flex;
   flex-direction: column;
+  /* The load-bearing line: without this a grid child refuses to shrink below
+     its content's intrinsic width, and a long name pushes the badges cell
+     out past the card edge instead of ellipsing. */
   min-width: 0;
-  flex: 1;
 }
 .person__name {
   font-weight: 700;
@@ -947,6 +981,27 @@ strong,
 .person__meta {
   font-size: 12px;
   color: var(--ink-soft);
+}
+
+/* Mic sits inline after the name rather than in its own column — it has
+   nothing to say when a name is long enough to ellipsis, and giving it a
+   fixed-width grid track would waste that space on every player who isn't
+   talking. */
+.person__mic {
+  margin-inline-start: 4px;
+  font-size: 12px;
+  line-height: 1;
+}
+
+/* Total + ready tick travel together as one grid cell so an absent total
+   (scores hidden before the room's first match) never leaves a dead gutter
+   where a grid column would otherwise reserve space for nothing. */
+.person__badges {
+  grid-area: badges;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
 }
 
 /* Cross-game running total, in the same row as the ready tick. */
@@ -1196,6 +1251,11 @@ strong,
   border-radius: 10px;
   background: var(--paper);
   font-size: 13px;
+  /* Only matters once the small-screen rules below start toggling padding/gap
+     and hiding children — animates the collapse instead of snapping it.
+     `prefers-reduced-motion` already flattens all transition-duration to
+     ~0 globally, so this needs no separate guard. */
+  transition: padding 140ms ease, gap 140ms ease;
 }
 .hudcard--me {
   background: var(--yellow);
@@ -1349,11 +1409,6 @@ strong,
 
 /* Speaking. A ring rather than a colour change, so it reads at a glance without
    competing with ready/away, which already own this row's colours. */
-.person__mic {
-  font-size: 12px;
-  line-height: 1;
-}
-
 .person--speaking {
   box-shadow: 0 0 0 3px var(--green);
   border-radius: 12px;
@@ -2600,6 +2655,31 @@ strong,
     font-size: 10px;
   }
 
+  /* Roster compaction: the local player keeps the full card above, everyone
+     else collapses to a dot plus their score — the one number worth a glance
+     mid-round. This is what keeps an 8-seat roster from wrapping into enough
+     rows to eat the arena; a wide `.rail__list` (see styles above) just wraps
+     these narrower chips onto fewer, shorter rows instead. The hidden name
+     still exists for assistive tech via `aria-label` on the card itself
+     (added in each screen's hud JSX), so nothing is lost, only hidden. */
+  .hudcard:not(.hudcard--me) {
+    padding: 2px 6px;
+    gap: 4px;
+  }
+  .hudcard:not(.hudcard--me) .hudcard__body,
+  .hudcard:not(.hudcard--me) .hudcard__right,
+  .hudcard:not(.hudcard--me) .hudcard__effects {
+    display: none;
+  }
+  .hudcard:not(.hudcard--me) .hudcard__dot {
+    width: 9px;
+    height: 9px;
+  }
+  .hudcard:not(.hudcard--me) .hudcard__score {
+    font-size: 13px;
+    min-width: 0;
+  }
+
   /* A quiet physical readout at the otherwise-unused bottom centre. Keeping it
      out of the score row avoids the overlap that caused the old mobile badge
      to be hidden entirely. */
@@ -2624,6 +2704,34 @@ strong,
   }
   .netbadge__jitter {
     display: none;
+  }
+}
+
+/* Landscape phone: ~350-390px of height total, so every row the roster wraps
+   onto (see .rail__list / .hudcard above) is a meaningful slice of the
+   arena. Squeeze both the local card and the collapsed chips further than
+   the general small-screen rule does. Placed after that rule so it wins the
+   cascade on equal-specificity `.hudcard` selectors — a landscape phone
+   matches both media queries at once. */
+@media (max-height: 460px) {
+  .hudcard {
+    padding: 2px 6px;
+    gap: 5px;
+    font-size: 11px;
+  }
+  .hudcard__name {
+    max-width: 46px;
+  }
+  .hudcard:not(.hudcard--me) {
+    padding: 1px 5px;
+    gap: 3px;
+  }
+  .hudcard:not(.hudcard--me) .hudcard__dot {
+    width: 8px;
+    height: 8px;
+  }
+  .hudcard:not(.hudcard--me) .hudcard__score {
+    font-size: 12px;
   }
 }
 
@@ -2944,6 +3052,7 @@ strong,
 }
 
 .skribbl__stage {
+  position: relative;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -3234,6 +3343,9 @@ strong,
 
 .skribbl__pickwrap {
   border-radius: inherit;
+  /* Anchored to `.skribbl__stage` (see the JSX comment), which is never
+     clipped and never resized by the roster or chat, so this box is a
+     function of the viewport only — not of how many players are seated. */
 }
 .skribbl__pick {
   display: flex;
@@ -3241,6 +3353,11 @@ strong,
   align-items: center;
   gap: 12px;
   padding: 20px;
+  /* Bounded and self-scrolling so a short viewport clips nothing: the one
+     scroller here is this element, never `.skribbl__cards` as well. */
+  max-width: min(92%, 460px);
+  max-height: 100%;
+  overflow-y: auto;
 }
 .skribbl__cards {
   display: flex;
@@ -3256,6 +3373,7 @@ strong,
   padding: 16px 22px;
   cursor: pointer;
   min-width: 130px;
+  min-height: 44px;
   /* Dealt in, one after another. */
   animation: skribbl-deal 320ms cubic-bezier(0.22, 1.3, 0.4, 1) both;
 }
@@ -3366,6 +3484,39 @@ strong,
   }
   .skribbl__act {
     min-height: 44px;
+  }
+
+  /* The picker collapses to a bottom sheet: pinned to the bottom edge of the
+     stage rather than centered, so it lands under the thumb instead of over
+     the middle of the canvas, and a single bounded, scrollable column of
+     full-width cards instead of a row that wraps 2-then-1 and reads as
+     scattered at 320-414px. */
+  .skribbl__pickwrap {
+    align-items: flex-end;
+    padding: 8px;
+  }
+  .skribbl__pick {
+    width: 100%;
+    max-width: none;
+    max-height: min(58dvh, 400px);
+    padding: 12px;
+    gap: 8px;
+  }
+  .skribbl__cards {
+    flex-direction: column;
+    width: 100%;
+    gap: 8px;
+  }
+  .skribbl__card {
+    flex-direction: row;
+    justify-content: space-between;
+    width: 100%;
+    min-width: 0;
+    min-height: 44px;
+    padding: 10px 16px;
+  }
+  .skribbl__cardword {
+    font-size: 18px;
   }
 }
 
@@ -3757,7 +3908,17 @@ strong,
   .memes { padding: calc(6px + env(safe-area-inset-top)) calc(6px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) calc(6px + env(safe-area-inset-left)); gap: 6px; }
   .memes__top { min-height: 50px; padding: 4px 8px; padding-inline-end: calc(var(--chrome-gutter) + env(safe-area-inset-right)); }
   .memes__clock { width: 38px; height: 38px; flex-basis: 38px; }
-  .memes__phase { align-content: start; }
+  /* `.memes__phase` was `display: grid` here, and a grid's implicit row is
+     sized to its content — so `.memes__composer`'s `height: 100%` had nothing
+     definite to resolve against and was silently treated as `auto`. That's
+     the actual reason the meme image never grew past its own intrinsic size
+     on a phone (issue #41): the 1fr preview row below had no real leftover
+     space to claim. Flex gives `.memes__composer` a genuine computed height
+     from `.memes__phase` (itself sized by the outer flex column in `.memes`),
+     so `flex: 1` on the composer and `height: 100%` on the preview underneath
+     it both resolve to real pixels instead of `auto`. `.memes__roster` stays
+     an ordinary flex item beneath it, at its natural height. */
+  .memes__phase { display: flex; flex-direction: column; }
   /* One column, and it must *fit*: the caption fields take the height they
      need and the preview takes what is left. A fixed `26dvh` preview was the
      other way round, and on a short phone it pushed the submit button below
@@ -3768,12 +3929,35 @@ strong,
     grid-template-rows: minmax(90px, 1fr) auto;
     grid-template-columns: minmax(0, 1fr);
     align-content: stretch;
-    height: 100%;
+    flex: 1 1 auto;
     min-height: 0;
     gap: 9px;
   }
-  .memes__preview { min-height: 0; height: 100%; }
-  .memes__preview .meme-card { max-width: min(100%, calc(100% * var(--meme-aspect))); max-height: 100%; height: auto; width: auto; }
+  /* `container-type: size` turns this box into a query container so the
+     meme-card below can size itself off *this* box's real height (`cqh`)
+     instead of guessing from the viewport the way `.meme-card--stage`'s
+     `dvh` formula does — this container's height depends on the fields
+     column's content, which a viewport unit knows nothing about. It needs a
+     height and width from outside to query, which `height: 100%` (now
+     definite, see the flex fix above) and the grid column both provide. */
+  .memes__preview { min-height: 0; height: 100%; container-type: size; }
+  /* `width: auto` here was the actual bug behind issue #41: `.meme-card` is
+     a plain box (not a replaced element), and a non-stretched grid item with
+     `width/height: auto` and an aspect-ratio sizes to its own *content*
+     (`fit-content`), not to the space available — so the card shrank to
+     whatever its caption text happened to need, nowhere near maximized, and
+     `max-width`/`max-height` never got a chance to matter because the
+     content-sized box was already far smaller than either cap. Deriving the
+     width explicitly from `cqh` (this container's real height) times the
+     template's aspect ratio, capped at the container's full width, is the
+     same "largest box that fits, aspect preserved" math `object-fit: contain`
+     does for a replaced element — just spelled out, because `.meme-card`
+     isn't one. Height then follows from the inline `aspect-ratio` style. */
+  .memes__preview .meme-card {
+    width: min(100%, calc(100cqh * var(--meme-aspect)));
+    height: auto;
+    max-height: 100%;
+  }
   .memes__fields { padding: 8px 10px; gap: 6px; }
   .memes__fields h2 { font-size: 18px; }
   .memes__field textarea { min-height: 58px; font-size: 16px; }
@@ -3870,7 +4054,7 @@ strong,
     padding: 4px 6px;
   }
   .person--self { grid-column: span 2; }
-  .person > .avatar { width: 38px; height: 38px; }
+  .person__avatar .avatar { width: 38px; height: 38px; }
   .person__meta { font-size: 10px; }
   .person__tick { width: 24px; height: 24px; }
   .person--self .appearance { gap: 4px; }

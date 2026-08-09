@@ -30,6 +30,7 @@ import {
   DEFAULT_TARGET_WINS,
   KB_UP_BIAS,
   MAX_DAMAGE,
+  PISTOL_RELOAD_TICKS,
   PLAYER_HALF_H,
   PLAYER_HALF_W,
   RESPAWN_HEIGHT,
@@ -140,8 +141,9 @@ function createPlayer(seat: GameSeat, index: number, config: GunMayhemConfig): G
     invuln: 0,
     active: true,
     weapon: DEFAULT_WEAPON,
-    ammo: 0,
+    ammo: WEAPONS[DEFAULT_WEAPON].ammo,
     cooldown: 0,
+    reloadTicks: 0,
     bombs: BOMBS_PER_LIFE,
     bombCooldown: 0,
     heldBits: 0,
@@ -192,8 +194,9 @@ function resetToSpawn(state: GunMayhemState, player: GmPlayer, index: number): v
   player.respawnTimer = 0;
   player.invuln = RESPAWN_INVULN_TICKS;
   player.weapon = DEFAULT_WEAPON;
-  player.ammo = 0;
+  player.ammo = WEAPONS[DEFAULT_WEAPON].ammo;
   player.cooldown = 0;
+  player.reloadTicks = 0;
   player.bombs = BOMBS_PER_LIFE;
   player.bombCooldown = 0;
   player.lastHitBy = -1;
@@ -324,6 +327,17 @@ function stepTimers(state: GunMayhemState): void {
     for (const kind of Object.keys(player.buffs) as GmBuffKind[]) {
       player.buffs[kind] = tick(player.buffs[kind]);
     }
+
+    if (player.reloadTicks > 0) {
+      player.reloadTicks = tick(player.reloadTicks);
+      // Only refill if the pistol is still out. A weapon crate picked up
+      // mid-reload already gave a full magazine of its own kind through
+      // `giveWeapon`, which also clears `reloadTicks` — this guard is a
+      // second line of defence, not the primary one.
+      if (player.reloadTicks === 0 && player.weapon === DEFAULT_WEAPON) {
+        player.ammo = WEAPONS[DEFAULT_WEAPON].ammo;
+      }
+    }
   }
 }
 
@@ -372,6 +386,7 @@ function stepShooting(state: GunMayhemState): void {
     if (!player.active) continue;
     if ((player.heldBits & IN_SHOOT) === 0) continue;
     if (player.cooldown > 0) continue;
+    if (player.reloadTicks > 0) continue;
 
     const weapon = WEAPONS[player.weapon];
     player.cooldown = shotCooldownTicks(player.weapon, player.buffs);
@@ -492,6 +507,7 @@ function spendAmmo(player: GmPlayer): void {
   const spent = spendRound(player.weapon, player.ammo);
   player.weapon = spent.weapon;
   player.ammo = spent.ammo;
+  if (spent.reloading) player.reloadTicks = PISTOL_RELOAD_TICKS;
 }
 
 /**
@@ -868,6 +884,10 @@ function giveWeapon(player: GmPlayer, weapon: WeaponKind): void {
   player.weapon = weapon;
   player.ammo = WEAPONS[weapon].ammo;
   player.cooldown = 0;
+  // A crate picked up mid-reload hands over a weapon that was never empty;
+  // the stale pistol reload it interrupted should not silently finish later
+  // and top up whatever is now in hand.
+  player.reloadTicks = 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -1003,6 +1023,7 @@ function toSnapshotPlayer(p: GmPlayer): GmSnapshotPlayer {
     w: p.weapon,
     am: p.ammo,
     cd: p.cooldown,
+    rl: p.reloadTicks,
     bo: p.bombs,
     p: p.roundWins,
     ack: p.ackSeq,

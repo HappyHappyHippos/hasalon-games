@@ -117,6 +117,10 @@ function GunMayhemHud({ room, mySeat }: Props): JSX.Element {
             className={`hudcard${out ? ' hudcard--out' : ''}${
               player.seat === mySeat ? ' hudcard--me' : ''
             }${speaking.has(player.id) ? ' hudcard--speaking' : ''}`}
+            // On small screens every non-`--me` card collapses to a dot plus
+            // score (see .hudcard in styles.css); this keeps the name reachable
+            // for assistive tech even though it's visually hidden there.
+            aria-label={`${player.name}: ${live?.score ?? player.score}`}
           >
             <span className="hudcard__dot" style={{ background: colorFor(player.colorIndex) }} />
             <div className="hudcard__body">
@@ -129,8 +133,17 @@ function GunMayhemHud({ room, mySeat }: Props): JSX.Element {
             <div className="hudcard__right">
               <span className="hudcard__damage">{Math.round(live?.damage ?? 0)}%</span>
               <span className="hudcard__weapon">
-                {WEAPONS[(live?.weapon ?? 'pistol') as WeaponKind].icon}
-                {live?.ammo ? ` ${live.ammo}` : ''}
+                {(() => {
+                  const weapon = (live?.weapon ?? 'pistol') as WeaponKind;
+                  const ammo = live?.ammo ?? 0;
+                  // The pistol is the only weapon that ever sits at 0 ammo —
+                  // every other weapon empties straight back to a full pistol
+                  // (see `spendRound` in shooting.ts) — so ammo === 0 on the
+                  // pistol unambiguously means "reloading" rather than "out".
+                  const reloading = weapon === 'pistol' && ammo === 0;
+                  if (reloading) return t.weaponReloading;
+                  return `${WEAPONS[weapon].icon}${ammo ? ` ${ammo}` : ''}`;
+                })()}
               </span>
             </div>
             <span className="hudcard__score">{live?.score ?? player.score}</span>

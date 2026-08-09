@@ -6,6 +6,8 @@ import {
   JETPACK_FUEL_TICKS,
   JETPACK_MAX_RISE,
   JUMP_BUFFER_TICKS,
+  KB_BASE,
+  KB_PER_DAMAGE,
   MAX_JUMPS,
   PLAYER_HALF_H,
   RUN_SPEED,
@@ -446,13 +448,16 @@ describe('segmentHitsBox', () => {
 
 describe('calculateKnockback', () => {
   it('starts at full strength at 0% damage', () => {
-    expect(calculateKnockback(0)).toBe(240);
-    expect(calculateKnockback(0, 2)).toBe(480);
+    expect(calculateKnockback(0)).toBe(KB_BASE);
+    expect(calculateKnockback(0, 2)).toBe(KB_BASE * 2);
   });
 
   it('grows extra pushback per damage % at 50% of the previous rate', () => {
-    expect(calculateKnockback(100)).toBe(240 + 100 * 4.75);
-    expect(calculateKnockback(50, 1.5)).toBe((240 + 50 * 4.75) * 1.5);
+    // Derived rather than written out, because `KB_PER_DAMAGE` is a tuning
+    // value — it moved for issue #32 and this test went stale with it.
+    const perDamage = KB_PER_DAMAGE * 0.5;
+    expect(calculateKnockback(100)).toBe(KB_BASE + 100 * perDamage);
+    expect(calculateKnockback(50, 1.5)).toBe((KB_BASE + 50 * perDamage) * 1.5);
   });
 });
 

@@ -208,16 +208,25 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
               </div>
             )}
 
-            {phase === 'picking' && isDrawer && (secret?.choices.length ?? 0) > 0 && (
-              <WordPicker choices={secret!.choices} dir={dir} secondsLeft={secondsLeft} />
-            )}
-
             {phase === 'picking' && !isDrawer && (
               <div className="overlay overlay--pass">
                 <p className="skribbl__waiting">{t.skribblChoosing(drawerName)}</p>
               </div>
             )}
           </div>
+
+          {/*
+            A sibling of the paper, not a child of it: the paper clips its own
+            overflow and its height is whatever the grid leaves over after the
+            roster strip and chat, which on a short phone can be less than the
+            picker needs. Anchoring here instead — to the stage, which has no
+            clip and no roster-dependent sizing — gives the picker one fixed
+            box to live in regardless of player count. See `.skribbl__stage`
+            in styles.css for the `position: relative` this relies on.
+          */}
+          {phase === 'picking' && isDrawer && (secret?.choices.length ?? 0) > 0 && (
+            <WordPicker choices={secret!.choices} dir={dir} secondsLeft={secondsLeft} />
+          )}
 
           {isDrawer && phase === 'drawing' ? (
             <Toolbar

@@ -99,7 +99,7 @@ export function LobbyScreen(): JSX.Element {
                   }`}
                 >
                   {player.id === playerId ? (
-                    <div style={{ marginLeft: '-0.5rem', marginRight: '0.25rem' }}>
+                    <div className="person__avatar">
                       <AppearancePicker
                         colorIndex={identity.colorIndex}
                         hat={identity.hat}
@@ -112,24 +112,26 @@ export function LobbyScreen(): JSX.Element {
                       />
                     </div>
                   ) : (
-                    <Avatar
-                      colorIndex={player.colorIndex}
-                      hat={player.hat}
-                      face={player.face}
-                      name={player.name}
-                      size={52}
-                      away={!player.connected}
-                    />
-                  )}
-                  {player.voice && (
-                    <span className="person__mic" aria-hidden="true">
-                      🎤
-                    </span>
+                    <div className="person__avatar">
+                      <Avatar
+                        colorIndex={player.colorIndex}
+                        hat={player.hat}
+                        face={player.face}
+                        name={player.name}
+                        size={52}
+                        away={!player.connected}
+                      />
+                    </div>
                   )}
                   <div className="person__text">
                     <span className="person__name">
                       {player.name}
                       {player.id === playerId ? t.suffixYou : ''}
+                      {player.voice && (
+                        <span className="person__mic" aria-hidden="true">
+                          🎤
+                        </span>
+                      )}
                     </span>
                     <span className="person__meta">
                       {player.isHost ? t.metaHost : ''}
@@ -140,18 +142,21 @@ export function LobbyScreen(): JSX.Element {
                           : t.metaNotReady}
                     </span>
                   </div>
-                  {showTotals && (
-                    <span className="person__total" title={t.totalScoreTitle}>
-                      {t.totalScoreLabel(Math.round(player.totalScore))}
+                  <div className="person__badges">
+                    {showTotals && (
+                      <span className="person__total" title={t.totalScoreTitle}>
+                        {t.totalScoreLabel(Math.round(player.totalScore))}
+                      </span>
+                    )}
+                    <span
+                      className={`person__tick${player.ready ? ' person__tick--on' : ''}`}
+                      style={{ background: player.ready ? colorFor(player.colorIndex) : undefined }}
+                      role="img"
+                      aria-label={t.personReadyState(player.name, player.ready)}
+                    >
+                      {player.ready ? '✓' : ''}
                     </span>
-                  )}
-                  <span
-                    className={`person__tick${player.ready ? ' person__tick--on' : ''}`}
-                    style={{ background: player.ready ? colorFor(player.colorIndex) : undefined }}
-                    aria-hidden="true"
-                  >
-                    {player.ready ? '✓' : ''}
-                  </span>
+                  </div>
                 </li>
               ))}
             </ul>

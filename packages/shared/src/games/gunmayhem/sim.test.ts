@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ARENA_WIDTH,
   BLAST_BOTTOM,
+  BLAST_LEFT,
+  BLAST_RIGHT,
+  BLAST_TOP,
   BOMBS_PER_LIFE,
   BOMB_RADIUS,
   BUFF_TICKS,
@@ -9,6 +12,7 @@ import {
   JETPACK_FUEL_TICKS,
   KB_BASE,
   MAX_PLAYERS,
+  PISTOL_RELOAD_TICKS,
   PLAYER_HALF_W,
   PLAYER_WIDTH,
   POWERUP_TTL_TICKS,
@@ -58,6 +62,20 @@ function skipCountdown(state: GunMayhemState): void {
 
 function run(state: GunMayhemState, ticks: number): void {
   for (let i = 0; i < ticks; i++) stepTick(state);
+}
+
+/**
+ * Step until `pred` holds. Now that the pistol has a magazine, a test that runs
+ * a fixed number of ticks with the trigger held keeps firing *past* the moment
+ * it wanted to observe — the fresh pistol starts spending itself immediately —
+ * so anything asserting on the swap has to stop exactly there.
+ */
+function runUntil(state: GunMayhemState, pred: () => boolean, maxTicks = 600): void {
+  for (let i = 0; i < maxTicks; i++) {
+    stepTick(state);
+    if (pred()) return;
+  }
+  throw new Error('runUntil: condition never held');
 }
 
 /** Hold `bits`; each call is a fresh sequence number. */
@@ -271,10 +289,100 @@ describe('shooting', () => {
     shooter.ammo = 2;
 
     hold(state, 0, IN_SHOOT);
-    run(state, WEAPONS.sniper.cooldown * 3);
+    runUntil(state, () => shooter.weapon === 'pistol');
+    hold(state, 0, 0);
 
     expect(shooter.weapon).toBe('pistol');
+    // Falls back to a full pistol magazine, not an empty one — the swap is the
+    // only path back to the pistol for another weapon, so it has to leave you
+    // able to fire immediately rather than stuck reloading a gun you never fired.
+    expect(shooter.ammo).toBe(WEAPONS.pistol.ammo);
+  });
+});
+
+describe('pistol reload (#40)', () => {
+  it('empties the magazine after ten shots', () => {
+    const state = makeState(2, { weaponsEnabled: false });
+    skipCountdown(state);
+    const shooter = state.players[0]!;
+    expect(shooter.ammo).toBe(WEAPONS.pistol.ammo);
+    expect(WEAPONS.pistol.ammo).toBe(10);
+
+    hold(state, 0, IN_SHOOT);
+    run(state, WEAPONS.pistol.cooldown * 10 + 5);
+
+    expect(shooter.weapon).toBe('pistol'); // never swaps away from itself
     expect(shooter.ammo).toBe(0);
+    expect(shooter.reloadTicks).toBeGreaterThan(0);
+  });
+
+  it('ignores the trigger while reloading', () => {
+    const state = makeState(2, { weaponsEnabled: false });
+    skipCountdown(state);
+    const shooter = state.players[0]!;
+
+    hold(state, 0, IN_SHOOT);
+    run(state, WEAPONS.pistol.cooldown * 10 + 5);
+    expect(shooter.ammo).toBe(0);
+
+    const bulletsBefore = state.bullets.length;
+    // Cooldown alone would let the eleventh shot through; only the reload
+    // gate blocks it.
+    shooter.cooldown = 0;
+    stepTick(state);
+
+    expect(state.bullets.length).toBe(bulletsBefore);
+    expect(shooter.ammo).toBe(0);
+  });
+
+  it('refills the magazine once the reload finishes and can fire again', () => {
+    const state = makeState(2, { weaponsEnabled: false });
+    skipCountdown(state);
+    const shooter = state.players[0]!;
+
+    hold(state, 0, IN_SHOOT);
+    run(state, WEAPONS.pistol.cooldown * 10 + 5);
+    expect(shooter.reloadTicks).toBeGreaterThan(0);
+
+    // Trigger off, or the refill is spent again before we can look at it.
+    hold(state, 0, 0);
+    run(state, PISTOL_RELOAD_TICKS + 2);
+    expect(shooter.reloadTicks).toBe(0);
+    expect(shooter.ammo).toBe(WEAPONS.pistol.ammo);
+
+    hold(state, 0, IN_SHOOT);
+    shooter.cooldown = 0;
+    const bulletsBefore = state.bullets.length;
+    stepTick(state);
+    expect(state.bullets.length).toBeGreaterThan(bulletsBefore);
+  });
+
+  it('leaves you with a full pistol after picking up and depleting a shotgun', () => {
+    const state = makeState(2, { weaponsEnabled: true });
+    skipCountdown(state);
+    const shooter = state.players[0]!;
+
+    state.crates.push({
+      id: 9200,
+      x: shooter.x,
+      y: shooter.y,
+      vy: 0,
+      landed: true,
+      ttl: 600,
+      weapon: 'shotgun',
+    });
+    stepTick(state);
+    expect(shooter.weapon).toBe('shotgun');
+
+    hold(state, 0, IN_SHOOT);
+    runUntil(state, () => shooter.weapon === 'pistol');
+    hold(state, 0, 0);
+
+    expect(shooter.weapon).toBe('pistol');
+    // See the knife's fallback test: the held trigger spends the first round of
+    // the fresh magazine in the same tick as the swap.
+    expect(shooter.ammo).toBeGreaterThanOrEqual(WEAPONS.pistol.ammo - 1);
+    expect(shooter.reloadTicks).toBe(0);
   });
 });
 
@@ -354,6 +462,81 @@ describe('damage and knockback', () => {
   });
 });
 
+describe('knockback tuning (#32)', () => {
+  /**
+   * Point-blank-shoots a fresh victim with the pistol, repeatedly, and counts
+   * how many landed hits it takes before knockback carries them past
+   * `BLAST_RIGHT` and they are ruled out.
+   *
+   * Runs against a *freshly imported* copy of the module with `KB_PER_DAMAGE`
+   * patched, rather than duplicating the flight physics by hand — friction,
+   * gravity and the up-bias all matter to how far a hit actually carries
+   * someone, and only the real sim gets that right.
+   */
+  async function hitsToOffstage(kbPerDamage: number): Promise<number> {
+    vi.resetModules();
+    vi.doMock('./constants', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('./constants')>();
+      return { ...actual, KB_PER_DAMAGE: kbPerDamage };
+    });
+
+    const simMod = await import('./sim');
+    const constMod = await import('./constants');
+    const typesMod = await import('./types');
+
+    const state = simMod.createState(
+      [
+        { id: 'shooter', name: 'Shooter', colorIndex: 0 },
+        { id: 'victim', name: 'Victim', colorIndex: 1 },
+      ],
+      { ...simMod.defaultConfig(), weaponsEnabled: false, bombsEnabled: false, powerupsEnabled: false },
+      4242,
+    );
+    for (let i = 0; i < constMod.COUNTDOWN_TICKS; i++) simMod.stepTick(state);
+
+    const shooter = state.players[0]!;
+    const victim = state.players[1]!;
+    shooter.x = 200;
+    shooter.facing = 1;
+    victim.x = shooter.x + 45;
+    victim.y = shooter.y;
+    victim.invuln = 0;
+
+    let hitSeq = 0;
+    let hits = 0;
+    for (let tick = 0; tick < 3000; tick++) {
+      // Never let the pistol's own magazine or reload confound a test about
+      // knockback tuning — keep the shooter's gun topped up every tick.
+      if (shooter.ammo <= 0) {
+        shooter.ammo = 999;
+        shooter.reloadTicks = 0;
+      }
+      simMod.applyInput(state, 'shooter', ++hitSeq, typesMod.IN_SHOOT);
+      simMod.stepTick(state);
+      if (state.events.some((e) => e.t === 'hit' && e.seat === victim.seat)) hits++;
+      if (!victim.active || victim.x > constMod.BLAST_RIGHT) break;
+    }
+
+    vi.doUnmock('./constants');
+    vi.resetModules();
+    return hits;
+  }
+
+  it('sends the victim off-stage in roughly 70% of the hits the pre-#32 tuning needed', async () => {
+    const hitsOld = await hitsToOffstage(9.5);
+    const hitsNew = await hitsToOffstage(13.6);
+
+    expect(hitsNew).toBeGreaterThan(0);
+    expect(hitsNew).toBeLessThan(hitsOld);
+    // "Roughly" 70%, not exactly — hit counts are small integers, so the
+    // ratio is coarse. A wide-but-meaningful band around 0.7 is what actually
+    // distinguishes "tuned as intended" from "barely moved" or "way overshot".
+    const ratio = hitsNew / hitsOld;
+    expect(ratio).toBeGreaterThan(0.5);
+    expect(ratio).toBeLessThan(0.9);
+  });
+});
+
 describe('bombs', () => {
   it('explodes and falls off with distance', () => {
     const measure = (distance: number): number => {
@@ -388,6 +571,62 @@ describe('bombs', () => {
     expect(measure(BOMB_RADIUS + 60)).toBe(0);
   });
 
+  it('reaches a target just inside the #35 radius and not one just outside it', () => {
+    const measure = (distance: number): number => {
+      const state = makeState(2, { weaponsEnabled: false });
+      skipCountdown(state);
+      const [thrower, target] = state.players as [GmPlayer, GmPlayer];
+      target.invuln = 0;
+      target.x = thrower.x + distance;
+      target.y = thrower.y;
+
+      state.bombs.push({
+        id: 9101,
+        owner: thrower.seat,
+        x: thrower.x,
+        y: thrower.y,
+        vx: 0,
+        vy: 0,
+        fuse: 1,
+      });
+      stepTick(state);
+
+      return target.damage;
+    };
+
+    expect(BOMB_RADIUS).toBe(180); // pins the issue #35 raise from 130
+    expect(measure(BOMB_RADIUS - 5)).toBeGreaterThan(0);
+    expect(measure(BOMB_RADIUS + 5)).toBe(0);
+  });
+
+  it('catches every player inside the blast, not just the nearest one', () => {
+    const state = makeState(3, { weaponsEnabled: false });
+    skipCountdown(state);
+    const [thrower, near, far] = state.players as [GmPlayer, GmPlayer, GmPlayer];
+    near.invuln = 0;
+    far.invuln = 0;
+    near.y = thrower.y;
+    far.y = thrower.y;
+    near.x = thrower.x + 40;
+    far.x = thrower.x - (BOMB_RADIUS - 20);
+
+    state.bombs.push({
+      id: 9102,
+      owner: thrower.seat,
+      x: thrower.x,
+      y: thrower.y,
+      vx: 0,
+      vy: 0,
+      fuse: 1,
+    });
+    stepTick(state);
+
+    expect(near.damage).toBeGreaterThan(0);
+    expect(far.damage).toBeGreaterThan(0);
+    // Closer to the centre of the blast takes more of it.
+    expect(near.damage).toBeGreaterThan(far.damage);
+  });
+
   it('gives you a limited number and refills them on respawn', () => {
     const state = makeState(2, { weaponsEnabled: false });
     skipCountdown(state);
@@ -411,6 +650,51 @@ describe('bombs', () => {
 });
 
 describe('stocks and blast zones', () => {
+  /**
+   * Issue #36: a phone held sideways letterboxes world either side of the
+   * stage, and a player standing out there looked alive because they *were*.
+   * The camera now marks that strip, but the rule it marks has to hold on all
+   * four sides — the horizontal ones were never covered here.
+   */
+  it.each([
+    ['left', { x: BLAST_LEFT - 5, y: 300 }],
+    ['right', { x: BLAST_RIGHT + 5, y: 300 }],
+    ['top', { x: 640, y: BLAST_TOP - 5 }],
+    ['bottom', { x: 640, y: BLAST_BOTTOM + 5 }],
+  ])('kills on crossing the %s bound', (_side, at) => {
+    const state = makeState(2, { weaponsEnabled: false, stocks: 3 });
+    skipCountdown(state);
+    const player = state.players[0]!;
+
+    player.x = at.x;
+    player.y = at.y;
+    stepTick(state);
+
+    expect(player.active).toBe(false);
+    expect(player.stocks).toBe(2);
+  });
+
+  it.each([
+    ['left', { x: BLAST_LEFT + 5, y: 300 }],
+    ['right', { x: BLAST_RIGHT - 5, y: 300 }],
+    ['top', { x: 640, y: BLAST_TOP + 5 }],
+    ['bottom', { x: 640, y: BLAST_BOTTOM - 5 }],
+  ])('survives just inside the %s bound', (_side, at) => {
+    const state = makeState(2, { weaponsEnabled: false, stocks: 3 });
+    skipCountdown(state);
+    const player = state.players[0]!;
+
+    // Frozen in place: gravity would carry the vertical cases straight over the
+    // line we are asserting they are still inside.
+    player.x = at.x;
+    player.y = at.y;
+    player.vx = 0;
+    player.vy = 0;
+
+    expect(player.active).toBe(true);
+    expect(player.stocks).toBe(3);
+  });
+
   it('costs exactly one stock to fall off the bottom', () => {
     const state = makeState(2, { weaponsEnabled: false, stocks: 3 });
     skipCountdown(state);
@@ -581,10 +865,16 @@ describe('the knife', () => {
   it('runs out of stabs and falls back to the pistol', () => {
     const { state, attacker } = duel(400);
     hold(state, 0, IN_SHOOT);
-    run(state, WEAPONS.knife.cooldown * (WEAPONS.knife.ammo + 1));
+    runUntil(state, () => attacker.weapon === 'pistol');
+    hold(state, 0, 0);
 
     expect(attacker.weapon).toBe('pistol');
-    expect(attacker.ammo).toBe(0);
+    // Not pinned to exactly a full magazine: the trigger is still down on the
+    // tick of the swap, so the fresh pistol spends its first round in that same
+    // tick. What matters is that you are handed a loaded gun rather than an
+    // empty one — landing on 0 would strand you in a reload you never earned.
+    expect(attacker.ammo).toBeGreaterThanOrEqual(WEAPONS.pistol.ammo - 1);
+    expect(attacker.reloadTicks).toBe(0);
   });
 });
 
@@ -834,12 +1124,10 @@ describe('weapon balance', () => {
     expect(WEAPONS.rocket.blastRadius).toBeGreaterThan(PLAYER_WIDTH * 4);
   });
 
-  it('costs the strong weapons their ammo — only the pistol is unlimited', () => {
+  it('costs every weapon its ammo — the pistol included, since #40', () => {
     for (const weapon of Object.keys(WEAPONS) as WeaponKind[]) {
-      if (weapon === 'pistol') continue;
       expect(WEAPONS[weapon].ammo).toBeGreaterThan(0);
     }
-    expect(WEAPONS.pistol.ammo).toBe(0);
     // The rocket is the rarest thing you can pick up, so it stays the smallest
     // magazine of the lot.
     for (const weapon of ['shotgun', 'sniper', 'knife', 'smg'] as WeaponKind[]) {

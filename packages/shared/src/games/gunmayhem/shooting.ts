@@ -39,16 +39,25 @@ export function applyShotImpulse(body: { vx: number; facing: 1 | -1 }, weapon: W
 }
 
 /**
- * Spend a round, falling back to the pistol when the magazine runs out.
+ * Spend a round.
  *
- * Returns the weapon and ammo the shooter is left holding. Capacity 0 means
- * infinite, which is the pistol and only the pistol.
+ * Returns the weapon and ammo the shooter is left holding, plus whether this
+ * shot just started a reload. Capacity 0 would mean infinite ammo, but
+ * nothing currently has it — the pistol used to be the one exception and is
+ * now a 10-round magazine like everything else.
+ *
+ * Running the pistol dry sets `reloading` instead of swapping weapons: it is
+ * `DEFAULT_WEAPON`, so "swap back to the default" would be a no-op that left
+ * the magazine empty forever. Every other weapon still empties straight back
+ * to the pistol, and `sim.ts:spendAmmo` hands it a full one.
  */
 export function spendRound(
   weapon: WeaponKind,
   ammo: number,
-): { weapon: WeaponKind; ammo: number } {
-  if (WEAPONS[weapon].ammo <= 0) return { weapon, ammo };
+): { weapon: WeaponKind; ammo: number; reloading: boolean } {
+  if (WEAPONS[weapon].ammo <= 0) return { weapon, ammo, reloading: false };
   const left = ammo - 1;
-  return left <= 0 ? { weapon: DEFAULT_WEAPON, ammo: 0 } : { weapon, ammo: left };
+  if (left > 0) return { weapon, ammo: left, reloading: false };
+  if (weapon === DEFAULT_WEAPON) return { weapon, ammo: 0, reloading: true };
+  return { weapon: DEFAULT_WEAPON, ammo: WEAPONS[DEFAULT_WEAPON].ammo, reloading: false };
 }

@@ -124,6 +124,10 @@ function AchtungHud({ room, mySeat }: Props): JSX.Element {
           className={`hudcard${live && !live.alive ? ' hudcard--out' : ''}${
             player.seat === mySeat ? ' hudcard--me' : ''
           }${speaking.has(player.id) ? ' hudcard--speaking' : ''}`}
+          // On small screens every non-`--me` card collapses to a dot plus
+          // score (see .hudcard in styles.css); this keeps the name reachable
+          // for assistive tech even though it's visually hidden there.
+          aria-label={`${player.name}: ${live?.score ?? player.score}`}
         >
           <span className="hudcard__dot" style={{ background: colorFor(player.colorIndex) }} />
           <div className="hudcard__body">

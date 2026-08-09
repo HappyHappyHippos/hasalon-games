@@ -57,6 +57,10 @@ const he = {
   metaAway: 'לא מחובר',
   metaReady: 'סופר מוכן',
   metaNotReady: 'לא מוכן',
+  // Accessible label for the ready tick badge — the icon and colour alone
+  // carry no meaning to a screen reader.
+  personReadyState: (name: string, ready: boolean) =>
+    ready ? `${name}: מוכן` : `${name}: לא מוכן`,
   ready: 'אני מוכן ומזומן',
   notReady: 'חכה אני לא מוכן!',
   startGame: (game: string) => `התחילו ${game}`,
@@ -110,6 +114,8 @@ const he = {
   netTitle: (rtt: number, jitter: number, delay: number) =>
     `פינג ${rtt} מ״ש · ריצוד ${jitter} מ״ש · האחרים מצוירים ${delay} מ״ש אחורה`,
   livesLeft: (n: number) => `נשארו ${n} חיים`,
+  /** Gun Mayhem HUD: the pistol emptied its magazine and is reloading. */
+  weaponReloading: 'טוענים…',
   rotateHint: 'סובבו את הטלפון לרוחב',
   enterFullscreen: 'מסך מלא',
   exitFullscreen: 'צאו ממסך מלא',
@@ -200,7 +206,7 @@ const he = {
   // Game names stay as they are — they are proper nouns in both languages.
   games: {
     achtung: {
-      name: 'קרב הקו',
+      name: 'קרב קו',
       tagline: 'להחזיר את החוש האומנותי מכיתה ג',
       controls: 'חצים ימינה ושמאלה, או A ו-D',
       rules: [
@@ -464,6 +470,10 @@ const en: Dict = {
   metaAway: 'away',
   metaReady: 'ready',
   metaNotReady: 'not ready',
+  // Accessible label for the ready tick badge — the icon and colour alone
+  // carry no meaning to a screen reader.
+  personReadyState: (name: string, ready: boolean) =>
+    ready ? `${name}: ready` : `${name}: not ready`,
   ready: "I'm ready",
   notReady: "Wait, I'm not ready",
   startGame: (game: string) => `Start ${game}`,
@@ -514,6 +524,8 @@ const en: Dict = {
   netTitle: (rtt: number, jitter: number, delay: number) =>
     `Ping ${rtt}ms · jitter ${jitter}ms · others drawn ${delay}ms behind`,
   livesLeft: (n: number) => `${n} lives left`,
+  /** Gun Mayhem HUD: the pistol emptied its magazine and is reloading. */
+  weaponReloading: 'Reloading…',
   rotateHint: 'Turn your phone sideways',
   enterFullscreen: 'Fullscreen',
   exitFullscreen: 'Exit fullscreen',

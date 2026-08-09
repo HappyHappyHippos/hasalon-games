@@ -86,10 +86,13 @@ export const JETPACK_MAX_RISE = 300;
 
 /**
  * Knockback *replaces* velocity rather than adding to it, so a hit always reads
- * clearly. At 0 damage you get shoved; at 100 you leave the stage.
+ * clearly. At 0 damage you get shoved; at ~70 you leave the stage — issue #32
+ * wanted dying in ~30% fewer hits, so `KB_PER_DAMAGE` went from 9.5 to 13.6
+ * rather than moving `KB_BASE` or `DEFAULT_STOCKS`, which would have changed
+ * the opening shove or the number of lives instead of hits-per-life.
  */
 export const KB_BASE = 240;
-export const KB_PER_DAMAGE = 9.5;
+export const KB_PER_DAMAGE = 13.6;
 /** Fraction of the knockback applied upwards, so hits pop people into the air. */
 export const KB_UP_BIAS = 0.42;
 
@@ -131,10 +134,23 @@ export const BOMB_BOUNCE = 0.34;
 export const BOMB_FRICTION = 0.86;
 export const BOMB_FUSE_TICKS = seconds(1.4);
 export const BOMB_COOLDOWN_TICKS = seconds(0.6);
-export const BOMB_RADIUS = 130;
+/** Issue #35: bigger blast. Was 130 — the drawn blast in the client renderer reads this same constant. */
+export const BOMB_RADIUS = 180;
 export const BOMB_DAMAGE = 24;
 export const BOMB_KB_MUL = 2.6;
 export const BOMB_SIZE = 12;
+
+// ---------------------------------------------------------------------------
+// Pistol
+// ---------------------------------------------------------------------------
+
+/**
+ * Issue #40: the pistol is no longer infinite ammo — it holds 10 rounds (see
+ * `WEAPONS.pistol.ammo` in `weapons.ts`) and reloads on an empty magazine
+ * instead of swapping away, since there is nothing to swap to. Every other
+ * weapon still empties straight back to a freshly-topped-up pistol.
+ */
+export const PISTOL_RELOAD_TICKS = seconds(1.2);
 
 // ---------------------------------------------------------------------------
 // Weapon crates

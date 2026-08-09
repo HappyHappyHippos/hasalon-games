@@ -126,6 +126,8 @@ export interface GmPlayer {
   weapon: WeaponKind;
   ammo: number;
   cooldown: number;
+  /** >0 blocks firing; hits zero when the magazine refills. Pistol only. */
+  reloadTicks: number;
   bombs: number;
   bombCooldown: number;
 
@@ -278,6 +280,14 @@ export interface GmSnapshotPlayer {
    * puts your predicted position a kick's width away from the server's.
    */
   cd: number;
+  /**
+   * Reload ticks left on the pistol; 0 means the magazine is ready.
+   *
+   * Same reasoning as `cd`: the predictor replays inputs from this snapshot,
+   * and a shot fired mid-reload never happened, so it has to know the
+   * magazine is down before it gets there.
+   */
+  rl?: number;
   /** bombs */
   bo: number;
   /** round wins */

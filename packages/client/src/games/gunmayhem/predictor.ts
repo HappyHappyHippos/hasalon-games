@@ -6,6 +6,9 @@ import {
   IN_RIGHT,
   IN_SHOOT,
   MAX_JUMPS,
+  DEFAULT_WEAPON,
+  PISTOL_RELOAD_TICKS,
+  WEAPONS,
   applyShotImpulse,
   emptyBuffs,
   movementMods,
@@ -65,6 +68,11 @@ import { gmInput } from './input';
  * `vx`, and a knife's lunge is the same thing pointing the other way. Only the
  * shooter's own movement is replayed here — no bullet is created, nothing takes
  * damage, and whether a shot connected stays entirely the server's business.
+ * The pistol's magazine and reload are replayed alongside it for the same
+ * reason a knife's lunge is: whether a held trigger fires at all this tick
+ * depends on ammo and `reloadTicks`, both carried through the replay from the
+ * snapshot, so a magazine the server is refusing to fire cannot be predicted
+ * as firing anyway.
  */
 
 /**
@@ -181,17 +189,31 @@ export class GunMayhemPredictor {
     let weapon = server.w;
     let ammo = server.am;
     let cooldown = server.cd ?? 0;
+    // Mirrors `stepTimers`/`stepShooting`: a magazine that is still reloading
+    // when this snapshot was authored has to stay reloading through however
+    // many ticks get replayed on top of it, or a shot the server is refusing
+    // gets predicted anyway.
+    let reloadTicks = server.rl ?? 0;
     let firedAt = 0;
     let firedKind: WeaponKind | null = null;
 
     for (let i = start; i < pending.length; i++) {
       const record = pending[i]!;
 
-      // Server order, exactly: `stepTimers` runs down the cooldown, then
-      // `stepBodies` moves you and sets which way you are facing, and only then
-      // does `stepShooting` fire and kick you the other way. Recoil therefore
-      // lands on `vx` *after* this tick's movement, and shows up in the next.
+      // Server order, exactly: `stepTimers` runs down the cooldown and the
+      // reload, then `stepBodies` moves you and sets which way you are facing,
+      // and only then does `stepShooting` fire and kick you the other way.
+      // Recoil therefore lands on `vx` *after* this tick's movement, and shows
+      // up in the next.
       cooldown = Math.max(0, cooldown - 1);
+      if (reloadTicks > 0) {
+        reloadTicks = Math.max(0, reloadTicks - 1);
+        // Mirrors `stepTimers`'s second-line-of-defence refill: a weapon crate
+        // picked up mid-reload already reset `reloadTicks` to 0 through
+        // `giveWeapon`, so reaching zero here with the pistol still equipped
+        // means the magazine, not a swap, is what emptied.
+        if (reloadTicks === 0 && weapon === DEFAULT_WEAPON) ammo = WEAPONS[DEFAULT_WEAPON].ammo;
+      }
 
       const result = stepMovement(
         body,
@@ -205,14 +227,19 @@ export class GunMayhemPredictor {
         jumpedKind = result.jumped;
       }
 
-      // Held, not pressed: `stepShooting` gates on the held bit and the
-      // cooldown and nothing else, so every gun is effectively full-auto.
-      if (controllable && (record.bits & IN_SHOOT) !== 0 && cooldown === 0) {
+      // Held, not pressed: `stepShooting` gates on the held bit, the cooldown
+      // and the reload and nothing else, so every gun is effectively full-auto
+      // — until the magazine the server would refuse to fire is predicted as
+      // refusing too.
+      if (controllable && (record.bits & IN_SHOOT) !== 0 && cooldown === 0 && reloadTicks === 0) {
         cooldown = shotCooldownTicks(weapon, buffs);
         applyShotImpulse(body, weapon);
         firedAt = record.seq;
         firedKind = weapon;
-        ({ weapon, ammo } = spendRound(weapon, ammo));
+        const spent = spendRound(weapon, ammo);
+        weapon = spent.weapon;
+        ammo = spent.ammo;
+        if (spent.reloading) reloadTicks = PISTOL_RELOAD_TICKS;
       }
 
       previous = record.bits;

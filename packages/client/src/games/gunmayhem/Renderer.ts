@@ -3,6 +3,10 @@ import { TICK_MS, colorFor } from '@mg/shared';
 import {
   ARENA_HEIGHT,
   ARENA_WIDTH,
+  BLAST_BOTTOM,
+  BLAST_LEFT,
+  BLAST_RIGHT,
+  BLAST_TOP,
   BOMB_SIZE,
   CRATE_SIZE,
   GM_POWERUPS,
@@ -26,9 +30,10 @@ import { bracket, lerp } from '../../game/interpolation';
 import { PositionSmoother } from '../../game/PositionSmoother';
 import { RemoteBodies } from '../../game/RemoteBodies';
 import { isPredicting, predictsSelf } from '../../net/playbackMode';
+import { prefersReducedMotion } from '../../ui/motion';
 import { advancePlayer, ticksBehind } from './advance';
 import { GunMayhemPredictor } from './predictor';
-import { LocalShotFx } from './localFx';
+import { DeathFx, LocalShotFx } from './localFx';
 import { backdropUrl, drawBackdrop, drawScenery } from './stageArt';
 import { drawSlash, drawWeapon, muzzleX, recoilStrength } from './weaponArt';
 
@@ -49,6 +54,19 @@ interface FloatingText {
   x: number;
   y: number;
   text: string;
+  color: string;
+  life: number;
+}
+
+/**
+ * The reduced-motion stand-in for a death explosion: a flat disc that fades
+ * out rather than a burst of moving particles. Kept as its own list instead
+ * of reusing `Particle` — particles are simulated (gravity, drift) and this
+ * is deliberately static, the whole point of the reduced-motion path.
+ */
+interface DeathFlash {
+  x: number;
+  y: number;
   color: string;
   life: number;
 }
@@ -95,6 +113,8 @@ export class GunMayhemRenderer {
   private predictor = new GunMayhemPredictor();
   /** Plays your own gunfire on the trigger press rather than the server's echo. */
   private localFx = new LocalShotFx();
+  /** Guarantees each death explodes exactly once — see `localFx.ts`. */
+  private deathFx = new DeathFx();
   /** Absorbs the jump when your own character changes which clock it is on. */
   private smoother = new PositionSmoother();
   /**
@@ -127,6 +147,7 @@ export class GunMayhemRenderer {
   private seenEventTick = -1;
   private particles: Particle[] = [];
   private floaters: FloatingText[] = [];
+  private deathFlashes: DeathFlash[] = [];
   private shake = 0;
   /** Per-seat firing animation, decayed every frame. */
   private swings = new Map<number, Swing>();
@@ -155,6 +176,7 @@ export class GunMayhemRenderer {
     this.smoother.reset();
     this.remotes.clear();
     this.drawnBySeat.clear();
+    this.deathFx.reset();
     this.wasPredicting = false;
     const loop = (now: number): void => {
       this.frame(now);
@@ -170,6 +192,7 @@ export class GunMayhemRenderer {
     this.smoother.reset();
     this.remotes.clear();
     this.drawnBySeat.clear();
+    this.deathFx.reset();
     this.wasPredicting = false;
   }
 
@@ -235,15 +258,86 @@ export class GunMayhemRenderer {
 
     this.drawParticles();
     this.drawFloaters();
+    this.drawDeathFlashes();
   }
 
   // -------------------------------------------------------------------------
   // Stage
   // -------------------------------------------------------------------------
 
+  /**
+   * Paints the letterbox surplus as the void it actually is.
+   *
+   * The stage is a fixed 1280x720 but a phone held sideways is far wider than
+   * 16:9, so the letterbox reveals world either side of it. That strip is not
+   * scenery — it is reachable, and you survive in it until you cross
+   * `BLAST_LEFT`/`BLAST_RIGHT`, which at that aspect ratio can sit off screen
+   * entirely. Left flat it reads as ordinary playable ground you inexplicably
+   * do not die in, which is exactly what was reported.
+   *
+   * So the strip is hatched, and the kill line is drawn on it whenever it is
+   * visible. The bounds themselves stay untouched: the server has no idea what
+   * shape anyone's screen is, and a viewport-dependent kill line would be a
+   * desync by construction.
+   */
+  private drawOutOfPlay(): void {
+    const { ctx } = this.stage;
+    const view = this.stage.visibleRect();
+    if (view.x0 >= 0 && view.x1 <= ARENA_WIDTH && view.y0 >= 0 && view.y1 <= ARENA_HEIGHT) {
+      return;
+    }
+
+    ctx.save();
+
+    // Hatching, not a flat fill — a second flat colour beside the sky still
+    // reads as somewhere to stand. Diagonals read as "off the map" at a glance.
+    ctx.beginPath();
+    ctx.rect(view.x0, view.y0, view.x1 - view.x0, view.y1 - view.y0);
+    ctx.rect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
+    ctx.clip('evenodd');
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+    ctx.lineWidth = 6;
+    const span = view.x1 - view.x0 + (view.y1 - view.y0);
+    for (let d = view.x0 - (view.y1 - view.y0); d < view.x0 + span; d += 34) {
+      ctx.beginPath();
+      ctx.moveTo(d, view.y0);
+      ctx.lineTo(d + (view.y1 - view.y0), view.y1);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // The kill line, wherever it falls inside the view. Off screen on a 16:9
+    // display, which is why this was invisible until someone played sideways.
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255, 92, 92, 0.5)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    if (BLAST_LEFT > view.x0) {
+      ctx.moveTo(BLAST_LEFT, view.y0);
+      ctx.lineTo(BLAST_LEFT, view.y1);
+    }
+    if (BLAST_RIGHT < view.x1) {
+      ctx.moveTo(BLAST_RIGHT, view.y0);
+      ctx.lineTo(BLAST_RIGHT, view.y1);
+    }
+    if (BLAST_TOP > view.y0) {
+      ctx.moveTo(view.x0, BLAST_TOP);
+      ctx.lineTo(view.x1, BLAST_TOP);
+    }
+    if (BLAST_BOTTOM < view.y1) {
+      ctx.moveTo(view.x0, BLAST_BOTTOM);
+      ctx.lineTo(view.x1, BLAST_BOTTOM);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
   private drawBackground(now: number): void {
     const { ctx } = this.stage;
     const palette = this.level.palette;
+
+    this.drawOutOfPlay();
 
     ctx.fillStyle = palette.sky;
     ctx.fillRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
@@ -1138,11 +1232,38 @@ export class GunMayhemRenderer {
           this.spawnParticles(event.x, event.y, 12, '#ffd23f', 0, 260);
           this.shake = 16;
           break;
-        case 'died':
+        case 'died': {
           sfx.ringOut();
-          this.spawnParticles(event.x, Math.min(event.y, ARENA_HEIGHT - 20), 22, '#fff', 0, 360);
+          // `snap.tick` plus the seat is a unique handle on *this* death —
+          // `DeathFx` is the belt to `seenEventTick`'s suspenders (see its own
+          // comment): the outer per-tick gate already keeps this switch from
+          // running twice for the same snapshot, but the explosion is the one
+          // effect the issue calls out by name, so it gets its own guarantee
+          // that isn't riding on renderer bookkeeping a test can't reach.
+          if (!this.deathFx.consume(event.seat, snap.tick)) break;
+
+          const x = event.x;
+          const y = Math.min(event.y, ARENA_HEIGHT - 20);
+          const color = colorFor(this.context.colorBySeat[event.seat] ?? event.seat);
+
+          if (prefersReducedMotion()) {
+            // A brief static flash instead of a particle burst — same
+            // duration budget, none of the motion.
+            this.deathFlashes.push({ x, y, color, life: 1 });
+          } else {
+            // Bigger and tinted to the dying player's colour, otherwise the
+            // same shape as a bomb's `explode` — see that case above. Short
+            // particle lifetimes (inherited from `spawnParticles`) matter
+            // here specifically: a `respawn` event lands the player at their
+            // spawn point moments later, and this must have finished fading
+            // before that reads as "obscured".
+            this.spawnParticles(x, y, 30, color, 0, 460);
+            this.spawnParticles(x, y, 16, '#fff', 0, 300);
+          }
+
           this.shake = Math.max(this.shake, 10);
           break;
+        }
         case 'jump':
           // Only other people's. Your own jump is predicted, so the character
           // leaves the ground on the frame you press it — waiting a round trip
@@ -1241,7 +1362,35 @@ export class GunMayhemRenderer {
       return true;
     });
   }
+
+  /**
+   * The reduced-motion death effect: a disc that only fades, never moves or
+   * grows. `FLASH_LIFETIME_MS` is short on purpose — brief enough that it is
+   * gone well before a `respawn` event could place the same player back on
+   * screen nearby.
+   */
+  private drawDeathFlashes(): void {
+    const { ctx } = this.stage;
+    const dt = 1 / 60;
+
+    this.deathFlashes = this.deathFlashes.filter((f) => {
+      f.life -= dt / (FLASH_LIFETIME_MS / 1000);
+      if (f.life <= 0) return false;
+
+      ctx.save();
+      ctx.globalAlpha = Math.max(0, f.life);
+      ctx.fillStyle = f.color;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, PLAYER_HALF_H + 6, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return true;
+    });
+  }
 }
+
+/** How long the reduced-motion death flash stays visible. */
+const FLASH_LIFETIME_MS = 220;
 
 // ---------------------------------------------------------------------------
 // Small helpers

@@ -66,6 +66,23 @@ export class CanvasStage {
     ctx.setTransform(this.scale, 0, 0, this.scale, this.offsetX, this.offsetY);
   }
 
+  /**
+   * The world rectangle the letterbox is currently revealing, in arena units.
+   *
+   * At exactly the arena's aspect ratio this is the arena. At any other ratio
+   * it is larger on one axis — the letterbox bars are world the player can
+   * reach but the stage does not cover. Only meaningful after `begin`.
+   */
+  visibleRect(): { x0: number; y0: number; x1: number; y1: number } {
+    const { canvas } = this;
+    return {
+      x0: -this.offsetX / this.scale,
+      y0: -this.offsetY / this.scale,
+      x1: (canvas.width - this.offsetX) / this.scale,
+      y1: (canvas.height - this.offsetY) / this.scale,
+    };
+  }
+
   /** Screen coordinates (relative to the canvas) to arena units. */
   toArena(clientX: number, clientY: number): { x: number; y: number } {
     const rect = this.canvas.getBoundingClientRect();

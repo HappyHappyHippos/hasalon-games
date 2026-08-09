@@ -12,7 +12,11 @@ export interface WeaponDef {
   speed: number;
   /** Multiplier on knockback. */
   kbMul: number;
-  /** 0 means infinite — only the pistol. */
+  /**
+   * 0 would mean infinite; nothing currently uses it. The pistol used to be
+   * the exception (issue #40 gave it a 10-round magazine and a reload — see
+   * `PISTOL_RELOAD_TICKS` in constants.ts and `spendRound` in shooting.ts).
+   */
   ammo: number;
   pellets: number;
   /** Radians of random spread per pellet. */
@@ -48,7 +52,10 @@ export const WEAPONS: Record<WeaponKind, WeaponDef> = {
     cooldown: 13,
     speed: 1500,
     kbMul: 1,
-    ammo: 0,
+    // Issue #40: ten rounds, then a reload — see `PISTOL_RELOAD_TICKS` and
+    // `spendRound` in `shooting.ts`. It is the default weapon, so an empty
+    // pistol reloads in place instead of swapping to itself.
+    ammo: 10,
     pellets: 1,
     spread: 0,
     recoil: 150,

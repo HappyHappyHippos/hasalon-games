@@ -100,7 +100,12 @@ export function stepTank(
 export function resolveTankWalls(body: TankBody, maze: Maze, clear: number = TANK_CLEAR): void {
   if (maze.obstacles && maze.obstacles.length > 0) {
     // A stage obstacle is a solid box, not a zero-thickness lattice segment, so
-    // its own extent already accounts for the wall's thickness. Adding
+    // its own extent already accounts for the wall's thickness — and, since
+    // `stages.ts` boxes the wall's whole drawn silhouette rather than the
+    // ground footprint it sits on, for the drawn height as well. Nothing here
+    // grows or shrinks the box: the rectangle a tank is stopped at, the one a
+    // shell reflects off in `ballistics.ts`, and the one the client draws are
+    // the same numbers. Adding
     // `WALL_HALF` on top — which is the only difference between `TANK_CLEAR`
     // and `TANK_R` — would inflate every box by 5 units on all four sides and
     // push the arena edge 5 units inward, which is a wall you can feel and
