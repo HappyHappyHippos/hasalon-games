@@ -898,7 +898,11 @@ export class GunMayhemRenderer {
     const { ctx } = this.stage;
     const kind = player.w;
     const rl = player.rl ?? 0;
-    const reloadSpin = rl > 0 ? (1 - rl / PISTOL_RELOAD_TICKS) * Math.PI * 4 : 0;
+    const rawProgress = 1 - rl / PISTOL_RELOAD_TICKS;
+    const progress = rawProgress < 0.5
+      ? 4 * rawProgress * rawProgress * rawProgress
+      : 1 - Math.pow(-2 * rawProgress + 2, 3) / 2;
+    const reloadSpin = rl > 0 ? progress * Math.PI * 6 : 0;
 
     const shoulderX = w - 6;
     const shoulderY = -2;
@@ -906,7 +910,7 @@ export class GunMayhemRenderer {
     ctx.save();
     ctx.translate(shoulderX, shoulderY);
 
-    // Reloading spins the gun twice around the hand grip (8, 1).
+    // Reloading spins the gun three times around the hand grip (8, 1).
     if (reloadSpin > 0) {
       ctx.translate(8, 1);
       ctx.rotate(reloadSpin);
