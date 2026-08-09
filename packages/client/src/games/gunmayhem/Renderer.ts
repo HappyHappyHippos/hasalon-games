@@ -34,6 +34,7 @@ import { prefersReducedMotion } from '../../ui/motion';
 import { advancePlayer, ticksBehind } from './advance';
 import { GunMayhemPredictor } from './predictor';
 import { DeathFx, LocalShotFx } from './localFx';
+import { roundRect, shade } from '../../game/canvasDraw';
 import { drawBackdrop } from './stageArt';
 import { drawSlash, drawWeapon, muzzleX, recoilStrength } from './weaponArt';
 
@@ -1412,24 +1413,6 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-): void {
-  const radius = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + w, y, x + w, y + h, radius);
-  ctx.arcTo(x + w, y + h, x, y + h, radius);
-  ctx.arcTo(x, y + h, x, y, radius);
-  ctx.arcTo(x, y, x + w, y, radius);
-  ctx.closePath();
-}
-
 /** A hex colour as an rgba() string at the given alpha, for gradient stops. */
 function hexToRgba(hex: string, alpha: number): string {
   const value = hex.replace('#', '');
@@ -1440,14 +1423,3 @@ function hexToRgba(hex: string, alpha: number): string {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
-/** Darken (negative) or lighten (positive) a hex colour. */
-function shade(hex: string, amount: number): string {
-  const value = hex.replace('#', '');
-  const num = Number.parseInt(value, 16);
-  const channel = (shift: number): number => {
-    const base = (num >> shift) & 0xff;
-    const next = amount < 0 ? base * (1 + amount) : base + (255 - base) * amount;
-    return Math.round(Math.min(255, Math.max(0, next)));
-  };
-  return `rgb(${channel(16)}, ${channel(8)}, ${channel(0)})`;
-}

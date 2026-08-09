@@ -45,7 +45,7 @@ const he = {
   copyInvite: 'העתקת הזמנה',
   copied: 'הועתק!',
   copyThisLink: 'העתיקו את הקישור:',
-  inviteShareText: (code: string) => `בואו לשחק איתי בהסלון. קוד החדר: ${code}`,
+  inviteShareText: (code: string) => `בואו להינות איתי בסלון!. קוד: ${code}`,
   inviteAppTitle: 'כבר התקנתם את האפליקציה?',
   inviteAppBody: (code: string) =>
     `Safari לא יכול להעביר את הקישור לאפליקציה. העתיקו את הקוד ${code}, פתחו את הסלון ממסך הבית והצטרפו איתו.`,
