@@ -847,6 +847,9 @@ strong,
   flex-direction: column;
   gap: 8px;
   background: var(--teal);
+  /* A bit more breathing room below the button itself than the sticker's
+     default 20px, so it doesn't sit flush against the box edge. */
+  padding-bottom: 28px;
 }
 
 /* The ready button and its count share a narrow grid column (240–320px), and
