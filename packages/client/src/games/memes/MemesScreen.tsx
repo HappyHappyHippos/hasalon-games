@@ -10,7 +10,6 @@ import { preloadMemes } from './preload';
 import { ResultCard } from './ResultCard';
 import { MemesStandings } from './Standings';
 import { VotePanel } from './VotePanel';
-import { WritingRoster } from './WritingRoster';
 
 interface Props { room: RoomView; mySeat: number }
 
@@ -77,13 +76,8 @@ export function MemesScreen({ room, mySeat }: Props): JSX.Element {
   let body: JSX.Element;
   if (phase === 'writing') {
     body = mySeat >= 0 && mine?.templateId
-      ? (
-        <>
-          <Composer view={mine} />
-          <WritingRoster room={room} />
-        </>
-      )
-      : <div className="memes__center"><p>{t.memesSpectating}</p><WritingRoster room={room} /></div>;
+      ? <Composer view={mine} />
+      : <div className="memes__center"><p>{t.memesSpectating}</p></div>;
   } else if (phase === 'standings') {
     body = <MemesStandings room={room} mySeat={mySeat} />;
   } else if (stage) {
