@@ -804,7 +804,7 @@ export class GunMayhemRenderer {
     drawHat(ctx, this.context.hatBySeat[player.s] ?? 0, color, w);
     ctx.restore();
 
-    this.drawArmedHand(player.w, color, w, recoil, swing);
+    this.drawArmedHand(player, color, w, recoil, swing);
 
     ctx.restore();
 
@@ -816,7 +816,6 @@ export class GunMayhemRenderer {
       if ((player.bf?.shield ?? 0) > 0) this.drawShieldBubble(body, now);
       this.drawBuffGlyphs(player, body);
       this.drawNameplate(player, body, lift);
-      this.drawReloadRing(player, body, lift);
     }
   }
 
@@ -890,21 +889,29 @@ export class GunMayhemRenderer {
    * to the torso, which is most of why it read as a stray rectangle.
    */
   private drawArmedHand(
-    kind: WeaponKind,
+    player: GmSnapshotPlayer,
     color: string,
     w: number,
     recoil: number,
     swing: Swing | undefined,
   ): void {
     const { ctx } = this.stage;
+    const kind = player.w;
+    const rl = player.rl ?? 0;
+    const reloadSpin = rl > 0 ? (1 - rl / PISTOL_RELOAD_TICKS) * Math.PI * 4 : 0;
+
     const shoulderX = w - 6;
     const shoulderY = -2;
 
     ctx.save();
     ctx.translate(shoulderX, shoulderY);
 
-    // Knife swings overhead and down; guns stay level and kick back.
-    if (kind === 'knife' && swing) {
+    // Reloading spins the gun twice around the hand grip (8, 1).
+    if (reloadSpin > 0) {
+      ctx.translate(8, 1);
+      ctx.rotate(reloadSpin);
+      ctx.translate(-8, -1);
+    } else if (kind === 'knife' && swing) {
       ctx.rotate((1 - swing.amount) * 0.9 - 0.45);
     } else {
       ctx.rotate(-recoil * 0.35);
@@ -1009,37 +1016,6 @@ export class GunMayhemRenderer {
     const label = `${Math.round(damage)}%`;
     ctx.strokeText(label, body.x, y);
     ctx.fillText(label, body.x, y);
-    ctx.restore();
-  }
-
-  /**
-   * A clock-wipe ring above the head while the pistol reloads — `rl` counts
-   * down to 0 in `PISTOL_RELOAD_TICKS`, same field the predictor replays, so
-   * this reads the one number both server and client already agree on.
-   */
-  private drawReloadRing(player: GmSnapshotPlayer, body: DrawnPlayer, lift: number): void {
-    const rl = player.rl ?? 0;
-    if (rl <= 0) return;
-    const { ctx } = this.stage;
-    const progress = 1 - rl / PISTOL_RELOAD_TICKS;
-    const y = body.y - PLAYER_HALF_H - 32 - lift;
-    const r = 8;
-
-    ctx.save();
-    ctx.translate(body.x, y);
-    ctx.lineCap = 'round';
-
-    // Empty track, then the filled arc sweeping clockwise from 12 o'clock.
-    ctx.strokeStyle = 'rgba(20, 17, 15, 0.25)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(0, 0, r, 0, Math.PI * 2);
-    ctx.stroke();
-
-    ctx.strokeStyle = INK;
-    ctx.beginPath();
-    ctx.arc(0, 0, r, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
-    ctx.stroke();
     ctx.restore();
   }
 
