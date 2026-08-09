@@ -24,6 +24,7 @@ import { prefersReducedMotion } from '../../ui/motion';
 import { TanksPredictor, advanceTank, ticksBehind } from './predictor';
 import { getImage } from '../../game/images';
 import { TANK_STAGES, stageMaze, type TankBody } from '@mg/shared/tanks';
+import { getRecoloredTankSprite } from './tankRecolor';
 
 const FLOOR = '#1c1a24';
 const LETTERBOX = '#100f16';
@@ -573,10 +574,10 @@ export class TanksRenderer {
     // Shadow: same silhouette, solid black, hard-offset — never a blur.
     ctx.save();
     ctx.translate(SHADOW_OFFSET, SHADOW_OFFSET);
-    this.paintTankSilhouette(ctx, SHADOW_PALETTE, 0);
+    this.paintTankSilhouette(ctx, SHADOW_PALETTE, 0, true);
     ctx.restore();
 
-    this.paintTankSilhouette(ctx, palette, 0);
+    this.paintTankSilhouette(ctx, palette, 0, false);
 
     ctx.restore();
 
@@ -612,7 +613,7 @@ export class TanksRenderer {
     ctx.rotate(angle);
     ctx.globalAlpha = 0.35;
     // A knocked-askew turret is what reads as "destroyed" rather than "faded".
-    this.paintTankSilhouette(ctx, palette, WRECK_TURRET_SKEW);
+    this.paintTankSilhouette(ctx, palette, WRECK_TURRET_SKEW, false);
     ctx.restore();
     ctx.globalAlpha = 1;
   }
@@ -627,7 +628,28 @@ export class TanksRenderer {
     ctx: CanvasRenderingContext2D,
     palette: TankPalette,
     turretSkew: number,
+    isShadow = false,
   ): void {
+    const rawImg = getImage('/avatars/tank_game_tank_asset.png');
+    if (rawImg) {
+      const recolored = getRecoloredTankSprite(rawImg, palette.hull, isShadow);
+      if (recolored) {
+        ctx.save();
+        if (turretSkew !== 0) {
+          ctx.rotate(turretSkew);
+        }
+        // Scaled to match TANK_R exactly
+        // Artwork bounds inside 1536x1024: center (788.5, 492), height 737, width 924
+        const drawH = (TANK_R * 2) * (1024 / 737);
+        const drawW = drawH * (1536 / 1024);
+        const offsetX = -(788.5 / 1536) * drawW;
+        const offsetY = -(492 / 1024) * drawH;
+        ctx.drawImage(recolored, offsetX, offsetY, drawW, drawH);
+        ctx.restore();
+        return;
+      }
+    }
+
     const trackHalfLen = TANK_R * 0.92;
     const trackWidth = TANK_R * 0.34;
     const trackOuter = TANK_R;
