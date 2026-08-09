@@ -494,3 +494,83 @@ describe('word lists', () => {
     }
   });
 });
+
+/**
+ * The same-seed, byte-identical check every other game has.
+ *
+ * Skribbl was the only one of the six without it. It matters here for a reason
+ * the movement games do not have: word choice, drawer rotation and letter
+ * reveals are all RNG draws, so a stray `Math.random` or a `Date.now` anywhere
+ * in the tick path would make two servers disagree about which word is in play
+ * — and a mid-round reconnect replays state that must match what everyone else
+ * already has.
+ */
+describe('determinism', () => {
+  /** Everything a replay must reproduce, flattened. */
+  function digest(state: SkribblState): string {
+    return JSON.stringify({
+      tickCount: state.tickCount,
+      phase: state.phase,
+      phaseTicks: state.phaseTicks,
+      round: state.round,
+      drawerSeat: state.drawerSeat,
+      word: state.word,
+      choices: state.choices,
+      revealed: [...state.revealed],
+      revealOrder: state.revealOrder,
+      used: [...state.used],
+      strokes: state.strokes.length,
+      players: state.players.map((p) => ({
+        id: p.id,
+        seat: p.seat,
+        score: p.score,
+        guessed: p.guessed,
+      })),
+    });
+  }
+
+  function play(): string {
+    const state = createState(seats(4), defaultConfig(), 0xbeef);
+    const digests: string[] = [];
+
+    for (let tick = 0; tick < 2500; tick += 1) {
+      // A fixed script rather than random input: the point is that the same
+      // log produces the same state, so the log has to be the same log.
+      if (state.phase === 'picking') {
+        const drawer = state.players.find((p) => p.seat === state.drawerSeat);
+        if (drawer) applyInput(state, drawer.id, { k: 'pick', w: state.choices[tick % 3] });
+      }
+      if (tick % 37 === 0) {
+        const guesser = state.players[tick % state.players.length]!;
+        applyInput(state, guesser.id, { k: 'guess', g: `guess-${tick}` });
+      }
+      if (tick % 11 === 0) {
+        const drawer = state.players.find((p) => p.seat === state.drawerSeat);
+        if (drawer) {
+          applyInput(state, drawer.id, { k: 'ink', o: OP_FILL, x: tick % 100, y: tick % 80 });
+        }
+      }
+      stepTick(state);
+      if (tick % 50 === 0) digests.push(digest(state));
+    }
+
+    digests.push(digest(state));
+    return digests.join('|');
+  }
+
+  it('produces identical state from the same seed and input log', () => {
+    expect(play()).toBe(play());
+  });
+
+  it('produces different words from a different seed', () => {
+    // Guards the opposite failure: a "deterministic" sim that ignores its seed
+    // would pass the test above and deal every room the same word.
+    const words = new Set<string>();
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const state = createState(seats(3), defaultConfig(), seed);
+      while (state.phase !== 'picking') stepTick(state);
+      words.add(state.choices.join(','));
+    }
+    expect(words.size).toBeGreaterThan(1);
+  });
+});

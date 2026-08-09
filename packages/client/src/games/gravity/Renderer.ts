@@ -1,3 +1,4 @@
+import { roundRect, shade } from '../../game/canvasDraw';
 import { colorFor } from '@mg/shared';
 import {
   RUN_HALF_H,
@@ -551,32 +552,3 @@ export class GravityRenderer {
   }
 }
 
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-): void {
-  const radius = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + w, y, x + w, y + h, radius);
-  ctx.arcTo(x + w, y + h, x, y + h, radius);
-  ctx.arcTo(x, y + h, x, y, radius);
-  ctx.arcTo(x, y, x + w, y, radius);
-  ctx.closePath();
-}
-
-/** Darken (negative) or lighten (positive) a hex colour. Mirrors Gun Mayhem's helper. */
-function shade(hex: string, amount: number): string {
-  const value = hex.replace('#', '');
-  const num = Number.parseInt(value, 16);
-  const channel = (shift: number): number => {
-    const base = (num >> shift) & 0xff;
-    const next = amount < 0 ? base * (1 + amount) : base + (255 - base) * amount;
-    return Math.round(Math.min(255, Math.max(0, next)));
-  };
-  return `rgb(${channel(16)}, ${channel(8)}, ${channel(0)})`;
-}

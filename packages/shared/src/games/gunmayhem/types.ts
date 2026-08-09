@@ -1,4 +1,4 @@
-import type { RngState } from '../achtung/rng';
+import type { RngState } from './rng';
 
 export type WeaponKind = 'pistol' | 'smg' | 'shotgun' | 'sniper' | 'rocket' | 'knife';
 

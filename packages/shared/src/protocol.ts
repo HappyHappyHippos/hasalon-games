@@ -1,5 +1,5 @@
 import type { GameConfig, GameId, GameSnapshot } from './gameModule';
-import type { RoomView } from './room';
+import type { RoomView } from './roomTypes';
 
 /** Bump when the message shapes change so stale tabs fail loudly, not weirdly. */
 export const PROTOCOL_VERSION = 21;

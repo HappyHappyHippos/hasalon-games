@@ -17,10 +17,6 @@ export function makeRng(seed: number): RngState {
   return { s: (seed >>> 0) || 0x9e3779b9 };
 }
 
-export function cloneRng(rng: RngState): RngState {
-  return { s: rng.s };
-}
-
 /** Uniform in [0, 1). */
 export function nextFloat(rng: RngState): number {
   rng.s = (rng.s + 0x6d2b79f5) >>> 0;

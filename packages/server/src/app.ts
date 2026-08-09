@@ -1,3 +1,19 @@
+/**
+ * The whole server surface: one HTTP server for static files, `/healthz` and
+ * the ICE config, and one WebSocket server for everything else.
+ *
+ * Message handling is the interesting half. Three rules hold throughout:
+ *
+ * - **Nothing from a socket is trusted.** Every message goes through
+ *   `parseClientMessage` first, and anything game-shaped is handed to the room
+ *   rather than acted on here. The rate and size limits below are part of that,
+ *   not an optimisation.
+ * - **The handler never throws.** One bad frame from one client must not take
+ *   down the process and every room in it, so the dispatch is wrapped and logged.
+ * - **No game logic lives here.** This routes to `Room`, which routes to a
+ *   `GameModule`. If a change to one game needs a change in this file,
+ *   something has been put in the wrong place.
+ */
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer, type WebSocket } from 'ws';

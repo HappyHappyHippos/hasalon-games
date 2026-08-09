@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DT } from '../../engine';
 import { CHUNKS, CHUNKS_BY_TIER } from './chunks';
-import { CHUNK_COLS, PACE_MUL, ROWS, START_COL, TILE } from './constants';
+import { CHUNK_COLS, type PACE_MUL, ROWS, START_COL, TILE } from './constants';
 import { settleOnFloor, stepRunner, type RunnerBody } from './physics';
 import { speedAt } from './sim';
 import { buildTrack, isSolid, validateChunk, validateTrack, type Track } from './track';

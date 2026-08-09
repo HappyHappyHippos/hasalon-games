@@ -1,3 +1,15 @@
+/**
+ * What a room looks like on the wire.
+ *
+ * Types only — the room's *behaviour* is `server/src/Room.ts`, which is a
+ * different file with a very similar name. This one is the shape both sides
+ * agree on: `RoomView` is what the server broadcasts and what the client's
+ * store holds, so anything added here widens every `room` message.
+ *
+ * Player-visible secrets must never appear in these types. See
+ * `GameInstance.privateFor` in `gameModule.ts` for the one channel that carries
+ * per-player state.
+ */
 import type { GameConfig, GameId } from './gameModule';
 
 export type RoomPhase = 'lobby' | 'playing' | 'matchOver';

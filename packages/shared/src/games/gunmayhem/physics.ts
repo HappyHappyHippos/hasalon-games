@@ -290,10 +290,6 @@ export function blocksBullets(platform: Platform): boolean {
   return !platform.oneWay;
 }
 
-export function pointInPlatform(x: number, y: number, platform: Platform): boolean {
-  return x > platform.x && x < platform.x + platform.w && y > platform.y && y < platform.y + platform.h;
-}
-
 /**
  * How far along the segment `(x0,y0) → (x1,y1)` it first enters the box, as a
  * fraction in `[0, 1]`, or null if it never does.

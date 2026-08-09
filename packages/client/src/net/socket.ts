@@ -1,3 +1,25 @@
+/**
+ * The client's entire wire surface: one socket, one message dispatch, and the
+ * reconnect logic behind it.
+ *
+ * Where an incoming message goes is the thing to understand here, because it is
+ * three different places on purpose:
+ *
+ * - **Snapshots go to `feed`**, a module-level singleton, and never into React.
+ *   At 30 Hz, pushing them through a store would re-render the tree thirty
+ *   times a second for no benefit; canvas renderers read `feed` from their own
+ *   rAF loop instead.
+ * - **Slow-changing derived data goes to the zustand store** via `mirrorHud`,
+ *   which is throttled — scores, phase, countdown. Anything that must not be
+ *   dropped cannot go through it. Skribbl's ink is the standing example and is
+ *   handed off *before* the throttle for exactly that reason.
+ * - **Private state goes to `receivePrivate`**, which is exhaustive over
+ *   `GameId` so a new game with secrets is a compile error rather than a silent
+ *   misparse.
+ *
+ * Reconnection state lives in `sessionStorage`, not `localStorage`, so two tabs
+ * are two players. See the note in CLAUDE.md before changing that.
+ */
 import {
   PROTOCOL_VERSION,
   TICK_RATE,
@@ -353,16 +375,7 @@ class GameSocket {
         return;
 
       case 'private':
-        // The message is deliberately game-agnostic on the wire. The selected
-        // game supplies the private shape, and the other game's slice is cleared
-        // so a switch can never expose stale secret state.
-        if (store.room?.gameId === 'memes') {
-          store.setMemesPrivate((message.data as MemesPrivate | null) ?? null);
-          store.setSecret(null);
-        } else {
-          store.setSecret((message.data as Secret | null) ?? null);
-          store.setMemesPrivate(null);
-        }
+        this.receivePrivate(message.data);
         return;
 
       case 'error': {
@@ -378,6 +391,50 @@ class GameSocket {
         // it is useful. The toast renders `code` through the dictionary.
         store.setError(message.code);
         return;
+      }
+    }
+  }
+
+  /**
+   * Route a `private` payload to the slice that understands it.
+   *
+   * The message is deliberately game-agnostic on the wire — the server just
+   * forwards whatever `GameInstance.privateFor` returned — so the routing has to
+   * happen here, and every game that has no secrets must have its slice cleared
+   * rather than left holding a stale one from the game before.
+   *
+   * Exhaustive on purpose, for the same reason `mirrorHud` below is. This used
+   * to be `if (gameId === 'memes') … else setSecret(…)`, where the `else` meant
+   * "Skribbl" by assumption: a seventh game with private state would have had
+   * its payload silently parsed as a Skribbl secret, with no compile error.
+   * Adding one is now a build failure until it picks a slice.
+   */
+  private receivePrivate(data: unknown): void {
+    const store = useStore.getState();
+    const gameId = store.room?.gameId;
+
+    switch (gameId) {
+      case 'memes':
+        store.setMemesPrivate((data as MemesPrivate | null) ?? null);
+        store.setSecret(null);
+        return;
+      case 'skribbl':
+        store.setSecret((data as Secret | null) ?? null);
+        store.setMemesPrivate(null);
+        return;
+      // No hidden state; their `privateFor` returns null and the server never
+      // sends this. `undefined` is "no room yet", which clears the same way.
+      case 'achtung':
+      case 'gravity':
+      case 'gunmayhem':
+      case 'tanks':
+      case undefined:
+        store.setSecret(null);
+        store.setMemesPrivate(null);
+        return;
+      default: {
+        const never: never = gameId;
+        throw new Error(`unhandled game for private state: ${String(never)}`);
       }
     }
   }

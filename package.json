@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "הסלון — a small site for playing multiplayer games with friends: Gun Mayhem and Achtung die Kurve.",
+  "description": "הסלון — a small site for playing multiplayer games with friends: Gun Mayhem, Tank Trouble, Achtung die Kurve, Gravity Guy, Skribbl and Meme Machine.",
   "workspaces": [
     "packages/shared",
     "packages/server",
@@ -16,15 +16,24 @@
     "build": "npm run build --workspace @mg/client && npm run build --workspace @mg/server",
     "start": "node packages/server/dist/server.js",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "test": "vitest run",
+    "test:unit": "vitest run packages/shared packages/client",
+    "test:integration": "vitest run packages/server",
     "test:watch": "vitest",
     "smoke": "node scripts/smoke-ws.mjs",
     "audit:voice": "node scripts/browser-audit-voice.mjs",
     "probe:turn": "node scripts/probe-turn.mjs"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "concurrently": "^9.1.2",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^17.9.0",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.66.0",
     "vitest": "^3.0.5"
   },
   "engines": {

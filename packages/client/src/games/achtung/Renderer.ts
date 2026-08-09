@@ -18,7 +18,7 @@ import { isPredicting } from '../../net/playbackMode';
 import { CanvasStage } from '../../game/CanvasStage';
 import { drawHat } from '../../game/appearance';
 import { bracket, lerp, shortestAngle } from '../../game/interpolation';
-import { advanceCurve, ticksAhead, type TurnSource } from './advance';
+import { advanceCurve, ticksBehind, type TurnSource } from './advance';
 import { localInput, turnAt } from './input';
 import { trailOps, type Point } from './trail';
 
@@ -364,7 +364,7 @@ export class AchtungRenderer {
     const turnRate = turnRateFor(this.context.settings);
 
     // Paused, the server is not advancing anyone — so neither do we.
-    const ticks = this.context.paused ? 0 : ticksAhead(now, latest.serverAt);
+    const ticks = this.context.paused ? 0 : ticksBehind(now, latest.serverAt);
 
     const heads = new Map<number, Motion>();
     const paths = new Map<number, Motion[]>();
@@ -490,7 +490,7 @@ export class AchtungRenderer {
         (inverted ? -localInput.turn : localInput.turn) as TurnDir,
         me.v,
         turnRate,
-        this.context.paused ? 0 : ticksAhead(now, latestEntry.serverAt),
+        this.context.paused ? 0 : ticksBehind(now, latestEntry.serverAt),
       );
       heads.set(me.s, path[path.length - 1]!);
       paths.set(me.s, path);

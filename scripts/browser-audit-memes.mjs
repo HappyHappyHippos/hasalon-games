@@ -32,7 +32,8 @@ const edge = spawn(edgePath, [
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function waitFor(url) {
   for (let i = 0; i < 80; i += 1) {
-    try { const response = await fetch(url); if (response.ok) return response; } catch {}
+    // Server not up yet; keep polling until the deadline below.
+    try { const response = await fetch(url); if (response.ok) return response; } catch { /* retry */ }
     await sleep(125);
   }
   throw new Error(`Timed out waiting for ${url}`);

@@ -15,6 +15,7 @@ import {
   type TanksSnapshot,
 } from '@mg/shared/tanks';
 import { CanvasStage } from '../../game/CanvasStage';
+import { roundRect } from '../../game/canvasDraw';
 import { PositionSmoother } from '../../game/PositionSmoother';
 import { RemoteBodies } from '../../game/RemoteBodies';
 import { feed } from '../../net/feed';
@@ -422,7 +423,7 @@ export class TanksRenderer {
       if (img) {
         ctx.save();
         ctx.fillStyle = '#000000';
-        roundedRect(ctx, cx - w / 2 + SHADOW_OFFSET, cy - h / 2 + SHADOW_OFFSET, w, h, r * 0.5);
+        roundRect(ctx, cx - w / 2 + SHADOW_OFFSET, cy - h / 2 + SHADOW_OFFSET, w, h, r * 0.5);
         ctx.fill();
         ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
         ctx.restore();
@@ -431,16 +432,16 @@ export class TanksRenderer {
 
       const corner = r * 0.5;
       ctx.fillStyle = '#000000';
-      roundedRect(ctx, cx - w / 2 + SHADOW_OFFSET, cy - h / 2 + SHADOW_OFFSET, w, h, corner);
+      roundRect(ctx, cx - w / 2 + SHADOW_OFFSET, cy - h / 2 + SHADOW_OFFSET, w, h, corner);
       ctx.fill();
 
       ctx.fillStyle = spec?.color ?? '#ffd447';
-      roundedRect(ctx, cx - w / 2, cy - h / 2, w, h, corner);
+      roundRect(ctx, cx - w / 2, cy - h / 2, w, h, corner);
       ctx.fill();
 
       ctx.strokeStyle = 'rgba(0, 0, 0, 0.25)';
       ctx.lineWidth = Math.max(1, r * 0.08);
-      roundedRect(ctx, cx - w / 2, cy - h / 2, w, h, corner);
+      roundRect(ctx, cx - w / 2, cy - h / 2, w, h, corner);
       ctx.stroke();
 
       ctx.save();
@@ -656,7 +657,7 @@ export class TanksRenderer {
     const hullHalfWid = TANK_R * 0.58;
     const hullCorner = TANK_R * 0.28;
     ctx.fillStyle = palette.hull;
-    roundedRect(ctx, -hullHalfLen, -hullHalfWid, hullHalfLen * 2, hullHalfWid * 2, hullCorner);
+    roundRect(ctx, -hullHalfLen, -hullHalfWid, hullHalfLen * 2, hullHalfWid * 2, hullCorner);
     ctx.fill();
 
     ctx.save();
@@ -708,8 +709,8 @@ export class TanksRenderer {
 
     const palette: TankPalette = {
       hull: color,
-      track: shade(color, 0.45),
-      turret: shade(color, 0.25),
+      track: darken(color, 0.45),
+      turret: darken(color, 0.25),
       barrel: '#1c1a24',
     };
     this.paletteCache.set(seat, palette);
@@ -763,26 +764,17 @@ function circle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number):
   ctx.fill();
 }
 
-/** Adds a rounded-rect path (caller fills/strokes) — used for the tank hull. */
-function roundedRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  r: number,
-): void {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
-}
-
-/** Darkens a `#rrggbb` colour toward black by `factor` (0..1). */
-function shade(hex: string, factor: number): string {
+/**
+ * Darkens a `#rrggbb` colour toward black by `factor` (0..1), as `#rrggbb`.
+ *
+ * Deliberately *not* `game/canvasDraw.ts:shade`, and deliberately not named
+ * `shade` either. This takes a positive factor to darken where `shade` takes a
+ * negative amount, and it returns hex where `shade` returns `rgb()`. While both
+ * were called `shade`, `shade(c, 0.45)` darkened here and lightened in the
+ * other two renderers — so a line moved between files inverted without a word
+ * of warning. The name is the fix.
+ */
+function darken(hex: string, factor: number): string {
   const num = parseInt(hex.slice(1), 16);
   const r = Math.max(0, Math.round(((num >> 16) & 0xff) * (1 - factor)));
   const g = Math.max(0, Math.round(((num >> 8) & 0xff) * (1 - factor)));

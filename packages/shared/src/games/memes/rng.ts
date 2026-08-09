@@ -25,11 +25,14 @@ export function nextInt(rng: RngState, min: number, max: number): number {
   return min + Math.floor(nextFloat(rng) * (max - min + 1));
 }
 
+/** Fisher–Yates, returning a new array and leaving the input alone. */
 export function shuffle<T>(rng: RngState, values: readonly T[]): T[] {
-  const out = [...values];
+  const out = values.slice();
   for (let i = out.length - 1; i > 0; i -= 1) {
     const j = nextInt(rng, 0, i);
-    [out[i], out[j]] = [out[j]!, out[i]!];
+    const tmp = out[i]!;
+    out[i] = out[j]!;
+    out[j] = tmp;
   }
   return out;
 }

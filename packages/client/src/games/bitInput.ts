@@ -1,19 +1,34 @@
 /**
- * A bitmask input sampler, shared by the games that use one.
+ * A bitmask input sampler, shared by every game that drives with buttons —
+ * Gun Mayhem, Tank Trouble and Gravity Guy. A game supplies its key map and a
+ * storage key; everything else about how input reaches the server is here, and
+ * only here.
  *
- * This is `gunmayhem/input.ts` with the key map and the storage key lifted out.
- * Every reason for the shape of it is recorded there and none of them are
- * Gun Mayhem's:
+ * Four properties, all load-bearing:
  *
  * - **One sample per tick, whether or not anything changed.** Sending on change
- *   leaves a mask's *duration* implicit, and an exact replay is impossible
- *   without it. It also means a packet lost across a reconnect is repaired by
- *   the very next tick instead of leaving the server on a stale mask.
+ *   alone is fewer packets, but it leaves a mask's *duration* implicit — the
+ *   client cannot know how many ticks the server held it for, which makes an
+ *   exact replay impossible and is what forced the old timestamp-based
+ *   reconciliation. One input per tick makes sequence and tick the same thing.
+ *   It also repairs itself: a packet lost while the socket reconnects used to
+ *   leave the server on a stale mask until the next keypress, and if the lost
+ *   packet was a *press* the character simply stopped responding.
+ *
+ *   60 messages a second sits well inside the server's 200/s budget
+ *   (`app.ts:MAX_MESSAGES_PER_SECOND`), and repeats are harmless by
+ *   construction — the server ORs `bits & ~heldBits` for rising edges, so an
+ *   unchanged mask adds nothing.
+ *
  * - **A tap latch**, so a press and release inside one 16 ms sample still
- *   reaches the server as one tick of that button.
+ *   reaches the server as one tick of that button. At 60 Hz that is an easy
+ *   thing to do with a jump.
+ *
  * - **Release everything on blur, pagehide and `visibilitychange`.** Phones do
- *   not reliably fire `blur`, and a held mask at the moment the screen locks
- *   means driving into a wall while nobody is watching.
+ *   not reliably fire `blur` when the app backgrounds — a locked screen or a
+ *   notification pulled down leaves the last mask held, and the character keeps
+ *   running off the stage while nobody is watching.
+ *
  * - **The sequence survives a reload** in `sessionStorage`, so it never restarts
  *   below the sequence the server has already acknowledged.
  */
@@ -33,9 +48,24 @@ const SAMPLE_MS = 1000 / 60;
 export interface InputBuffer {
   bits: number;
   seq: number;
-  /** Every input sent recently, in order, one per tick. The predictor replays these. */
+  /**
+   * Every input sent recently, in order, one per tick.
+   *
+   * This is what makes prediction correct rather than approximately correct.
+   * The client and the server do not apply a given input at the same instant —
+   * a press takes half a round trip to arrive — so comparing the two by
+   * wall-clock time reads that delay as prediction error and "corrects" it,
+   * which is what used to cancel jumps mid-air. Replaying *by sequence* from
+   * the state the server has actually acknowledged has no such gap: the same
+   * masks, in the same order, from the same starting point.
+   */
   history: InputRecord[];
-  /** Everything the server has not confirmed applying yet; prunes as it goes. */
+  /**
+   * Everything the server has not confirmed applying yet.
+   *
+   * Acknowledged inputs can never be needed again, so this drops them as it
+   * goes — which keeps the buffer bounded without a separate sweep.
+   */
   since(ack: number): InputRecord[];
   reset(): void;
 }

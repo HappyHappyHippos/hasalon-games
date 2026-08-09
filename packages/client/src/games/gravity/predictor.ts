@@ -12,6 +12,7 @@
  * correction actually is and why it doesn't need special handling.
  */
 
+import { ticksBehind as sharedTicksBehind } from '../prediction';
 import { DT, TICK_MS } from '@mg/shared';
 import {
   IN_FLIP,
@@ -178,5 +179,8 @@ export function advanceRunner(
 }
 
 export function ticksBehind(now: number, serverAt: number): number {
-  return Math.max(0, (now - serverAt) / TICK_MS);
+  // Unclamped on purpose: `advanceTank`/`advanceRunner` cap at
+  // MAX_ADVANCE_TICKS themselves, and the renderer's own carry uses the raw
+  // value.
+  return sharedTicksBehind(now, serverAt);
 }

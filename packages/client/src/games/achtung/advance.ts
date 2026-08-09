@@ -25,6 +25,7 @@
  * It does, however, need the local steering *timeline* rather than just the
  * current value — see `TurnSource` below and the long note in `input.ts`.
  */
+import { ticksBehind as sharedTicksBehind } from '../prediction';
 import { DT } from '@mg/shared';
 import { advanceMotion, type Motion, type TurnDir } from '@mg/shared/achtung';
 
@@ -49,9 +50,8 @@ export const MAX_ADVANCE_TICKS = 12;
  * 120 Hz a modern phone runs at, the curve stands still for a frame and then
  * lurches. This is what the old `Math.round(leadMs / TICK_MS)` got wrong.
  */
-export function ticksAhead(now: number, serverAt: number): number {
-  const raw = (now - serverAt) / (DT * 1000);
-  return Math.min(MAX_ADVANCE_TICKS, Math.max(0, raw));
+export function ticksBehind(now: number, serverAt: number): number {
+  return sharedTicksBehind(now, serverAt, MAX_ADVANCE_TICKS);
 }
 
 /**

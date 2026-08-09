@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DT, TICK_MS } from '@mg/shared';
 import { advanceMotion, type Motion, type TurnDir } from '@mg/shared/achtung';
-import { MAX_ADVANCE_TICKS, advanceCurve, ticksAhead } from './advance';
+import { MAX_ADVANCE_TICKS, advanceCurve, ticksBehind } from './advance';
 
 const SPEED = 122;
 const TURN_RATE = 3.25;
@@ -70,20 +70,20 @@ describe('advanceCurve', () => {
   });
 });
 
-describe('ticksAhead', () => {
+describe('ticksBehind', () => {
   it('is fractional', () => {
-    expect(ticksAhead(1000 + TICK_MS * 2.5, 1000)).toBeCloseTo(2.5, 10);
+    expect(ticksBehind(1000 + TICK_MS * 2.5, 1000)).toBeCloseTo(2.5, 10);
   });
 
   it('never runs backwards when a snapshot arrives from the future', () => {
     // Clock slew can briefly put `serverAt` marginally ahead of `now`.
-    expect(ticksAhead(1000, 1020)).toBe(0);
+    expect(ticksBehind(1000, 1020)).toBe(0);
   });
 
   it('caps a stalled connection rather than flinging the curve across the arena', () => {
-    expect(ticksAhead(100_000, 0)).toBe(MAX_ADVANCE_TICKS);
+    expect(ticksBehind(100_000, 0)).toBe(MAX_ADVANCE_TICKS);
 
-    const path = advanceCurve(base(), 0, SPEED, TURN_RATE, ticksAhead(100_000, 0));
+    const path = advanceCurve(base(), 0, SPEED, TURN_RATE, ticksBehind(100_000, 0));
     const head = path[path.length - 1]!;
     expect(head.x - 500).toBeLessThanOrEqual(SPEED * DT * MAX_ADVANCE_TICKS + 1e-9);
   });
@@ -107,8 +107,8 @@ describe('one clock for everyone', () => {
     const serverAt = 5_000;
     const now = serverAt + 47.3;
 
-    const localTicks = ticksAhead(now, serverAt);
-    const remoteTicks = ticksAhead(now, serverAt);
+    const localTicks = ticksBehind(now, serverAt);
+    const remoteTicks = ticksBehind(now, serverAt);
     expect(localTicks).toBe(remoteTicks);
 
     // Same start, same speed, same horizon: the only thing that may differ
@@ -130,14 +130,14 @@ describe('one clock for everyone', () => {
       0,
       SPEED,
       TURN_RATE,
-      ticksAhead(now, serverAt),
+      ticksBehind(now, serverAt),
     ).at(-1)!;
     const remoteHead = advanceCurve(
       base(),
       0,
       SPEED,
       TURN_RATE,
-      ticksAhead(now - OLD_MIN_DELAY_MS, serverAt),
+      ticksBehind(now - OLD_MIN_DELAY_MS, serverAt),
     ).at(-1)!;
 
     // Even on a LAN, where the delay sits on its floor, that is most of a line

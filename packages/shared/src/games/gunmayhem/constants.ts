@@ -203,7 +203,6 @@ export const SHIELD_KB_MUL = 0.3;
 // Bullets
 // ---------------------------------------------------------------------------
 
-export const BULLET_SIZE = 5;
 /** Rockets arc a little; everything else flies flat. */
 export const ROCKET_GRAVITY = 420;
 

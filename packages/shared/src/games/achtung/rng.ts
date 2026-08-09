@@ -1,9 +1,14 @@
 /**
- * mulberry32 — a small, fast, seeded PRNG.
+ * mulberry32 — copied per game by design.
  *
- * The whole simulation draws randomness from here so that a given seed plus a
- * given input log always produces byte-identical state. That determinism is
- * what lets the client predict its own curve and agree with the server.
+ * Achtung's simulation draws all of its randomness from here, so that a given
+ * seed plus a given input log always produces byte-identical state. That
+ * determinism is what lets the client predict its own curve and agree with the
+ * server.
+ *
+ * The copy is the isolation: nothing outside `games/achtung/` may import this
+ * file, so no amount of editing it can perturb another game's sequence. Every
+ * game has its own identical copy for the same reason — keep them identical.
  */
 
 export interface RngState {
@@ -13,10 +18,6 @@ export interface RngState {
 export function makeRng(seed: number): RngState {
   // Avoid the degenerate all-zero state.
   return { s: (seed >>> 0) || 0x9e3779b9 };
-}
-
-export function cloneRng(rng: RngState): RngState {
-  return { s: rng.s };
 }
 
 /** Uniform in [0, 1). */

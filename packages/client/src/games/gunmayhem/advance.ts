@@ -31,7 +31,8 @@
  * means simulating one more tick, so the failure mode degrades smoothly instead
  * of stuttering or freezing.
  */
-import { DT, TICK_MS } from '@mg/shared';
+import { ticksBehind as sharedTicksBehind } from '../prediction';
+import { DT } from '@mg/shared';
 import {
   IN_DOWN,
   IN_JUMP,
@@ -71,8 +72,7 @@ export const MAX_ADVANCE_TICKS = 6;
  * judder that reads as broken physics.
  */
 export function ticksBehind(now: number, serverAt: number): number {
-  const raw = (now - serverAt) / TICK_MS;
-  return Math.min(MAX_ADVANCE_TICKS, Math.max(0, raw));
+  return sharedTicksBehind(now, serverAt, MAX_ADVANCE_TICKS);
 }
 
 /** The mutable body `stepMovement` works on, built from a wire player. */

@@ -23,13 +23,16 @@ import { Avatar } from './Avatar';
 export function Paused({ room, spectating }: { room: RoomView; spectating: boolean }): JSX.Element | null {
   const optionsOpen = useStore((s) => s.optionsOpen);
   const playerId = useStore((s) => s.playerId);
+  // Above the early return, not below it. `useT` is a hook, and calling it
+  // after the return meant this component ran two hooks on some renders and
+  // three on others — opening the options menu while paused changed the count.
+  const t = useT();
 
-  if (optionsOpen || (room.pausedBy === playerId)) {
+  if (optionsOpen || room.pausedBy === playerId) {
     return null;
   }
 
   const pauser = room.players.find((p) => p.id === room.pausedBy);
-  const t = useT();
 
   return (
     <div className="overlay overlay--solid">
@@ -86,11 +89,12 @@ export function MatchOver({
 
   // Picked once per match end (this component only exists while `matchOver`
   // is the phase, so a fresh mount is a fresh match), not re-rolled on every
-  // re-render while the overlay sits on screen.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // re-render while the overlay sits on screen. The empty dep array is the
+  // point; `t` and `winner` are deliberately not tracked.
   const quip = useMemo(() => {
     const quips = t.winnerQuips(winner ? winner.name : '');
     return quips[Math.floor(Math.random() * quips.length)];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
