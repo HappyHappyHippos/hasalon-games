@@ -51,12 +51,9 @@ export function hatRise(hatIndex: number, r: number): number {
     case 'tophat':
     case 'beanie':
     case 'beret':
-    case 'pilot':
     case 'pirate':
-    case 'normal':
       return r * 1.05;
     case 'cowboy':
-    case 'kids':
     case 'rabbi_hat':
     case 'university':
       return r * 1.2;

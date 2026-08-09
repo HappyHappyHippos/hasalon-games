@@ -124,10 +124,7 @@ function HatMark({ hat, fill }: { hat: Hat; fill: string }): JSX.Element | null 
         </>
       );
     case 'beret':
-    case 'kids':
-    case 'normal':
-    case 'pilot':
-      return <image href={`/hats/${hat}.png`} x="6" y="0" width="28" height="18" />;
+      return <image href={`/hats/${hat}.png`} x="5" y="4" width="30" height="17" />;
     case 'birthday':
     case 'santa':
       return <image href={`/hats/${hat}.png`} x="7" y="-6" width="26" height="24" />;
