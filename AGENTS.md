@@ -40,6 +40,8 @@ Before proposing a change as finished: `npm run typecheck && npm run lint && npm
 4. **Each game copies `rng.ts` on purpose.** The duplication is the isolation.
    Never import another game's.
 
-5. **Playtest on the `dev` Railway environment before `main`.** Anything that
-   changes how a game feels goes there first and gets played on a real phone.
-   `main` is production, and the people on it are family, not testers.
+5. **Merge to `dev` and playtest before `main`.** Railway builds `dev` from the
+   `dev` branch and production from `main`, both automatically — a merge *is*
+   the deploy. Anything that changes how a game feels goes through `dev` first
+   and gets played on a real phone. `main` is production, and the people on it
+   are family, not testers.

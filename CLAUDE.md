@@ -49,41 +49,57 @@ Production smoke test: `PORT=3900 node packages/server/dist/server.js`, then
 
 ## Deployment
 
-**Playtest on `dev` before `main`.** Anything that changes how the game feels —
-controls, netcode, tuning, voice — goes to the Railway `dev` environment first
-and gets played on real phones there. `main` is production and the people using
-it are family, not testers.
+**Two branches, two Railway services, both wired permanently. Nothing is
+repointed by hand.**
+
+| Branch | Service | URL | Who's on it |
+|---|---|---|---|
+| `dev` | `hasalon-dev` | https://hasalon-dev-dev.up.railway.app | Us, playtesting |
+| `main` | production | https://hasalon-games-production.up.railway.app | Family |
+
+**Merging is the deploy.** Each service builds from its branch automatically, so
+there is no deploy command in either direction:
 
 ```bash
-git push -u origin <branch>
-railway environment dev && railway service hasalon-dev
-railway service source connect --repo HappyHappyHippos/hasalon-games --branch <branch>
-railway environment production   # or later commands silently target dev
+git checkout dev && git merge --no-ff <branch> && git push    # deploys dev
+git checkout main && git merge --no-ff dev && git push        # deploys production
 ```
 
-The service is `hasalon-dev` at https://hasalon-dev-dev.up.railway.app. That
-`source connect` prints **"ServiceInstance not found" and succeeds anyway** —
-confirm by reading the deploying commit hash out of `railway status --json`,
-never by trusting the exit message. The dev service draws Hobby-plan usage while
-it exists, so it is worth pointing at whatever branch is current rather than
-leaving a stale one deployed.
+**Playtest on `dev` before `main`.** Anything that changes how the game feels —
+controls, netcode, tuning, voice — goes to `dev` first and gets played on a real
+phone there. `main` is production and the people using it are family, not
+testers.
 
-Railway, connected to `main` — **`git push` is the deploy**, there is no deploy
-command. `railway.json` at the repo root holds the deploy config (Dockerfile
-builder, `/healthz` healthcheck, `numReplicas: 1`, `sleepApplication: true`);
-change it there and commit rather than in the dashboard. `fly.toml` is a
-leftover alternative — configured, nothing deployed to it.
+Do not run `railway service source connect` to point a service at a feature
+branch. That workflow is gone: merge into `dev` instead. (It used to print
+"ServiceInstance not found" and succeed anyway, which is exactly the kind of
+thing worth not having in the loop.)
 
-`railway status` / `railway logs` / `railway usage` for the current state. The
-README's "Deploying" section has the full runbook.
+`railway.json` at the repo root holds the deploy config (Dockerfile builder,
+`/healthz` healthcheck, `numReplicas: 1`, `sleepApplication: true`); change it
+there and commit rather than in the dashboard. `fly.toml` is a leftover
+alternative — configured, nothing deployed to it.
+
+`railway status` / `railway logs` / `railway usage` for the current state.
+**Every one of those targets whichever environment the CLI last selected**, so
+say which you mean before trusting the answer:
+
+```bash
+railway environment dev && railway service hasalon-dev
+railway environment production
+```
+
+The README's "Deploying" section has the full runbook.
 
 **The GitHub→Railway webhook has silently stopped firing before.** Two merges to
 `main` produced no build at all — not a failed one, *no deployment attempted* —
 and prod kept serving a commit from hours earlier while everything looked
-healthy. Never assume a push deployed. Check
-`railway status --json | .latestDeployment.meta.commitHash` against `git rev-parse HEAD`,
-or `railway deployment list` for whether a build even started. `railway up`
-deploys from the CLI when the webhook is dead.
+healthy. Now that a merge is the entire deploy for *both* environments, this is
+the failure mode to watch: a merge that lands, a branch that looks shipped, and
+an instance still serving yesterday. Never assume a push deployed. Check
+`railway status --json | .latestDeployment.meta.commitHash` against
+`git rev-parse HEAD`, or `railway deployment list` for whether a build even
+started. `railway up` deploys from the CLI when the webhook is dead.
 
 **`/healthz` cannot tell you which build is running.** It returns byte-identical
 JSON in every version, so a poll loop waiting for it to "come back" passes

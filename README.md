@@ -227,22 +227,44 @@ production, and configure production only after the dev device matrix passes.
 > (Oracle Cloud's free Jerusalem region, or Vultr Tel Aviv); the Railway deploy
 > below stays up until that is proven.
 
+### Branches and environments
+
+Two long-lived branches, one Railway service each, both wired up permanently.
+Nothing is ever repointed by hand.
+
+| Branch | Railway service | URL | Who's on it |
+|---|---|---|---|
+| `dev` | `hasalon-dev` | https://hasalon-dev-dev.up.railway.app | Us, playtesting |
+| `main` | production | https://hasalon-games-production.up.railway.app | Family |
+
+**Work on a branch, merge to `dev`, and it deploys itself.** The `dev` service
+builds from the `dev` branch automatically, so a merge is the whole deploy step:
+
+```bash
+git checkout dev && git merge --no-ff <branch> && git push
+```
+
+Play it there, on a real phone, before it goes any further. **Anything that
+changes how the game feels — controls, netcode, tuning, voice — goes through
+`dev` first.** `main` is production and the people on it are family, not
+testers.
+
+When it holds up, merge `dev` into `main`, which deploys production the same
+way:
+
+```bash
+git checkout main && git merge --no-ff dev && git push
+```
+
+There is no deploy command in either direction — the push is the deploy.
+
 ### Live deployment (Railway)
 
 | | |
 |---|---|
-| Site | https://hasalon-games-production.up.railway.app |
 | Repo | https://github.com/HappyHappyHippos/hasalon-games |
-| Railway project | `hasalon-games` (workspace *Ohad's Projects*, env `production`) |
-| Region | EU West, **1 replica** |
-
-**Deploying is just pushing.** The Railway service is connected to this repo's
-`main` branch, so `git push` builds and releases. There is no deploy command to
-remember.
-
-```bash
-git push
-```
+| Railway project | `hasalon-games` (workspace *Ohad's Projects*) |
+| Region | EU West, **1 replica** per service |
 
 `railway.json` at the repo root is the source of truth for deploy config
 (Dockerfile builder, `/healthz` healthcheck, one replica, app sleeping) — change

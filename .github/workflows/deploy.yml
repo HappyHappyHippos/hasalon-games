@@ -1,9 +1,11 @@
 # Restores "git push is the deploy" on a self-hosted box.
 #
-# The `test` job runs on branches and pull requests too, not just `main`.
-# CLAUDE.md says anything touching game feel gets played on the `dev` Railway
-# environment before it reaches production — which is worth a lot less if
-# nothing has typechecked, linted or built the branch first.
+# The `test` job runs on pull requests and on `dev`, not just `main`.
+#
+# Both branches auto-deploy on Railway — `dev` to the playtest service, `main`
+# to production — so a merge is a release in both directions. Running the gate
+# on pull requests is what keeps a broken build from becoming a deployed one,
+# since by the time it has landed on `dev` it is already going out.
 name: Deploy
 
 on:
