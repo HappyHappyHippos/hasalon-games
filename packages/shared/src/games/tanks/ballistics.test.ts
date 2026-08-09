@@ -138,14 +138,14 @@ describe('marchBullet', () => {
    */
   it('reflects off the same stage face a tank is stopped at', () => {
     const maze = stageMaze(TANK_STAGES.israel);
-    // The south-west wall's silhouette is y 544..608 at x 104..288.
+    // The south-west wall's silhouette is y 544..600 at x 52..280.
     const upward = bullet({ x: 260, y: 690, vx: 0, vy: -BULLET_SPEED });
     const hits: Array<{ x: number; y: number }> = [];
     for (let i = 0; i < 40 && upward.bounces === 0; i += 1) {
       marchBullet(maze, upward, DT, (x, y) => hits.push({ x, y }));
     }
     expect(upward.vy).toBe(BULLET_SPEED);
-    expect(hits[0]!.y).toBeCloseTo(608, 6);
+    expect(hits[0]!.y).toBeCloseTo(600, 6);
 
     const downward = bullet({ x: 260, y: 470, vx: 0, vy: BULLET_SPEED });
     hits.length = 0;

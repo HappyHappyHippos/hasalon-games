@@ -475,35 +475,36 @@ describe('static stage geometry', () => {
   });
 
   /**
-   * Israel is the stage the boxes were re-derived for, so pin a few of them
-   * against the painting rather than against the list — coordinates a reader can
-   * check by opening `tank_stage_israel.png` and looking.
+   * Israel's boxes are re-derived from a blackened-wall reference render (every
+   * wall painted solid black, decoration untouched), so pin a few points against
+   * that ground truth rather than against the list — a reader can check these by
+   * opening `tank_stage_israel.png` and looking.
    */
-  it('matches the Israel artwork at the coordinates that were wrong', () => {
+  it('matches the Israel artwork at coordinates confirmed against the reference render', () => {
     const maze = stageMaze(TANK_STAGES.israel);
 
-    // Painted wall that the old top-face-only boxes left hollow: the front face
-    // under the north-west L, and under the north wall by the laundry line.
-    expect(insideObstacle(maze, 264, 96)).toBe(true);
+    // Full wall silhouette: the north wall by the laundry line, and the
+    // north-west L's vertical arm.
     expect(insideObstacle(maze, 780, 90)).toBe(true);
+    expect(insideObstacle(maze, 300, 140)).toBe(true);
 
-    // Open sand the old list claimed: a strip east of the north-west L's
-    // vertical arm, the gap north of the long central wall, and the pocket east
-    // of the south-west wall's end.
+    // Open sand right up against those same walls.
+    expect(insideObstacle(maze, 264, 96)).toBe(false);
     expect(insideObstacle(maze, 335, 66)).toBe(false);
     expect(insideObstacle(maze, 890, 270)).toBe(false);
     expect(insideObstacle(maze, 302, 542)).toBe(false);
 
     // The fountain is a built structure with a raised stone basin, so it is
     // solid on purpose — unlike the barrels, crates and palms around it, which
-    // are scatter and stay drivable.
+    // are scatter and stay drivable. The reference render doesn't blacken
+    // structures like this one, so its box is carried over by hand.
     expect(insideObstacle(maze, 796, 200)).toBe(true);
     expect(insideObstacle(maze, 73, 620)).toBe(false); // the south-west palm
   });
 
   it('keeps a tank out of the Israel wall front it used to drive into', () => {
     const maze = stageMaze(TANK_STAGES.israel);
-    // The south-west wall runs y 544..608 at x 104..288: top face on top, front
+    // The south-west wall runs y 544..600 at x 52..280: top face on top, front
     // face below it. Coming down stops at its top edge, coming up at its foot.
     const fromAbove = body({ x: 260, y: 470, angle: Math.PI / 2 });
     run(fromAbove, maze, 90, input({ fwd: true }));
@@ -511,7 +512,7 @@ describe('static stage geometry', () => {
 
     const fromBelow = body({ x: 260, y: 690, angle: -Math.PI / 2 });
     run(fromBelow, maze, 90, input({ fwd: true }));
-    expect(fromBelow.y).toBeCloseTo(608 + TANK_R, 1);
+    expect(fromBelow.y).toBeCloseTo(600 + TANK_R, 1);
   });
 
   it('keeps a tank out of the Jungle wall front it used to drive into', () => {
