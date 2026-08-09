@@ -10,6 +10,7 @@ import {
   BOMB_SIZE,
   CRATE_SIZE,
   GM_POWERUPS,
+  PISTOL_RELOAD_TICKS,
   PLAYER_HALF_H,
   PLAYER_HALF_W,
   POWERUP_SIZE,
@@ -815,6 +816,7 @@ export class GunMayhemRenderer {
       if ((player.bf?.shield ?? 0) > 0) this.drawShieldBubble(body, now);
       this.drawBuffGlyphs(player, body);
       this.drawNameplate(player, body, lift);
+      this.drawReloadRing(player, body, lift);
     }
   }
 
@@ -1007,6 +1009,37 @@ export class GunMayhemRenderer {
     const label = `${Math.round(damage)}%`;
     ctx.strokeText(label, body.x, y);
     ctx.fillText(label, body.x, y);
+    ctx.restore();
+  }
+
+  /**
+   * A clock-wipe ring above the head while the pistol reloads — `rl` counts
+   * down to 0 in `PISTOL_RELOAD_TICKS`, same field the predictor replays, so
+   * this reads the one number both server and client already agree on.
+   */
+  private drawReloadRing(player: GmSnapshotPlayer, body: DrawnPlayer, lift: number): void {
+    const rl = player.rl ?? 0;
+    if (rl <= 0) return;
+    const { ctx } = this.stage;
+    const progress = 1 - rl / PISTOL_RELOAD_TICKS;
+    const y = body.y - PLAYER_HALF_H - 32 - lift;
+    const r = 8;
+
+    ctx.save();
+    ctx.translate(body.x, y);
+    ctx.lineCap = 'round';
+
+    // Empty track, then the filled arc sweeping clockwise from 12 o'clock.
+    ctx.strokeStyle = 'rgba(20, 17, 15, 0.25)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.strokeStyle = INK;
+    ctx.beginPath();
+    ctx.arc(0, 0, r, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+    ctx.stroke();
     ctx.restore();
   }
 
