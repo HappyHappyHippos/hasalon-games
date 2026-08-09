@@ -1,3 +1,15 @@
+/**
+ * The client half of the game seam.
+ *
+ * `@mg/shared`'s `GAMES` says what a game *is* — rules, config, simulation.
+ * This says what it *looks like*: the screen to mount while it is running, the
+ * settings panel the host sees in the lobby, the box art on the picker, and the
+ * accent colour. Nothing outside this file needs to know which games exist;
+ * `renderGameScreen` takes a room and returns the right screen.
+ *
+ * `CLIENT_GAMES` is keyed by `GameId`, so adding a game to the shared registry
+ * without adding it here is a compile error rather than a blank screen.
+ */
 import type { ComponentType, JSX } from 'react';
 import { GAMES, type GameConfig, type GameId, type GameMeta, type RoomView } from '@mg/shared';
 import { AchtungBoxArt } from './achtung/BoxArt';

@@ -1,15 +1,8 @@
-import { randomUUID } from 'node:crypto';
 import {
   GAMES,
-  PLAYER_COLORS,
   ROOM_MAX_PLAYERS,
-  SNAPSHOT_EVERY,
-  TICK_MS,
   encode,
-  isFaceIndex,
-  isHatIndex,
   placementPoints,
-  sanitizeName,
   type GameConfig,
   type GameId,
   type GameInstance,
@@ -22,42 +15,45 @@ import {
   type ServerMessage,
 } from '@mg/shared';
 import type { Client } from './Client';
+import { MatchClock } from './MatchClock';
+import {
+  EMPTY_ROOM_TTL_MS,
+  applyIdentity,
+  connectedPlayers,
+  createPlayer,
+  expiredSeats,
+  freeColor,
+  nextHostId,
+  seatedCount,
+  takenColors,
+  type RoomPlayer,
+} from './roster';
 import { serverNow } from './serverClock';
 
-/** How long a seat is held open for someone who dropped out. */
-const DISCONNECT_GRACE_MS = 60_000;
-/** An empty room is torn down after this long, so codes get recycled. */
-const EMPTY_ROOM_TTL_MS = 120_000;
 /**
- * Anyone seated may pause, so anyone seated may also wander off mid-pause. The
- * pauser leaving already lifts it; this catches the rest — a phone that locked,
- * someone who stopped paying attention — rather than freezing the room forever.
+ * One room: who is in it, what they are playing, and the match in progress.
+ *
+ * Two collaborators carry the parts that are their own concern — `roster.ts`
+ * for membership rules and `MatchClock.ts` for the tick loop — so what is left
+ * here is orchestration: deciding when to start, stop or broadcast, and telling
+ * everyone afterwards.
+ *
+ * **The one invariant to preserve.** `broadcastSnapshot` builds the snapshot
+ * once, encodes it once, and pushes the identical bytes to every socket in the
+ * room. That single encode is most of why the tick loop is cheap, and it means
+ * a snapshot can never hold a secret — anything in one is readable in devtools
+ * by every player. Hidden state goes through `sendPrivate`, which asks the game
+ * for one player's view and sends it to exactly that person.
+ *
+ * Nothing here branches on which game is running. Every game-specific decision
+ * goes through the `GameModule` interface; if you find yourself writing
+ * `if (gameId === ...)` in this file, the thing you want probably belongs on
+ * the module.
  */
-const PAUSE_MAX_MS = 120_000;
 
 const DEFAULT_GAME: GameId = 'gunmayhem';
 
-export interface RoomPlayer {
-  id: string;
-  /** Secret used to reclaim this seat after a reload. */
-  token: string;
-  name: string;
-  colorIndex: number;
-  hat: number;
-  face: number;
-  ready: boolean;
-  client: Client | null;
-  disconnectedAt: number | null;
-  /** Seat in the running match, or -1 if not playing this match. */
-  seat: number;
-  score: number;
-  /** Never reset between matches or game switches — see `PlayerView.totalScore`. */
-  totalScore: number;
-  /** Their mic is live. Display only — the audio is peer-to-peer. */
-  voice: boolean;
-  /** Whether they are willing to receive peer audio. */
-  listening: boolean;
-}
+export type { RoomPlayer } from './roster';
 
 export class Room {
   readonly code: string;
@@ -85,16 +81,25 @@ export class Room {
   private lastPrivate = new Map<string, string>();
   /** When that snapshot was authored. Replayed with it, so it stays honest about its age. */
   private lastSnapshotAt = 0;
-  private timer: NodeJS.Timeout | null = null;
-  private lastTickAt = 0;
-  private accumulator = 0;
-  private ticksSinceSnapshot = 0;
-  /** Wall-clock moment the next tick is *due*, so scheduling error can't accumulate. */
-  private nextTickAt = 0;
 
-  paused = false;
-  pausedBy: string | null = null;
-  private pausedAt = 0;
+  /**
+   * The tick loop.
+   *
+   * Anyone seated may pause, so anyone seated may also wander off mid-pause.
+   * The pauser leaving already lifts it (`resumeIfPausedBy`); the clock catches
+   * the rest — a phone that locked, someone who stopped paying attention — by
+   * lifting the pause itself after a couple of minutes rather than freezing the
+   * room forever, and calling `pauseLapsed` so we can tell everyone.
+   */
+  private readonly clock = new MatchClock({
+    tick: () => {
+      this.instance?.stepTick();
+      return this.instance?.status() !== 'over';
+    },
+    snapshot: () => this.broadcastSnapshot(),
+    finished: () => this.endMatch(this.instance?.winnerSeat() ?? null),
+    pauseLapsed: () => this.broadcastRoom(),
+  });
 
   emptySince: number | null = Date.now();
 
@@ -123,7 +128,15 @@ export class Room {
   // -------------------------------------------------------------------------
 
   get activePlayers(): RoomPlayer[] {
-    return this.players.filter((p) => p.client !== null);
+    return connectedPlayers(this.players);
+  }
+
+  get paused(): boolean {
+    return this.clock.paused;
+  }
+
+  get pausedBy(): string | null {
+    return this.clock.pausedBy;
   }
 
   isFull(): boolean {
@@ -131,46 +144,19 @@ export class Room {
   }
 
   takenColors(exceptPlayerId?: string): Set<number> {
-    const taken = new Set<number>();
-    for (const p of this.players) {
-      if (p.id !== exceptPlayerId) taken.add(p.colorIndex);
-    }
-    return taken;
+    return takenColors(this.players, exceptPlayerId);
   }
 
   /** First unused colour, or null when all eight are spoken for. */
   freeColor(preferred: number): number | null {
-    const taken = this.takenColors();
-    if (Number.isInteger(preferred) && preferred >= 0 && preferred < PLAYER_COLORS.length) {
-      if (!taken.has(preferred)) return preferred;
-    }
-    for (let i = 0; i < PLAYER_COLORS.length; i++) {
-      if (!taken.has(i)) return i;
-    }
-    return null;
+    return freeColor(this.players, preferred);
   }
 
   addPlayer(client: Client, identity: Identity): RoomPlayer | null {
     const colorIndex = this.freeColor(identity.colorIndex);
     if (colorIndex === null) return null;
 
-    const player: RoomPlayer = {
-      id: randomUUID(),
-      token: randomUUID(),
-      name: sanitizeName(identity.name),
-      colorIndex,
-      hat: isHatIndex(identity.hat) ? identity.hat : 0,
-      face: isFaceIndex(identity.face) ? identity.face : 0,
-      ready: false,
-      client,
-      disconnectedAt: null,
-      seat: -1,
-      score: 0,
-      totalScore: 0,
-      voice: false,
-      listening: true,
-    };
-
+    const player = createPlayer(client, identity, colorIndex);
     this.players.push(player);
     if (!this.hostId) this.hostId = player.id;
     this.emptySince = null;
@@ -247,13 +233,11 @@ export class Room {
   }
 
   private seatedCount(): number {
-    return this.players.filter((p) => p.seat >= 0).length;
+    return seatedCount(this.players);
   }
 
   private reassignHostIfNeeded(): void {
-    if (this.players.some((p) => p.id === this.hostId)) return;
-    const next = this.activePlayers[0] ?? this.players[0];
-    this.hostId = next ? next.id : '';
+    this.hostId = nextHostId(this.players, this.hostId);
   }
 
   private updateEmptiness(): void {
@@ -263,13 +247,7 @@ export class Room {
 
   /** Drop seats whose grace period expired. Called by the manager's sweeper. */
   reapDisconnected(now: number): void {
-    const expired = this.players.filter(
-      (p) =>
-        p.client === null &&
-        p.disconnectedAt !== null &&
-        now - p.disconnectedAt > DISCONNECT_GRACE_MS,
-    );
-    for (const player of expired) this.removePlayer(player.id);
+    for (const player of expiredSeats(this.players, now)) this.removePlayer(player.id);
   }
 
   isExpired(now: number): boolean {
@@ -282,19 +260,7 @@ export class Room {
 
   setIdentity(player: RoomPlayer, identity: Partial<Identity>): void {
     if (this.phase === 'playing') return;
-    if (typeof identity.name === 'string') player.name = sanitizeName(identity.name);
-    // Hats and faces are free for all — no takenColors equivalent.
-    if (isHatIndex(identity.hat)) player.hat = identity.hat;
-    if (isFaceIndex(identity.face)) player.face = identity.face;
-    if (
-      typeof identity.colorIndex === 'number' &&
-      Number.isInteger(identity.colorIndex) &&
-      identity.colorIndex >= 0 &&
-      identity.colorIndex < PLAYER_COLORS.length &&
-      !this.takenColors(player.id).has(identity.colorIndex)
-    ) {
-      player.colorIndex = identity.colorIndex;
-    }
+    applyIdentity(this.players, player, identity);
     this.broadcastRoom();
   }
 
@@ -402,7 +368,7 @@ export class Room {
     }
     if (seated.length < this.module.meta.minPlayers) return false;
 
-    this.stopLoop();
+    this.clock.stop();
     for (const p of this.players) {
       p.seat = -1;
       p.score = 0;
@@ -424,22 +390,17 @@ export class Room {
     );
 
     this.phase = 'playing';
-    this.clearPause();
-    this.ticksSinceSnapshot = 0;
-    this.accumulator = 0;
-    this.lastTickAt = serverNow();
-    this.nextTickAt = this.lastTickAt + TICK_MS;
+    this.clock.start();
 
     this.broadcast({ t: 'matchStarted', room: this.view() });
-    this.scheduleNext();
   }
 
   rematch(): void {
-    this.stopLoop();
+    this.clock.stop();
     this.instance = null;
     this.lastSnapshot = null;
     this.phase = 'lobby';
-    this.clearPause();
+    this.clock.clearPause();
     for (const p of this.players) {
       p.seat = -1;
       p.score = 0;
@@ -451,125 +412,21 @@ export class Room {
   /** Any seated player, mid-match. Freezes the tick for the whole room. */
   setPaused(player: RoomPlayer, paused: boolean): void {
     if (this.phase !== 'playing' || player.seat < 0) return;
-    if (this.paused === paused) return;
-
-    if (paused) {
-      this.paused = true;
-      this.pausedBy = player.id;
-      this.pausedAt = Date.now();
-    } else {
-      this.clearPause();
-    }
+    if (!this.clock.setPaused(paused, player.id)) return;
     this.broadcastRoom();
   }
 
-  /**
-   * Resuming must reset the clock as well as the flag. `loop` accumulates real
-   * elapsed time, so without this the first tick back would try to replay the
-   * whole pause at once — the 250 ms catch-up clamp would cap it at a quarter
-   * second of teleporting, which is still a quarter second too much.
-   */
-  private clearPause(): void {
-    if (!this.paused) return;
-    this.paused = false;
-    this.pausedBy = null;
-    this.pausedAt = 0;
-    this.lastTickAt = serverNow();
-    this.nextTickAt = this.lastTickAt + TICK_MS;
-    this.accumulator = 0;
-  }
-
   private resumeIfPausedBy(playerId: string): void {
-    if (this.pausedBy !== playerId) return;
-    this.clearPause();
+    this.clock.resumeIfPausedBy(playerId);
   }
 
   input(player: RoomPlayer, raw: unknown): void {
-    if (!this.instance || player.seat < 0 || this.paused) return;
+    if (!this.instance || player.seat < 0 || this.clock.paused) return;
     this.instance.applyInput(player.id, raw);
   }
 
-  /**
-   * Wake for the next tick *deadline*, not `TICK_MS` from whenever we happen to
-   * be now.
-   *
-   * `setInterval(loop, TICK_MS)` is the obvious version and it is subtly wrong:
-   * `TICK_MS` is 16.666…, libuv rounds the interval down to 16 ms, and the
-   * accumulator drains at the true 16.667. The two disagree by half a
-   * millisecond per tick, so the loop periodically runs two ticks in one wake
-   * or none at all, and snapshot spacing comes out uneven instead of a steady
-   * 33.3 ms. Clients interpolate between snapshots — uneven spacing is uneven
-   * motion, on everyone's screen, permanently.
-   *
-   * Deadlines here are always computed from the previous *ideal* deadline, so
-   * scheduling error corrects itself instead of accumulating.
-   */
-  private scheduleNext(): void {
-    if (!this.instance) return;
-    this.timer = setTimeout(this.tick, Math.max(0, this.nextTickAt - serverNow()));
-  }
-
-  private readonly tick = (): void => {
-    this.timer = null;
-    const instance = this.instance;
-    // Stopped between being scheduled and firing; do not re-arm.
-    if (!instance) return;
-
-    if (this.paused) {
-      if (serverNow() - this.pausedAt > PAUSE_MAX_MS) {
-        this.clearPause();
-        this.broadcastRoom();
-      } else {
-        // Hold the clock still so resuming doesn't owe the sim a backlog.
-        this.lastTickAt = serverNow();
-        this.nextTickAt = this.lastTickAt + TICK_MS;
-      }
-      this.scheduleNext();
-      return;
-    }
-
-    const now = serverNow();
-    let delta = now - this.lastTickAt;
-    this.lastTickAt = now;
-    // After a GC pause or a suspended process, catch up a little but never
-    // try to replay seconds of simulation at once.
-    if (delta > 250) {
-      delta = 250;
-      // The schedule is meaningless after a stall that long. Restart it from
-      // now rather than sprinting through a queue of missed deadlines.
-      this.nextTickAt = now;
-    }
-    this.accumulator += delta;
-
-    while (this.accumulator >= TICK_MS) {
-      this.accumulator -= TICK_MS;
-
-      instance.stepTick();
-      this.ticksSinceSnapshot += 1;
-
-      if (this.ticksSinceSnapshot >= SNAPSHOT_EVERY) {
-        this.broadcastSnapshot();
-      }
-
-      if (instance.status() === 'over') {
-        this.broadcastSnapshot();
-        this.endMatch(instance.winnerSeat());
-        return;
-      }
-    }
-
-    this.nextTickAt += TICK_MS;
-    // If simulating cost longer than a tick, the next deadline is already in
-    // the past. Waking at delay 0 forever would just burn the event loop for a
-    // rate we have already proven we cannot hit, so give up the lost time.
-    const after = serverNow();
-    if (this.nextTickAt <= after) this.nextTickAt = after + TICK_MS;
-    this.scheduleNext();
-  };
-
   private broadcastSnapshot(): void {
     if (!this.instance) return;
-    this.ticksSinceSnapshot = 0;
     this.lastSnapshot = this.instance.snapshot();
     this.lastSnapshotAt = serverNow();
 
@@ -619,8 +476,8 @@ export class Room {
   }
 
   private endMatch(winnerSeat: number | null): void {
-    this.stopLoop();
-    this.clearPause();
+    this.clock.stop();
+    this.clock.clearPause();
 
     if (this.instance) {
       const scores = this.instance.scores();
@@ -642,16 +499,9 @@ export class Room {
     this.broadcast({ t: 'matchEnded', room: this.view(), winnerSeat });
   }
 
-  private stopLoop(): void {
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = null;
-    }
-  }
-
   /** Called when the room is torn down, so no timer outlives it. */
   dispose(): void {
-    this.stopLoop();
+    this.clock.stop();
     for (const p of this.players) p.client?.close();
   }
 

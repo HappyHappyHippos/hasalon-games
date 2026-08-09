@@ -1,3 +1,25 @@
+/**
+ * The client's entire wire surface: one socket, one message dispatch, and the
+ * reconnect logic behind it.
+ *
+ * Where an incoming message goes is the thing to understand here, because it is
+ * three different places on purpose:
+ *
+ * - **Snapshots go to `feed`**, a module-level singleton, and never into React.
+ *   At 30 Hz, pushing them through a store would re-render the tree thirty
+ *   times a second for no benefit; canvas renderers read `feed` from their own
+ *   rAF loop instead.
+ * - **Slow-changing derived data goes to the zustand store** via `mirrorHud`,
+ *   which is throttled — scores, phase, countdown. Anything that must not be
+ *   dropped cannot go through it. Skribbl's ink is the standing example and is
+ *   handed off *before* the throttle for exactly that reason.
+ * - **Private state goes to `receivePrivate`**, which is exhaustive over
+ *   `GameId` so a new game with secrets is a compile error rather than a silent
+ *   misparse.
+ *
+ * Reconnection state lives in `sessionStorage`, not `localStorage`, so two tabs
+ * are two players. See the note in CLAUDE.md before changing that.
+ */
 import {
   PROTOCOL_VERSION,
   TICK_RATE,
