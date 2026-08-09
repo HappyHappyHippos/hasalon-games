@@ -3924,9 +3924,21 @@ strong,
      other way round, and on a short phone it pushed the submit button below
      the fold — so writing a caption meant scrolling inside a panel that gave
      no sign it could scroll. `min-height: 0` is what lets the preview actually
-     give way; without it a grid row refuses to shrink below its content. */
+     give way; without it a grid row refuses to shrink below its content.
+
+     The `90px` floor below it was too low for portrait templates specifically
+     (issue #47): `.memes__preview .meme-card` derives its *width* from this
+     row's height times the template's aspect ratio, so a fields column that
+     squeezes the row down to ~90-200px leaves a landscape template filling
+     the screen width regardless, while a portrait one (about a quarter of
+     the catalogue) shrinks in both dimensions and renders as a sliver. `32dvh`
+     gives portrait templates a real width without reintroducing the old fixed-
+     height bug above — it is still a `minmax(…, 1fr)` floor, not a fixed size,
+     so it only grows the row when there's slack, and the few px it can push
+     the submit button by are within what `.memes__phase`'s scroll already
+     covers. */
   .memes__composer {
-    grid-template-rows: minmax(90px, 1fr) auto;
+    grid-template-rows: minmax(32dvh, 1fr) auto;
     grid-template-columns: minmax(0, 1fr);
     align-content: stretch;
     flex: 1 1 auto;
