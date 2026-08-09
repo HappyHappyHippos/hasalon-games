@@ -2263,7 +2263,12 @@ strong,
 .options__panel {
   width: min(528px, 100%);
   max-height: calc(100% - 12px);
-  max-height: calc(100dvh - 24px);
+  /* The dvh fallback above ignores the notch/punch-hole reservation the
+     `.options__overlay` padding makes (issue: settings overlapped the camera
+     bump) — a tall panel (this menu has six sections) filled the raw viewport
+     height and ran up under the cutout. Subtracting the safe-area insets here
+     keeps it inside the same safe box the overlay already computes. */
+  max-height: calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
   gap: 18px;
   padding: 28px;
   /* A second hard colour offset gives the menu the same playful sticker depth
