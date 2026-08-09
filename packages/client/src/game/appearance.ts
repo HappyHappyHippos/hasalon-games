@@ -93,13 +93,21 @@ export function drawHat(
     let offsetY = top - hatH + r * 0.3;
 
     if (hat === 'santa' || hat === 'birthday') {
+      hatW = r * 1.8;
+      hatH = (hatW * customImg.height) / customImg.width;
+      offsetY = top - hatH + r * 0.25;
+    } else if (hat === 'pirate') {
+      hatW = r * 2.8;
+      hatH = (hatW * customImg.height) / customImg.width;
+      offsetY = top - hatH + r * 0.45;
+    } else if (hat === 'university' || hat === 'rabbi_hat' || hat === 'cowboy') {
       hatW = r * 2.2;
       hatH = (hatW * customImg.height) / customImg.width;
       offsetY = top - hatH + r * 0.35;
-    } else if (hat === 'cowboy' || hat === 'pirate' || hat === 'rabbi_hat' || hat === 'university') {
-      hatW = r * 2.5;
+    } else if (hat === 'beret') {
+      hatW = r * 2.1;
       hatH = (hatW * customImg.height) / customImg.width;
-      offsetY = top - hatH + r * 0.4;
+      offsetY = top - hatH + r * 0.15;
     }
 
     ctx.drawImage(customImg, -hatW / 2, offsetY, hatW, hatH);
