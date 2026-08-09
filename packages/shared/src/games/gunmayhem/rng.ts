@@ -1,14 +1,14 @@
 /**
  * mulberry32 — copied per game by design.
  *
- * Achtung's simulation draws all of its randomness from here, so that a given
- * seed plus a given input log always produces byte-identical state. That
- * determinism is what lets the client predict its own curve and agree with the
- * server.
+ * Each simulation owns its random sequence, so changing another game's random
+ * calls cannot silently change how Gun Mayhem deals powerups or picks spawns.
+ * Gun Mayhem used to import Achtung's copy, which quietly made that promise
+ * false in the one direction it mattered most — the flagship game's determinism
+ * hanging off a file nobody editing Achtung would think to check.
  *
- * The copy is the isolation: nothing outside `games/achtung/` may import this
- * file, so no amount of editing it can perturb another game's sequence. Every
- * game has its own identical copy for the same reason — keep them identical.
+ * The algorithm is identical to the other games' copies on purpose. Keep it
+ * that way: the point of the duplication is isolation, not variation.
  */
 
 export interface RngState {

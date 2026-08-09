@@ -1264,10 +1264,15 @@ export class GunMayhemRenderer {
           break;
         }
         case 'jump':
-          // Only other people's. Your own jump is predicted, so the character
-          // leaves the ground on the frame you press it — waiting a round trip
-          // to make the sound puts the two visibly out of step. `drawPlayers`
-          // plays yours off the prediction instead.
+          // Your own jump only, and only when prediction is off.
+          //
+          // While predicting, `drawPlayers` plays the sound off the replay so it
+          // lands on the frame you press rather than a round trip later; taking
+          // it from the server event too would double it. This is the fallback
+          // for the frames prediction is not running.
+          //
+          // Other seats are deliberately silent. Four players jumping
+          // constantly is noise, and a jump is already legible on screen.
           if (event.seat !== this.context.mySeat) break;
           if (!this.predictor.active) sfx.jump(event.double);
           break;

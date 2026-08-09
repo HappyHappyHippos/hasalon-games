@@ -88,7 +88,10 @@ export const CLIENT_GAMES: Record<GameId, ClientGame> = {
   },
 };
 
-/** Display order in the lobby. */
+/**
+ * Display order in the lobby's game picker — the only one. `GAMES` in
+ * `@mg/shared` is keyed by id and carries no order; reorder here.
+ */
 export const CLIENT_GAME_IDS: GameId[] = [
   'gunmayhem',
   'tanks',

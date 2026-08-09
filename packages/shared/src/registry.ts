@@ -1,4 +1,4 @@
-import type { GameId, GameMeta, GameModule } from './gameModule';
+import type { GameId, GameModule } from './gameModule';
 import { achtungModule } from './games/achtung/module';
 import { gravityModule } from './games/gravity/module';
 import { gunMayhemModule } from './games/gunmayhem/module';
@@ -7,9 +7,20 @@ import { skribblModule } from './games/skribbl/module';
 import { tanksModule } from './games/tanks/module';
 
 /**
- * The whole catalogue. Adding a game means writing a module, adding it here,
- * and adding a screen to the client registry — nothing in the room, the
- * protocol or the lobby needs to change.
+ * The whole catalogue, and the only place a `GameModule` is named.
+ *
+ * `Room.ts` and the lobby never branch on which game is active — they call
+ * through the `GameModule` interface — so nothing in the room or the protocol
+ * changes when a game is added. Several other files still do need an entry;
+ * `tsc` finds all of them, and CLAUDE.md's "Adding a game" list has the ones it
+ * cannot.
+ *
+ * Two things that are deliberately *not* here, because having a second copy is
+ * how they drift:
+ * - **Display order** lives once, in `client/games/registry.tsx:CLIENT_GAME_IDS`.
+ * - **Display names** live once, in `client/i18n.ts` under `games.<id>.name`,
+ *   because they are translated. `GameMeta.name` is the internal English name
+ *   for logs and error strings, not something a player is shown.
  */
 export const GAMES: Record<GameId, GameModule> = {
   achtung: achtungModule,
@@ -20,36 +31,6 @@ export const GAMES: Record<GameId, GameModule> = {
   tanks: tanksModule,
 };
 
-/** Display order in the lobby's game picker. */
-export const GAME_IDS: GameId[] = [
-  'gunmayhem',
-  'tanks',
-  'achtung',
-  'gravity',
-  'skribbl',
-  'memes',
-];
-
-export const GAME_LIST: GameMeta[] = GAME_IDS.map((id) => GAMES[id].meta);
-
-/** Polish and canonical game names across the registry. */
-export const GAME_NAMES: Record<GameId, string> = {
-  gunmayhem: 'אנדרלמוסקטרים',
-  tanks: 'אוי טנק!',
-  achtung: 'קרב הקו',
-  gravity: 'הפוך על הפוך',
-  skribbl: 'שרבוטיאדה',
-  memes: 'אלוף הממים',
-};
-
-export function getGameName(id: GameId): string {
-  return GAME_NAMES[id] ?? GAMES[id]?.meta.name ?? id;
-}
-
 export function isGameId(value: unknown): value is GameId {
   return typeof value === 'string' && value in GAMES;
-}
-
-export function gameMeta(id: GameId): GameMeta {
-  return GAMES[id].meta;
 }

@@ -17,7 +17,7 @@ import {
   FEATHER_GRAVITY_MUL,
 } from './constants';
 import { NO_MODS, type MoveMods } from './physics';
-import { nextInt, nextRange, pick, type RngState } from '../achtung/rng';
+import { nextInt, nextRange, pick, type RngState } from './rng';
 import type { GmBuffs, GmPlayer, GmPowerupKind, GunMayhemState } from './types';
 
 /**

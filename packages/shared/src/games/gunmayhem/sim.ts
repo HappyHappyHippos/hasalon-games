@@ -1,5 +1,5 @@
 import { DT } from '../../engine';
-import { makeRng, nextInt, nextRange, pick } from '../achtung/rng';
+import { makeRng, nextInt, nextRange, pick } from './rng';
 import type { GameSeat } from '../../gameModule';
 import {
   ARENA_WIDTH,

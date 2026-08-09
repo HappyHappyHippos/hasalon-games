@@ -353,16 +353,7 @@ class GameSocket {
         return;
 
       case 'private':
-        // The message is deliberately game-agnostic on the wire. The selected
-        // game supplies the private shape, and the other game's slice is cleared
-        // so a switch can never expose stale secret state.
-        if (store.room?.gameId === 'memes') {
-          store.setMemesPrivate((message.data as MemesPrivate | null) ?? null);
-          store.setSecret(null);
-        } else {
-          store.setSecret((message.data as Secret | null) ?? null);
-          store.setMemesPrivate(null);
-        }
+        this.receivePrivate(message.data);
         return;
 
       case 'error': {
@@ -378,6 +369,50 @@ class GameSocket {
         // it is useful. The toast renders `code` through the dictionary.
         store.setError(message.code);
         return;
+      }
+    }
+  }
+
+  /**
+   * Route a `private` payload to the slice that understands it.
+   *
+   * The message is deliberately game-agnostic on the wire — the server just
+   * forwards whatever `GameInstance.privateFor` returned — so the routing has to
+   * happen here, and every game that has no secrets must have its slice cleared
+   * rather than left holding a stale one from the game before.
+   *
+   * Exhaustive on purpose, for the same reason `mirrorHud` below is. This used
+   * to be `if (gameId === 'memes') … else setSecret(…)`, where the `else` meant
+   * "Skribbl" by assumption: a seventh game with private state would have had
+   * its payload silently parsed as a Skribbl secret, with no compile error.
+   * Adding one is now a build failure until it picks a slice.
+   */
+  private receivePrivate(data: unknown): void {
+    const store = useStore.getState();
+    const gameId = store.room?.gameId;
+
+    switch (gameId) {
+      case 'memes':
+        store.setMemesPrivate((data as MemesPrivate | null) ?? null);
+        store.setSecret(null);
+        return;
+      case 'skribbl':
+        store.setSecret((data as Secret | null) ?? null);
+        store.setMemesPrivate(null);
+        return;
+      case 'achtung':
+      case 'gravity':
+      case 'gunmayhem':
+      case 'tanks':
+      // No hidden state; their `privateFor` returns null and the server never
+      // sends this. Falling through to the same clear as "no room" is correct.
+      case undefined:
+        store.setSecret(null);
+        store.setMemesPrivate(null);
+        return;
+      default: {
+        const never: never = gameId;
+        throw new Error(`unhandled game for private state: ${String(never)}`);
       }
     }
   }
