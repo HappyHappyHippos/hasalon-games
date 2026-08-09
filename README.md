@@ -7,17 +7,22 @@ pick what to play together.
 - Room codes and shareable invite links, no accounts
 - Pick the game **after** everyone's joined, not before
 - Up to 8 players, desktop keyboard or phone touch
+- Built-in voice chat, so nobody has to start a separate call
 - One Node process serves the site and the game, so it deploys anywhere
 
 ## The games
 
-**Gun Mayhem** — a 4-player platform fighter. Run, double-jump, shoot each
-other off the stage. Damage adds up, knockback scales with it, three stages,
-five weapons, bombs, crates. This is the one we actually care about being
-good.
+Six, all playable on a phone. Seat counts are per match — a room holds 8 either
+way, and anyone over the limit spectates and rotates in next match.
 
-**Achtung die Kurve** — up to 8 players, steer a curve, don't hit anything,
-be the last one going. Classic rules plus Curve Fever-style powerups.
+| Game | Players | What it is |
+|---|---|---|
+| **Gun Mayhem** | 2–6 | A platform fighter. Run, double-jump, shoot each other off the stage. Damage adds up and knockback scales with it. Nine stages, five weapons, bombs, crates. **This is the flagship** — it gets the most care. |
+| **Tank Trouble** | 2–8 | Top-down maze duel with shells that ricochet off the walls, which is mostly how you shoot yourself. |
+| **Achtung die Kurve** | 2–8 | Steer a curve, don't hit anything, be the last one going. Classic rules plus Curve Fever-style powerups. |
+| **Gravity Guy** | 2–8 | One button. Everyone runs right at the same speed; flipping gravity is the only thing you control. Elimination race. |
+| **Skribbl** | 2–8 | One player draws, everyone else guesses. Hebrew or English word lists. |
+| **Meme Machine** | 2–8 | Caption a template, then vote on everyone's but your own. |
 
 ## Quick start
 
@@ -36,11 +41,19 @@ Vite prints.
 Other scripts:
 
 ```bash
-npm test
+npm run test:unit    # ~13s, shared + client. The loop to run while working.
+```
+
+```bash
+npm test             # ~65s, everything, including the real-socket server tests
 ```
 
 ```bash
 npm run typecheck
+```
+
+```bash
+npm run lint
 ```
 
 ```bash
@@ -61,8 +74,11 @@ npm run probe:turn -- https://hasalon-dev-dev.up.railway.app  # relay-only deplo
 **Create a room**, share the code or the link, and once your friends have
 piled in, the host picks a game from the lobby's game picker — everyone sees
 the choice land live. Ready up, and the host starts the match. If more people
-are ready than the game seats (Gun Mayhem is 4, Achtung is 8), the extras
-spectate and rotate in next match.
+are ready than the game seats (Gun Mayhem tops out at 6; the rest at 8), the
+extras spectate and rotate in next match.
+
+Every game's controls and rules are in the options menu during play, so the
+two write-ups below are just the ones with the most to explain.
 
 ### Gun Mayhem
 
@@ -93,6 +109,20 @@ turns that off.
 Powerups are colour-coded: green affects you, red affects everyone else, blue
 affects everyone. Speed changes, thin/thick lines, a ghost pass-through,
 inverted controls, and one that wipes every trail on the field.
+
+### The other four
+
+**Tank Trouble** — arrows or WASD to drive, <kbd>M</kbd> or <kbd>Space</kbd> to
+shoot. Shells bounce off walls and stay live for several seconds, so the main
+cause of death is your own last shot coming back.
+
+**Gravity Guy** — <kbd>Space</kbd>, <kbd>↑</kbd>, or tap anywhere. You cannot
+change speed; you flip which way is down. Last one still on the track wins.
+
+**Skribbl** — draw with a mouse or finger, type guesses in the chat. The drawer
+picks one of three words. Hebrew or English, set per room by the host.
+
+**Meme Machine** — write a caption, then vote. You cannot vote for your own.
 
 ## Layout
 
@@ -143,10 +173,17 @@ even at 30 Hz network updates; the local player is drawn from client-side
 prediction instead, reconciled against the server's version of events each
 snapshot.
 
-**Adding a third game** means writing a `GameModule` in `packages/shared/src/
-games/<id>/` plus an entry in `client/src/games/registry.tsx`. Rooms, invite
-links, reconnection, the lobby's game picker, and the tick loop are already
-game-agnostic — `Room.ts` only ever talks to the `GameInstance` interface.
+**Voice chat** is peer-to-peer WebRTC; the server only relays signalling and
+hands out ICE credentials (`server/src/ice.ts`), and never sees the audio.
+Skribbl also has a text chat, which is where its guesses are typed.
+
+**Adding a game** means writing a `GameModule` in `packages/shared/src/games/
+<id>/` plus an entry in `client/src/games/registry.tsx`. Rooms, invite links,
+reconnection, the lobby's game picker and the tick loop are already
+game-agnostic — `Room.ts` only ever talks to the `GameInstance` interface, and
+`registry.test.ts` holds every registered module to that contract. A handful of
+other files need an entry too; `tsc` finds all of them, and CLAUDE.md's
+"Adding a game" list covers the few it cannot.
 
 ## Deploying
 
@@ -333,8 +370,11 @@ hash-navigation notes in `CLAUDE.md`.
 ## Known limits
 
 - Rooms are in-memory: no database, nothing survives a restart, no history.
-- Joining mid-match makes you a spectator until the next match; Achtung
-  spectators won't see trail drawn before they arrived.
-- No chat or voice — the assumption is you're already on a call.
+- Joining mid-match makes you a spectator until the next match. Games whose
+  state is drained as it is sent — Achtung's trail, Skribbl's ink — won't show
+  you what was drawn before you arrived. Reconnecting is fine; the client keeps
+  its surface across a socket reopen.
+- Voice is peer-to-peer, so it needs TURN credentials to work behind
+  carrier-grade NAT. See the Cloudflare variables under Deploying.
 - Snapshots are JSON. Fine at this scale; a binary encoding is the obvious
   optimisation if it ever needs to support far more players per room.

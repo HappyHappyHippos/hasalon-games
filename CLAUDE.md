@@ -7,8 +7,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 הסלון (hasalon, "the living room") — a room-based multiplayer game site. Create
 a room, share the code/link, everyone joins, the host picks a game from a
 live game picker, then plays. No accounts, rooms live in memory only. The games
-that ship today: **Gun Mayhem** (4-player platform fighter, the priority — this
-is the flagship game and should get the most care), **Tank Trouble** (up to
+that ship today: **Gun Mayhem** (2–6 player platform fighter, the priority —
+this is the flagship game and should get the most care), **Tank Trouble** (up to
 8-player top-down maze duel with ricocheting shells), **Achtung die Kurve** (up
 to 8-player curve/Snake game), **Gravity Guy** (up to 8-player one-button
 auto-run elimination race), **Skribbl** (up to 8-player draw and guess, Hebrew
@@ -24,7 +24,10 @@ https://hasalon-games-production.up.railway.app — see **Deployment** below.
 npm install                 # once, from repo root
 npm run dev                 # server (tsx watch, :3000) + client (vite, :5173) together
 npm run typecheck           # tsc --noEmit across all 3 packages
-npm test                    # vitest run (whole suite; app.test.ts alone takes ~45s, real WS integration)
+npm run lint                # eslint (typescript-eslint + react-hooks); also covers scripts/
+npm run test:unit           # ~13s, shared + client — the loop to run while working
+npm run test:integration    # ~65s, server only: real WS, real sockets
+npm test                    # everything, ~65s (app.test.ts alone is ~60s of it)
 npm run test:watch
 npm run build                # client (vite build) then server (esbuild bundle)
 npm start                    # runs the production bundle: node packages/server/dist/server.js
@@ -148,15 +151,19 @@ through the interface.
 compile error until it is done, which is the point:
 
 - `gameModule.ts` — the `GameId` union, and the `GameConfig`/`GameSnapshot` unions
-- `registry.ts` — `GAMES` and `GAME_IDS`
+- `registry.ts` — `GAMES` (keyed by id; it carries no ordering and no names)
 - `shared/package.json` — an `exports` subpath, so the client can import internals
 - `Room.ts` — `settingsByGame` is a hand-written literal, one key per game
-- `client/games/registry.tsx` — `CLIENT_GAMES` and `CLIENT_GAME_IDS`
-- `client/i18n.ts` — a `games.<id>` block in **both** dictionaries
+- `client/games/registry.tsx` — `CLIENT_GAMES`, and `CLIENT_GAME_IDS` for the
+  picker's display order. **This is the only ordering.**
+- `client/i18n.ts` — a `games.<id>` block in **both** dictionaries. **This is the
+  only display name**; `GameMeta.name` is the internal English one for logs.
 - `client/music.ts` — `MusicTrack` is `'lobby' | GameId`, so it needs a track
-- `client/net/socket.ts` — `mirrorHud` switches on `snap.game`; the missing case
-  is a type error rather than a silent misread (it used to be a two-way ternary,
-  which would have read a third game's snapshot as Gun Mayhem's)
+- `client/net/socket.ts` — two exhaustive switches: `mirrorHud` on `snap.game`,
+  and `receivePrivate` on the room's `gameId`. A missing case is a type error
+  rather than a silent misread — `mirrorHud` used to be a two-way ternary that
+  would have read a third game's snapshot as Gun Mayhem's, and `receivePrivate`
+  used to be an if/else whose `else` meant Skribbl by assumption.
 
 And the ones no compiler catches, which is why they are worth writing down:
 
@@ -170,13 +177,23 @@ And the ones no compiler catches, which is why they are worth writing down:
   Point the `TRACKS` entry at an existing file rather than a missing one while a
   real track is being sourced — silence reads as the Ogg bug all over again.
 - `server/src/room.test.ts` and `app.test.ts` enumerate games.
-- Reuse rather than copy: `client/games/bitInput.ts` is the whole 60 Hz
-  sampler/tap-latch/sequence-in-`sessionStorage` machinery, parameterised by key
-  map. `ui/motion.ts:prefersReducedMotion` gates shake, trails and parallax.
-- `client/net/socket.ts:354` still branches private state on
-  `gameId === 'memes'` in a two-way if/else with no exhaustiveness check — the
-  same shape `mirrorHud` was fixed out of. Harmless while only Memes and Skribbl
-  have secrets; make it an exhaustive switch before a third game does.
+- Reuse rather than copy. All three of these are parameterised and already used
+  by every game that needs them:
+  - `client/games/bitInput.ts` — the whole 60 Hz sampler/tap-latch/
+    sequence-in-`sessionStorage` machinery, parameterised by key map.
+  - `client/games/prediction.ts:ticksBehind` — snapshot age in fractional ticks.
+  - `client/game/canvasDraw.ts` — `roundRect` and `shade`. Note Tank Trouble's
+    local `darken(hex, factor)` is a *different* function with the opposite sign
+    convention; that is why it has a different name.
+  - `ui/motion.ts:prefersReducedMotion` gates shake, trails and parallax.
+- `shared/src/games/<id>/rng.ts` — **copy it, do not import another game's.**
+  The duplication is the isolation: it is what makes "editing Achtung cannot
+  change which template Meme Machine deals" true. Gun Mayhem used to import
+  Achtung's, which quietly made that promise false for the flagship game.
+- `registry.test.ts` holds every registered module to the `GameModule` contract
+  — snapshot tagged with its own id, `defaultConfig` surviving
+  `normalizeConfig`, junk input neither throwing nor escaping. A new game is
+  covered the moment it is added to `GAMES`, with nothing to remember here.
 
 ### Private per-player state
 
@@ -196,12 +213,17 @@ Unlike `snapshot()`, `privateFor` must **not** drain — it is called repeatedly
 and has to be cheap to answer with `null`, which is what it returns for every
 game that has no secrets.
 
+Routing a `private` message to the right slice is an **exhaustive switch** over
+`GameId` in `socket.ts:receivePrivate`, with a `never`-typed default. It used to
+be `if (gameId === 'memes') … else`, where the `else` meant Skribbl by
+assumption; a seventh game with secrets would have had its payload parsed as a
+Skribbl secret with no compile error. Keep it exhaustive.
+
 `GameConfig` and `GameSnapshot` are unions discriminated by a `game` field
-(`'achtung' | 'gunmayhem' | 'skribbl'`). Narrow with `settings.game === 'achtung'` before
-reading game-specific fields — see `Room.settings` getter and
-`store.ts:selectSettings` for the pattern. Room settings are kept **per game**
-(`Room.settingsByGame`), so switching games in the lobby and back doesn't
-reset either one's config.
+(one member per `GameId`). Narrow with `settings.game === 'achtung'` before
+reading game-specific fields — see the `Room.settings` getter for the pattern.
+Room settings are kept **per game** (`Room.settingsByGame`), so switching games
+in the lobby and back doesn't reset either one's config.
 
 ### Networking model
 
@@ -265,164 +287,50 @@ looking fine on localhost. `feed.test.ts` pins it.
 
 Reconnection: `sessionStorage` (not localStorage — deliberately per-tab, see
 gotchas) holds `{code, playerId, token}`; a dropped player's seat is held for
-60s server-side (`Room.ts: DISCONNECT_GRACE_MS`) and their input freezes
-rather than being removed.
+60s server-side (`server/src/roster.ts: DISCONNECT_GRACE_MS`) and their input
+freezes rather than being removed.
 
-### Achtung specifics
+**The server splits three ways**, and which file a change belongs in is usually
+obvious once you know they exist:
 
-Collision is an occupancy grid (`achtung/grid.ts`), one byte per arena unit.
-The probe geometry (radius, `PROBE_EPS`, `PROBE_ARC`, sweep step) is
-interdependent — the file's top comment explains why probes can never
-self-collide with a curve's own trail as long as the arc stays under 90°, and
-why a *shrinking* radius needs `SELF_GRACE_TICKS`. Read it before touching
-`achtung/constants.ts` speed/radius values.
+- `roster.ts` — membership rules as pure functions over a player list: colour
+  allocation, identity patching, the disconnect grace window, host handover. No
+  timers, no sockets.
+- `MatchClock.ts` — the tick loop: deadline scheduling, the accumulator, the
+  250 ms catch-up clamp, snapshot cadence, the pause clock. Read the comment on
+  `scheduleNext` before touching any of it; `setInterval(loop, TICK_MS)` is the
+  obvious version and is subtly wrong.
+- `Room.ts` — orchestration and broadcast, and nothing game-specific. If you
+  find yourself writing `if (gameId === …)` there, it belongs on the module.
 
-### Gun Mayhem specifics
+### Per-game notes
 
-`gunmayhem/physics.ts:stepMovement` is the movement half, shared verbatim by
-server and client prediction. Two things make it feel right: coyote time and
-jump buffering (`COYOTE_TICKS`/`JUMP_BUFFER_TICKS` in `constants.ts`) — don't
-remove these while "simplifying" the jump code, they're most of what
-separates responsive from broken. Platforms are `solid` or `oneWay` (land
-from above / jump up through / drop through on Down); bullets pass through
-`oneWay` but not `solid`. Knockback (`gunmayhem/sim.ts:damageAndLaunch`)
-*replaces* velocity rather than adding to it — that's intentional, it's what
-makes every hit read consistently regardless of prior momentum — and scales
-with accumulated damage per `KB_BASE`/`KB_PER_DAMAGE`.
+The details that only matter when you are inside one game live next to a
+pointer instead of in this file, so every session does not pay for all six.
+**Read the one you are touching before you touch it** — each is a list of
+things that cost real debugging time to learn.
 
-`gunmayhem/constants.ts` is meant to be tuned; movement feel and weapon
-balance are one-line changes there, not sim-logic changes.
-
-Input is a bitmask + sequence number (`IN_LEFT`/`IN_JUMP`/etc in `types.ts`),
-not per-key messages — taps shorter than one tick still register because the
-server ORs rising edges (`sim.ts:applyInput`), and the sequence lets the
-client replay unacknowledged inputs after a correction
-(`client/games/gunmayhem/predictor.ts`). Prediction only runs while the local
-player is actually in control (not respawning or out of stocks) —
-knockback isn't predictable so the code deliberately doesn't try.
-
-### Tank Trouble specifics
-
-**The arena is a wall lattice, not a tilemap.** `tanks/types.ts:Maze` is two
-`Uint8Array`s of cell *edges*. Every wall is therefore an axis-aligned segment at
-a known coordinate, which is what makes shell reflection exact and tank collision
-a lookup rather than a broadphase. Almost everything else follows from it.
-
-**Generation cannot fail, by construction** (`tanks/maze.ts`): a randomised-DFS
-spanning tree is connected by definition, and the braid pass only *removes*
-walls, which cannot disconnect anything. So there is no generate-and-retry loop.
-`validateMaze` and `fallbackMaze` exist to prove that in tests and to guard a
-live match, not because generation is expected to misbehave. `BRAID_FRACTION` is
-the one number that decides whether the arena plays like Tank Trouble or like a
-hedge maze — a perfect maze is all dead ends with nowhere to circle.
-
-**Shells march the lattice** (`tanks/ballistics.ts`), they do not integrate. Three
-things in that file are load-bearing and all three were found by the tests:
-
-- The crossed axis is **assigned** to the grid line, not integrated onto it.
-  `pos + vel * ((line - pos) / vel)` does not land exactly on `line`, and the
-  residue accumulates until a shell sits a hair past a wall and walks out of the
-  arena.
-- The *un*-crossed axis is clamped so it cannot slip past its own next line at a
-  corner, for the same reason.
-- The crossing test is `t <= remaining`, not `<`. A shell landing exactly on a
-  line as the tick runs out would otherwise arrive untested, and the next march —
-  which treats "sitting on a line" as meaning the next one is a full cell away —
-  skips that wall entirely.
-
-**The maze is never in the snapshot.** It is deterministic from `(matchSeed,
-round)`, so the snapshot carries `az`/`aw`/`ah` and the client regenerates and
-memoises. A mid-round joiner gets the arena from the first frame they receive.
-
-Tank-vs-tank shoving is the one place prediction is not exact — the predictor
-only knows the others as of the last snapshot. `PositionSmoother` absorbs it;
-don't add rollback for a shove.
-
-### Gravity Guy specifics
-
-**Everyone runs right at the same speed**, and `speedAt(distance, pace)` is a
-pure function of distance rather than of anyone's input. That single decision
-buys a shared camera, nobody off screen, no falling behind, and a client that can
-extrapolate x exactly. Don't make run speed per-player.
-
-Vertical motion depends only on your own body, your own button and static
-geometry, so prediction is genuinely exact here — expect corrections to be
-invisible, and treat a visible one as a bug.
-
-`GRAVITY` is deliberately enormous (a full-height crossing takes ~0.29 s). At
-gentle gravity a flip is a swan dive, every gap has to be telegraphed most of a
-screen ahead, and the game stops being about reflexes.
-
-**Chunks are ASCII art** (`gravity/chunks.ts`) on a 7×8 tile grid, so editing the
-level design is editing the picture. One invariant makes assembly safe and
-`validateChunk` enforces it: *the first and last column of every chunk are a solid
-ceiling and floor with clear air between*. That is the whole seam rule — any
-chunk may follow any other, and pairwise entry/exit matching buys nothing.
-Inside a chunk, a floor gap and a ceiling gap never overlap and always have a
-both-solid column between them.
-
-`track.test.ts` runs a greedy bot — one tick of lookahead on both futures, no
-knowledge of the layout — over every seed and pace. If that bot cannot finish, a
-person cannot either, and a new chunk that breaks is caught immediately.
-
-### Skribbl specifics
-
-**The word is the whole design constraint.** `SkribblState.word` never leaves the
-server. The snapshot carries only `masked` — the pattern with unrevealed letters
-replaced — computed server-side, so a guesser is never sent letters they have not
-earned. The drawer gets the real word through `privateFor` (see above). There is
-deliberately no variant that ships the word plus a count of how much to hide.
-
-Three tests guard that, and they are the ones to keep green: the mask is checked
-at every reveal step for every word in both lists; `privateFor` is asserted to
-answer the drawer and `null` for everyone else; and an end-to-end test in
-`app.test.ts` reads back a guesser's entire received-frame buffer and greps it.
-
-**Ink** is a flat op stream in the snapshot (`OP_BEGIN`/`OP_TO`/`OP_CLEAR` in
-`skribbl/constants.ts`), drained as it is sent — so `droppableSnapshots: false`,
-same as Achtung's trail. Two paths it cannot use, both learned the hard way:
-
-- **not `mirrorHud`** — that returns early inside its 120 ms throttle, which
-  would silently drop most strokes. `socket.ts` hands Skribbl snapshots to
-  `games/skribbl/inkBus.ts` *before* the throttle instead.
-- **not `SnapshotFeed`** — it keeps one second of history, so a tab backgrounded
-  for two seconds would lose that ink permanently. The client accumulates into an
-  offscreen canvas that `CanvasStage.begin()` never wipes.
-
-Undo is a clear plus a full replay, because a delta already accumulated on
-everyone's surface cannot be un-drawn.
-
-**Guess matching** (`skribbl/guess.ts`) folds Hebrew final letters, strips
-niqqud, and — the one that decides whether the Hebrew half feels broken — treats
-interior vav and yod as optional, so שלחן and שולחן both count. Which spelling
-someone types is habit rather than knowledge, and rejecting either is rejecting a
-right answer. Only for words of four or more normalised letters, or the fold
-equates שר and שיר.
-
-**Language is a room setting** (`SkribblConfig.lang`), because the server has no
-other notion of one — `lang` is client-only everywhere else. The settings panel
-patches it once to match the host's UI language.
-
-Word lists are `words.he.ts` / `words.en.ts`, tagged easy/medium/hard, one word
-per line so growing them is appending. The three choices are always one per tier.
-A test asserts no duplicates within a language — watch for homographs, which is
-how ביצה (egg / swamp) and ספר (book / barber) got listed twice.
-
-Known limit: a player joining **mid-round** sees the drawing from the moment they
-arrived, because catch-up replays the last snapshot and for a delta format that is
-nearly empty. Reconnects are fine — the client keeps its surface across a socket
-reopen.
+- **Achtung die Kurve** — [`docs/games/achtung.md`](docs/games/achtung.md)
+- **Gun Mayhem** — [`docs/games/gunmayhem.md`](docs/games/gunmayhem.md)
+- **Tank Trouble** — [`docs/games/tanks.md`](docs/games/tanks.md)
+- **Gravity Guy** — [`docs/games/gravity.md`](docs/games/gravity.md)
+- **Skribbl** — [`docs/games/skribbl.md`](docs/games/skribbl.md)
+- **Meme Machine** — no notes yet; `packages/shared/src/games/memes/` is
+  conventional, and its one subtlety (captions are private until the reveal)
+  is covered by *Private per-player state* above.
 
 ### Client structure
 
-Shared canvas machinery both games reuse: `game/CanvasStage.ts` (DPR,
-resize/letterbox transform, screen↔arena coordinate mapping) and
-`game/interpolation.ts` (bracket two snapshots around render time, lerp).
+Shared canvas machinery the renderers reuse: `game/CanvasStage.ts` (DPR,
+resize/letterbox transform, screen↔arena coordinate mapping),
+`game/interpolation.ts` (bracket two snapshots around render time, lerp), and
+`game/canvasDraw.ts` (`roundRect`, `shade`).
+
 Each game's `Renderer.ts` owns a `requestAnimationFrame` loop calling
-`stage.begin()` then drawing; `predictor.ts` (Gun Mayhem only — Achtung
-predicts inline in its renderer) does the reconciliation math. The renderer
-instance is constructed once per mount in a `useEffect` with an empty dep
-array (see the HMR gotcha below before "fixing" that pattern).
+`stage.begin()` then drawing; `predictor.ts` (Gun Mayhem, Tank Trouble and
+Gravity Guy — Achtung predicts inline in its renderer) does the reconciliation
+math. The renderer instance is constructed once per mount in a `useEffect` with
+an empty dep array (see the HMR gotcha below before "fixing" that pattern).
 
 ## Testing multiplayer without two tabs
 
@@ -434,6 +342,9 @@ sharing the protocol constants so it cannot drift:
 ```bash
 npx tsx bot.tmp.mjs ROOMCODE   # then delete it
 ```
+
+`*.tmp.mjs` / `*.tmp.ts` are gitignored, so a forgotten one is not `git status`
+noise — but still delete it, because a stale bot is worse than no bot.
 
 The bot imports `PROTOCOL_VERSION` and `WS_PATH` from
 `./packages/shared/src/protocol.ts`, joins with `{ t: 'join', v, code, identity }`,
