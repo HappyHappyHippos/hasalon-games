@@ -211,11 +211,6 @@ export function GamePicker({ selected, canChoose, onSelect }: Props): JSX.Elemen
     layout(center);
   };
 
-  const step = (delta: number): void => {
-    refocus.current = trackRef.current?.contains(document.activeElement) ?? false;
-    commit(center + delta);
-  };
-
   return (
     <div className="picker">
       <div
@@ -284,60 +279,6 @@ export function GamePicker({ selected, canChoose, onSelect }: Props): JSX.Elemen
           );
         })}
       </div>
-
-      <div className="picker__nav">
-        <button
-          type="button"
-          className="picker__arrow"
-          aria-label={t.prevGame}
-          onClick={() => step(-1)}
-        >
-          <Chevron dir="prev" />
-        </button>
-
-        <div className="picker__dots">
-          {CLIENT_GAME_IDS.map((id, index) => (
-            <button
-              key={id}
-              type="button"
-              className={`picker__dot${index === center ? ' picker__dot--on' : ''}`}
-              aria-label={t.games[id].name}
-              onClick={() => {
-                refocus.current = false;
-                commit(index);
-              }}
-            />
-          ))}
-        </div>
-
-        <button
-          type="button"
-          className="picker__arrow"
-          aria-label={t.nextGame}
-          onClick={() => step(1)}
-        >
-          <Chevron dir="next" />
-        </button>
-      </div>
     </div>
-  );
-}
-
-/** Physical direction, not logical: the row itself never mirrors under RTL. */
-function Chevron({ dir }: { dir: 'prev' | 'next' }): JSX.Element {
-  return (
-    <svg
-      width="22"
-      height="22"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="3.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <polyline points={dir === 'prev' ? '15 18 9 12 15 6' : '9 18 15 12 9 6'} />
-    </svg>
   );
 }

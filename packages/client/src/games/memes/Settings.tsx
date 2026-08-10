@@ -1,8 +1,8 @@
 import type { JSX } from 'react';
 import type { GameConfig } from '@mg/shared';
-import { ROUNDS_PRESETS, VOTE_SECONDS_PRESETS, WRITE_SECONDS_PRESETS } from '@mg/shared/memes';
+import { MIN_ROUNDS, MAX_ROUNDS, MIN_WRITE_SECONDS, MAX_WRITE_SECONDS } from '@mg/shared/memes';
 import { useT } from '../../strings';
-import { Segmented } from '../../ui/Segmented';
+import { NumberStepper } from '../../ui/NumberStepper';
 import { Toggle } from '../../ui/Toggle';
 
 interface Props {
@@ -18,15 +18,10 @@ export function MemesSettings({ settings, isHost, onChange }: Props): JSX.Elemen
   if (!config) return null;
   return (
     <div className="settings">
-      <Segmented label={t.memesWriteTime} value={config.writeSeconds} disabled={!isHost}
-        options={WRITE_SECONDS_PRESETS.map((value) => ({ value, label: t.memesSeconds(value) }))}
-        onChange={(writeSeconds) => onChange({ writeSeconds })} />
-      <Segmented label={t.memesVoteTime} value={config.voteSeconds} disabled={!isHost}
-        options={VOTE_SECONDS_PRESETS.map((value) => ({ value, label: t.memesSeconds(value) }))}
-        onChange={(voteSeconds) => onChange({ voteSeconds })} />
-      <Segmented label={t.memesRounds} value={config.rounds} disabled={!isHost}
-        options={ROUNDS_PRESETS.map((value) => ({ value, label: String(value) }))}
-        onChange={(rounds) => onChange({ rounds })} />
+      <NumberStepper label={t.memesWriteTime} value={config.writeSeconds} min={MIN_WRITE_SECONDS} max={MAX_WRITE_SECONDS}
+        step={10} disabled={!isHost} onChange={(writeSeconds) => onChange({ writeSeconds })} />
+      <NumberStepper label={t.memesRounds} value={config.rounds} min={MIN_ROUNDS} max={MAX_ROUNDS}
+        disabled={!isHost} onChange={(rounds) => onChange({ rounds })} />
       <Toggle label={t.memesNudges} checked={config.nudges} disabled={!isHost}
         onChange={(nudges) => onChange({ nudges })} />
       <p className="muted small">{t.memesNudgesHelp}</p>

@@ -21,12 +21,6 @@ export function AchtungSettings({ settings, isHost, playerCount, onChange }: Pro
   return (
     <div className="settings">
       <Toggle
-        label={t.setPowerups}
-        checked={config.powerupsEnabled}
-        disabled={!isHost}
-        onChange={(powerupsEnabled) => onChange({ powerupsEnabled })}
-      />
-      <Toggle
         label={t.setWinByTwo}
         checked={config.winByTwo}
         disabled={!isHost}
