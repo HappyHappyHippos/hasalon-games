@@ -220,14 +220,14 @@ export function LobbyScreen(): JSX.Element {
             {/* One game or a whole run, never both at once — the picker and the
                 hat would be two different answers to the same question. */}
             {!rouletteOn && (
-              <>
+              <div className="sticker lobby__picker-card">
                 <GamePicker
                   selected={room.gameId}
                   canChoose={isHost}
                   onSelect={(gameId) => socket.setGame(gameId)}
                 />
 
-                <div className="sticker lobby__settings">
+                <div className="lobby__settings">
                   <h2 className="eyebrow">{t.gameSettings(t.games[game.meta.id].name)}</h2>
                   <SettingsPanel
                     settings={room.settings}
@@ -236,7 +236,7 @@ export function LobbyScreen(): JSX.Element {
                     onChange={(patch) => socket.setSettings(patch)}
                   />
                 </div>
-              </>
+              </div>
             )}
           </section>
         </div>

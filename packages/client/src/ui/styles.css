@@ -1035,6 +1035,18 @@ strong,
   gap: 16px;
 }
 
+.lobby__picker-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  overflow: clip;
+}
+
+.lobby__picker-card .lobby__settings {
+  border-top: var(--outline);
+  padding-top: 16px;
+}
+
 .lobby__settings {
   display: flex;
   flex-direction: column;
@@ -2976,6 +2988,7 @@ strong,
   .lobby__grid,
   .lobby__choice,
   .picker,
+  .lobby__picker-card,
   .lobby__head,
   .lobby__people,
   .lobby__settings,
@@ -4182,6 +4195,7 @@ strong,
   .lobby__inner { gap: 10px; }
   .lobby__head,
   .lobby__people,
+  .lobby__picker-card,
   .lobby__settings,
   .lobby__foot { padding: 11px; }
   .lobby__code { font-size: 30px; }
