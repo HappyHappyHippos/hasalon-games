@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1
 
 # --- build -------------------------------------------------------------------
-FROM node:22-alpine AS build
+FROM node:22-slim AS build
 WORKDIR /app
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 # Copy manifests first so `npm ci` is cached until dependencies actually change.
 COPY package.json package-lock.json ./
@@ -15,7 +16,7 @@ COPY . .
 RUN npm run build
 
 # --- runtime -----------------------------------------------------------------
-FROM node:22-alpine
+FROM node:22-slim
 WORKDIR /app
 ENV NODE_ENV=production
 
@@ -28,3 +29,4 @@ COPY --from=build /app/packages/client/dist ./packages/client/dist
 
 EXPOSE 3000
 CMD ["node", "packages/server/dist/server.js"]
+
