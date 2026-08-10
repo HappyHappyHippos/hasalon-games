@@ -232,6 +232,8 @@ const he = {
   chooseAGame: 'בחרו משחק',
   playersRange: (min: number, max: number) => `${min}–${max} שחקנים`,
   playingThis: 'משחקים את זה',
+  prevGame: 'המשחק הקודם',
+  nextGame: 'המשחק הבא',
 
   // Game names stay as they are — they are proper nouns in both languages.
   games: {
@@ -658,6 +660,8 @@ const en: Dict = {
   chooseAGame: 'Choose a game',
   playersRange: (min: number, max: number) => `${min}–${max} players`,
   playingThis: 'Playing this',
+  prevGame: 'Previous game',
+  nextGame: 'Next game',
 
   games: {
     achtung: {

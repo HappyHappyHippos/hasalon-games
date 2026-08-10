@@ -1062,12 +1062,124 @@ strong,
   gap: 4px;
 }
 
-/* Game picker */
+/* Game picker — a carousel, not a grid: one game big and flat in the middle,
+   its neighbours small, slanted and faded behind it.
+
+   The slant is a deliberate exception to the house rule at the top of
+   tokens.css ("no rotate on cards"). It applies only to cards that are *not*
+   the current pick; whatever is centred sits upright and square, and the
+   shadows stay hard and offset throughout. Nothing else in the app tilts.
+
+   Every card's position is an inline transform written by GamePicker.tsx, so
+   no rule here can move one — including `.gamecard`'s hover lift above, which
+   the carousel silently overrides. */
 
 .picker {
+  /* Sized so the first pair of neighbours lands just inside the lobby's
+     right-hand column; the pair behind them is meant to run off the edge. */
+  --card-w: min(280px, 68vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Every card is stacked in one grid cell rather than positioned absolutely,
+   so the track is still sized by its tallest card — transforms don't affect
+   layout, so the fan costs nothing here. The absolute version needed the
+   height stated as a constant, and no constant survives both languages:
+   Hebrew wraps a tagline and the card grows ~20px under it. */
+.picker__track {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 16px;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  justify-items: center;
+  /* Stretch, not start: taglines wrap to different depths, and cards of
+     different heights put the two neighbours at different points on the arc
+     even under identical transforms. One height for all six makes the fan
+     symmetric and squares the cards off, which is what the row wants. */
+  align-items: stretch;
+  /* Headroom for the badge that overhangs the top, and below for the hard
+     shadow plus the drop the arc puts on the outer cards. */
+  padding-block: 20px 14px;
+  /* The fan is wider than the column it sits in — without this the faded
+     outer cards drift over the people panel next door. `clip` rather than
+     `hidden` so nothing turns into a scroll container. */
+  overflow-x: clip;
+  /* Vertical stays with the browser so the lobby still scrolls under the
+     carousel; horizontal comes to the pointer handlers in GamePicker.tsx. */
+  touch-action: pan-y;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.picker__track .gamecard {
+  grid-area: 1 / 1;
+  width: var(--card-w);
+  will-change: transform, opacity;
+  transition: transform 260ms cubic-bezier(0.22, 0.9, 0.3, 1), opacity 260ms ease;
+}
+
+/* Mid-swipe the transform is being written every pointermove; a transition on
+   top of that would lag the finger by a quarter second. */
+.picker__track--dragging .gamecard {
+  transition: none;
+}
+
+/* Title and tagline belong to whatever is centred — `--body-op` is driven
+   from JS alongside the transform, so they fade out as a card slides aside
+   and a neighbour reads as art. */
+.picker__track .gamecard__body,
+.picker__track .gamecard__badge {
+  opacity: var(--body-op, 1);
+}
+
+.picker__nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+}
+
+.picker__arrow {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  color: inherit;
+  background: var(--surface);
+  border: var(--outline);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.picker__arrow:active {
+  transform: translate(var(--lift-sm), var(--lift-sm));
+  box-shadow: none;
+}
+
+.picker__dots {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.picker__dot {
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: width 160ms ease, background-color 160ms ease;
+}
+.picker__dot--on {
+  width: 26px;
+  background: var(--ink);
 }
 
 .gamecard {
@@ -2867,15 +2979,20 @@ strong,
   .lobby__head,
   .lobby__people,
   .lobby__settings,
-  .lobby__foot,
-  .gamecard {
+  .lobby__foot {
     width: 100%;
     min-width: 0;
     max-width: 100%;
   }
-  .lobby__grid,
-  .picker {
+  .lobby__grid {
     grid-template-columns: minmax(0, 1fr);
+  }
+  /* The carousel is the one thing here that is *meant* to overhang the
+     measure — the slanted neighbours run off both edges and get clipped by
+     `.lobby`'s `overflow-x: clip` above, which is why they aren't pinned to
+     100% width with everything else. */
+  .picker {
+    --card-w: min(268px, 62vw);
   }
   /* One column now, so the desktop banner trick above (`order: -1` pulling
      the room code above both grid tracks) isn't needed — cancel it and let
@@ -4090,10 +4207,14 @@ strong,
   .person--self .appearance__arrows { gap: 2px; }
   .person--self .appearance__arrow.btn { width: 44px; min-width: 44px; }
   .lobby__ready { padding: 9px; }
+  /* Vertical space is the scarce thing here, so the carousel shrinks rather
+     than the row of games getting shorter. */
   .picker {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 9px;
+    --card-w: min(210px, 34vw);
+    gap: 6px;
   }
+  .picker__track { padding-block: 14px 10px; }
+  .picker__arrow { width: 38px; height: 38px; }
   .gamecard { gap: 6px; padding: 7px; box-shadow: var(--shadow-sm); }
   .gamecard__name { font-size: 15px; }
   /* The tagline/players swap comes from the (max-height: 560px) arm above,
