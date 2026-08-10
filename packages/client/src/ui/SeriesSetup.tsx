@@ -35,13 +35,13 @@ const PACES: SeriesPace[] = ['quick', 'normal', 'long'];
 interface Props {
   setup: Setup;
   isHost: boolean;
-  /** Ready and connected — the same count the draw will actually use. */
-  readyCount: number;
+  /** Connected player count in the room. */
+  playerCount: number;
 }
 
-export function SeriesSetup({ setup, isHost, readyCount }: Props): JSX.Element {
+export function SeriesSetup({ setup, isHost, playerCount }: Props): JSX.Element {
   const t = useT();
-  const eligible = eligibleGames(setup.pool, readyCount);
+  const eligible = eligibleGames(setup.pool, playerCount);
 
   // Never offer more legs than there are games to fill them. The server clamps
   // too — someone can always join between this render and the draw — but a
@@ -94,7 +94,7 @@ export function SeriesSetup({ setup, isHost, readyCount }: Props): JSX.Element {
             {CLIENT_GAME_IDS.map((id) => {
               const game = CLIENT_GAMES[id];
               const on = setup.pool.includes(id);
-              const fits = readyCount >= game.meta.minPlayers && readyCount <= game.meta.maxPlayers;
+              const fits = playerCount >= game.meta.minPlayers && playerCount <= game.meta.maxPlayers;
               const BoxArt = game.BoxArt;
 
               return (
@@ -115,7 +115,7 @@ export function SeriesSetup({ setup, isHost, readyCount }: Props): JSX.Element {
                   <span className="poolcard__name">{t.games[id].name}</span>
                   {!fits && (
                     <span className="poolcard__why">
-                      {readyCount > game.meta.maxPlayers
+                      {playerCount > game.meta.maxPlayers
                         ? t.needsAtMost(game.meta.maxPlayers)
                         : t.needsAtLeast(game.meta.minPlayers)}
                     </span>

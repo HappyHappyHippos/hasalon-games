@@ -36,16 +36,25 @@ export function LobbyScreen(): JSX.Element {
   const SettingsPanel = game.Settings;
 
   const readyPlayers = room.players.filter((p) => p.ready && p.connected);
+  const connectedPlayers = room.players.filter((p) => p.connected);
+  const everyoneReady = connectedPlayers.length > 0 && readyPlayers.length === connectedPlayers.length;
+
   const canStart = readyPlayers.length >= game.meta.minPlayers;
   const overflow = Math.max(0, readyPlayers.length - game.meta.maxPlayers);
 
   const rouletteOn = room.seriesSetup.enabled;
-  // What the draw would actually produce right now, so the button can say it —
-  // and stay disabled rather than fail when the hat holds nothing that fits.
-  const legCount = Math.min(
+  // What the draw would actually produce with ready players right now:
+  const readyLegCount = Math.min(
     room.seriesSetup.rounds,
     eligibleGames(room.seriesSetup.pool, readyPlayers.length).length,
   );
+  // Display how many legs the roulette will have based on the room size:
+  const roomLegCount = Math.min(
+    room.seriesSetup.rounds,
+    eligibleGames(room.seriesSetup.pool, connectedPlayers.length).length,
+  );
+  const canStartSeries = everyoneReady && readyLegCount > 0;
+
   const takenColors = new Set(
     room.players.filter((p) => p.id !== playerId).map((p) => p.colorIndex),
   );
@@ -176,7 +185,14 @@ export function LobbyScreen(): JSX.Element {
               >
                 {me?.ready ? t.notReady : t.ready}
               </Button>
-              {!canStart && (
+              {rouletteOn && !canStartSeries && (
+                <p className="muted small center" style={{ marginTop: '0.5rem' }}>
+                  {!everyoneReady
+                    ? t.needReady(2)
+                    : t.errors.SERIES_UNAVAILABLE}
+                </p>
+              )}
+              {!rouletteOn && !canStart && (
                 <p className="muted small center" style={{ marginTop: '0.5rem' }}>
                   {t.readyCount(readyPlayers.length, game.meta.minPlayers, t.games[game.meta.id].name)}
                 </p>
@@ -198,7 +214,7 @@ export function LobbyScreen(): JSX.Element {
             <SeriesSetup
               setup={room.seriesSetup}
               isHost={isHost}
-              readyCount={readyPlayers.length}
+              playerCount={connectedPlayers.length}
             />
 
             {/* One game or a whole run, never both at once — the picker and the
@@ -231,11 +247,17 @@ export function LobbyScreen(): JSX.Element {
               <Button
                 variant="primary"
                 size="lg"
-                disabled={legCount === 0}
+                disabled={!canStartSeries}
                 onClick={() => socket.startSeries()}
-                title={legCount === 0 ? t.errors.SERIES_UNAVAILABLE : undefined}
+                title={
+                  !everyoneReady
+                    ? t.needReady(2)
+                    : readyLegCount === 0
+                      ? t.errors.SERIES_UNAVAILABLE
+                      : undefined
+                }
               >
-                {t.startSeries(legCount)}
+                {t.startSeries(roomLegCount)}
               </Button>
             ) : (
               <Button
