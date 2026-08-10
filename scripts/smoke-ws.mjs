@@ -134,6 +134,16 @@ console.log(
 // A match, and the reload that used to end it
 // ---------------------------------------------------------------------------
 
+// Keep the wire probe deterministic. Gun Mayhem defaults to a random stage,
+// but the combat checks below require both seats to start on one clear firing
+// lane. Green Hills has a full-width floor that both bots can drop onto.
+host.send(JSON.stringify({ t: 'settings', settings: { levelId: 'green', powerupsEnabled: false } }));
+await next(
+  host,
+  (m) => m.t === 'room' && m.room.settings.levelId === 'green',
+  'deterministic smoke settings',
+);
+
 host.send(JSON.stringify({ t: 'ready', ready: true }));
 await next(host, (m) => m.t === 'room' && m.room.players.every((p) => p.ready), 'both ready');
 host.send(JSON.stringify({ t: 'start' }));
@@ -145,6 +155,7 @@ console.log(`  ✓ match started, guest in seat ${guestSeat}`);
 const ARENA_MIDDLE = 640;
 const IN_LEFT = 1;
 const IN_RIGHT = 2;
+const IN_DOWN = 8;
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -202,7 +213,17 @@ await next(
   'countdown to finish',
 );
 
-const movedBefore = await run(guest, 1);
+// Put both bots on the same full-width floor before measuring movement and
+// combat. Otherwise a valid random/elevated spawn can put a platform between
+// the pistol and its target, making the live deployment look broken.
+host.send(JSON.stringify({ t: 'input', i: { seq: 1, bits: IN_DOWN } }));
+guest.send(JSON.stringify({ t: 'input', i: { seq: 1, bits: IN_DOWN } }));
+await wait(1200);
+host.send(JSON.stringify({ t: 'input', i: { seq: 2, bits: 0 } }));
+guest.send(JSON.stringify({ t: 'input', i: { seq: 2, bits: 0 } }));
+await wait(200);
+
+const movedBefore = await run(guest, 3);
 if (!(movedBefore > 5)) throw new Error(`guest did not move before reload (${movedBefore})`);
 console.log(`  ✓ guest moved ${movedBefore.toFixed(0)}px under their own input`);
 
