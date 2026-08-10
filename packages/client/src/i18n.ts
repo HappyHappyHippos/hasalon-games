@@ -51,6 +51,7 @@ const he = {
     `Safari לא יכול להעביר את הקישור לאפליקציה. העתיקו את הקוד ${code}, פתחו את הסלון ממסך הבית והצטרפו איתו.`,
   copyRoomCode: 'העתיקו את קוד החדר',
   whosHere: 'מי כאן',
+  readyLabel: 'מוכנים',
   outOf: (n: number, max: number) => `(${n}/${max})`,
   suffixYou: ' (זה אתם)',
   metaHost: 'מארח · ',
@@ -76,6 +77,7 @@ const he = {
     n === 1
       ? `שחקן אחד מוכן — ל-${game} צריך לפחות ${min}.`
       : `${n} מוכנים — ל-${game} צריך לפחות ${min}.`,
+  readySubtitle: (ready: number, total: number) => `${ready}/${total} מוכנים`,
   overflow: (game: string, max: number, n: number) =>
     n === 1
       ? `ב-${game} יש ${max} מקומות. אחד צופה במשחק הזה ונכנס בבא.`
@@ -496,6 +498,7 @@ const en: Dict = {
     `Safari cannot hand this link to the app. Copy code ${code}, open הסלון from your Home Screen, and join with it.`,
   copyRoomCode: 'Copy room code',
   whosHere: "Who's here",
+  readyLabel: 'Ready',
   outOf: (n: number, max: number) => `(${n}/${max})`,
   suffixYou: ' (you)',
   metaHost: 'host · ',
@@ -518,6 +521,7 @@ const en: Dict = {
     n === 1
       ? `1 ready — ${game} needs at least ${min}.`
       : `${n} ready — ${game} needs at least ${min}.`,
+  readySubtitle: (ready: number, total: number) => `${ready}/${total} ready`,
   overflow: (game: string, max: number, n: number) =>
     n === 1
       ? `${game} seats ${max}. 1 person watches this match and rotates in next.`

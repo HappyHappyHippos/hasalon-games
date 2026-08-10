@@ -95,6 +95,8 @@ export function LobbyScreen(): JSX.Element {
           <section className="sticker lobby__people">
             <h2 className="eyebrow lobby__people-head">
               {t.whosHere} <span className="muted">{t.outOf(room.players.length, 8)}</span>
+              <span className="muted"> · </span>
+              {t.readyLabel} <span className="muted">({readyPlayers.length}/{room.players.length})</span>
             </h2>
 
             <ul className="people">
@@ -174,7 +176,7 @@ export function LobbyScreen(): JSX.Element {
               <VoiceBar />
             </div>
 
-            <div className="sticker lobby__ready">
+            <div className="lobby__ready">
               <Button
                 variant={me?.ready ? 'plain' : 'primary'}
                 size="lg"
@@ -190,11 +192,6 @@ export function LobbyScreen(): JSX.Element {
                   {!everyoneReady
                     ? t.needReady(2)
                     : t.errors.SERIES_UNAVAILABLE}
-                </p>
-              )}
-              {!rouletteOn && !canStart && (
-                <p className="muted small center" style={{ marginTop: '0.5rem' }}>
-                  {t.readyCount(readyPlayers.length, game.meta.minPlayers, t.games[game.meta.id].name)}
                 </p>
               )}
             </div>
