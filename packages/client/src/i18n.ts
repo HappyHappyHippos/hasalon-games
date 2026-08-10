@@ -107,7 +107,7 @@ const he = {
     seconds === 1 ? 'מתחילים בעוד שנייה…' : `מתחילים בעוד ${seconds}…`,
   skipTheWait: 'קדימה, בלי לחכות',
   seriesStandings: 'הטבלה',
-  seriesChampion: (name: string) => `${name} אלוף הרולטה`,
+  seriesChampion: (name: string) => `${name} מנצח ברולטה ברולטה ברולטה`,
   seriesTie: 'תיקו בפסגה — אין אלוף',
   seriesEndedEarly: 'הרולטה נגמרה באמצע — לא נשארו מספיק שחקנים.',
   spinAgain: 'עוד סיבוב!',
