@@ -6,6 +6,7 @@ import {
   useIsFullscreen,
   useToggleFullscreen,
 } from './useFullscreen';
+import { MaximizeIcon, MinimizeIcon } from './Icons';
 
 /**
  * The maximize button.
@@ -42,7 +43,7 @@ export function FullscreenButton(): JSX.Element | null {
         aria-label={fullscreen ? t.exitFullscreen : t.enterFullscreen}
         title={fullscreen ? t.exitFullscreen : t.enterFullscreen}
       >
-        {fullscreen ? '⤡' : '⛶'}
+        {fullscreen ? <MinimizeIcon /> : <MaximizeIcon />}
       </button>
     </div>
   );

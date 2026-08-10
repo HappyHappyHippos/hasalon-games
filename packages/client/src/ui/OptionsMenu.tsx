@@ -12,6 +12,7 @@ import { useVoice } from './useVoice';
 import { exitFullscreen, useIsFullscreen } from './useFullscreen';
 import type { TouchControlsMode } from '../store';
 import { LANGS, type Dict, type Lang } from '../i18n';
+import { GearIcon } from './Icons';
 
 const TOUCH_MODES: Array<{ mode: TouchControlsMode; label: (t: Dict) => string }> = [
   { mode: 'auto', label: (t) => t.touchAuto },
@@ -87,7 +88,7 @@ export function OptionsMenu(): JSX.Element {
           setOpen(true);
         }}
       >
-        ⚙
+        <GearIcon />
       </button>
     );
   }

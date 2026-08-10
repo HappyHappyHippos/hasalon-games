@@ -3,6 +3,7 @@ import { selectMySeat, useStore } from '../store';
 import { useT } from '../strings';
 import { socket } from '../net/socket';
 import { sfx } from '../audio';
+import { PauseIcon, PlayIcon } from './Icons';
 
 /**
  * The fast path to pausing, sitting in the same top corner as the maximize
@@ -32,7 +33,7 @@ export function PauseButton(): JSX.Element | null {
         setOptionsOpen(true);
       }}
     >
-      {room.paused ? '▶' : '⏸'}
+      {room.paused ? <PlayIcon /> : <PauseIcon />}
     </button>
   );
 }
