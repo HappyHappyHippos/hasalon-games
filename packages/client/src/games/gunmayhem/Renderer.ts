@@ -35,7 +35,7 @@ import { prefersReducedMotion } from '../../ui/motion';
 import { advancePlayer, ticksBehind } from './advance';
 import { GunMayhemPredictor } from './predictor';
 import { DeathFx, LocalShotFx } from './localFx';
-import { roundRect, shade } from '../../game/canvasDraw';
+import { hexToRgba, roundRect, shade } from '../../game/canvasDraw';
 import { drawBackdrop } from './stageArt';
 import { drawSlash, drawWeapon, muzzleX, recoilStrength } from './weaponArt';
 
@@ -180,6 +180,7 @@ export class GunMayhemRenderer {
 
   start(): void {
     this.stage.attach();
+    this.seenEventTick = -1;
     this.predictor.reset();
     this.smoother.reset();
     this.remotes.clear();
@@ -196,6 +197,7 @@ export class GunMayhemRenderer {
   stop(): void {
     cancelAnimationFrame(this.raf);
     this.stage.detach();
+    this.seenEventTick = -1;
     this.predictor.reset();
     this.smoother.reset();
     this.remotes.clear();
@@ -219,6 +221,9 @@ export class GunMayhemRenderer {
     const latestSnap = latest?.snap;
     if (latestSnap && latestSnap.game === 'gunmayhem') {
       this.level = getLevel(latestSnap.levelId);
+      if (latestSnap.tick < this.seenEventTick) {
+        this.seenEventTick = -1;
+      }
       if (latestSnap.tick > this.seenEventTick) {
         this.consumeEvents(latestSnap, now);
         this.seenEventTick = latestSnap.tick;
@@ -1427,12 +1432,4 @@ function clamp(value: number, min: number, max: number): number {
 }
 
 /** A hex colour as an rgba() string at the given alpha, for gradient stops. */
-function hexToRgba(hex: string, alpha: number): string {
-  const value = hex.replace('#', '');
-  const num = Number.parseInt(value, 16);
-  const r = (num >> 16) & 0xff;
-  const g = (num >> 8) & 0xff;
-  const b = num & 0xff;
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
 

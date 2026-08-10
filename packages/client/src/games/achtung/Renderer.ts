@@ -171,6 +171,7 @@ export class AchtungRenderer {
 
   start(): void {
     this.stage.attach();
+    this.reset();
     const loop = (now: number): void => {
       this.frame(now);
       this.raf = requestAnimationFrame(loop);
@@ -181,6 +182,16 @@ export class AchtungRenderer {
   stop(): void {
     cancelAnimationFrame(this.raf);
     this.stage.detach();
+  }
+
+  /** Reset all persistent trail layer state (canvas, epoch, ticks, pen positions, bursts). */
+  reset(): void {
+    this.trailCtx.clearRect(0, 0, ARENA_WIDTH, ARENA_HEIGHT);
+    this.penPos.clear();
+    this.bakedTick.clear();
+    this.bursts = [];
+    this.trailEpoch = -1;
+    this.seenEventTick = -1;
   }
 
   // -------------------------------------------------------------------------
@@ -269,9 +280,10 @@ export class AchtungRenderer {
       const snap = entry.snap;
       if (snap.game !== 'achtung') continue;
 
-      // Entries from a previous epoch describe trail that has already been
-      // wiped. Skip them — re-processing would clear the layer every frame.
-      if (snap.trailEpoch < this.trailEpoch) continue;
+      if (snap.trailEpoch < this.trailEpoch || snap.tick < this.seenEventTick) {
+        // A new match has started or state was reset. Reset renderer state.
+        this.reset();
+      }
 
       if (snap.trailEpoch > this.trailEpoch) {
         // New round, or someone grabbed "clear trails".
