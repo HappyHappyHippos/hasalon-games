@@ -82,6 +82,37 @@ const he = {
       : `ב-${game} יש ${max} מקומות. ${n} צופים במשחק הזה ונכנסים בבא.`,
 
   // -------------------------------------------------------------------------
+  // Roulette — a run of different games with one table across all of them
+  // -------------------------------------------------------------------------
+  rouletteMode: 'רולטת משחקים',
+  rouletteBlurb: 'ההגרלה בוחרת משחקים שונים, משחקים אותם ברצף, ומכתירים אלוף.',
+  rouletteRounds: 'כמה משחקים',
+  roulettePool: 'מה נכנס לכובע',
+  roulettePace: 'אורך כל משחק',
+  paceNames: ['קצר', 'רגיל', 'ארוך'],
+  startSeries: (n: number) => `סובבו את הגלגל · ${n} משחקים`,
+  legsFromPool: (want: number, have: number) =>
+    want <= have
+      ? `${want} משחקים מתוך ${have} שבכובע`
+      : `יש רק ${have} בכובע שמתאימים — אז ${have} משחקים`,
+  needsAtMost: (n: number) => `עד ${n} שחקנים`,
+  needsAtLeast: (n: number) => `לפחות ${n} שחקנים`,
+  poolCardState: (game: string, on: boolean) => (on ? `${game}: בכובע` : `${game}: בחוץ`),
+  rouletteSpinning: 'מגרילים…',
+  rouletteLineup: 'זה מה שיצא!',
+  legOf: (i: number, n: number) => `משחק ${i} מתוך ${n}`,
+  legDone: (i: number, n: number) => `נגמר משחק ${i} מתוך ${n}`,
+  nextUp: 'עכשיו משחקים',
+  nextUpIn: (seconds: number) =>
+    seconds === 1 ? 'מתחילים בעוד שנייה…' : `מתחילים בעוד ${seconds}…`,
+  skipTheWait: 'קדימה, בלי לחכות',
+  seriesStandings: 'הטבלה',
+  seriesChampion: (name: string) => `${name} אלוף הרולטה`,
+  seriesTie: 'תיקו בפסגה — אין אלוף',
+  seriesEndedEarly: 'הרולטה נגמרה באמצע — לא נשארו מספיק שחקנים.',
+  spinAgain: 'עוד סיבוב!',
+
+  // -------------------------------------------------------------------------
   // In a match
   // -------------------------------------------------------------------------
   round: (n: number) => `סיבוב ${n}`,
@@ -432,6 +463,7 @@ const he = {
     NOT_ENOUGH_PLAYERS: 'אין מספיק שחקנים מוכנים..',
     RESUME_FAILED: 'המקום שלכם כבר לא שמור. הצטרפו מחדש.',
     RATE_LIMITED: 'רגע, לאט יותר.',
+    SERIES_UNAVAILABLE: 'אין משחקים בכובע שמתאימים לכמות הזאת. סמנו עוד.',
   } satisfies Record<ErrorCode, string>,
 };
 
@@ -488,6 +520,33 @@ const en: Dict = {
     n === 1
       ? `${game} seats ${max}. 1 person watches this match and rotates in next.`
       : `${game} seats ${max}. ${n} people watch this match and rotate in next.`,
+
+  rouletteMode: 'Game roulette',
+  rouletteBlurb: 'The wheel picks a few different games, you play them back to back, one champion.',
+  rouletteRounds: 'How many games',
+  roulettePool: "What's in the hat",
+  roulettePace: 'How long each one runs',
+  paceNames: ['Short', 'Normal', 'Long'],
+  startSeries: (n: number) => `Spin the wheel · ${n} games`,
+  legsFromPool: (want: number, have: number) =>
+    want <= have
+      ? `${want} games out of the ${have} in the hat`
+      : `Only ${have} in the hat fit right now — so ${have} games`,
+  needsAtMost: (n: number) => `Up to ${n} players`,
+  needsAtLeast: (n: number) => `${n} players minimum`,
+  poolCardState: (game: string, on: boolean) => (on ? `${game}: in the hat` : `${game}: out`),
+  rouletteSpinning: 'Drawing…',
+  rouletteLineup: "Here's the run!",
+  legOf: (i: number, n: number) => `Game ${i} of ${n}`,
+  legDone: (i: number, n: number) => `Game ${i} of ${n} done`,
+  nextUp: 'Up next',
+  nextUpIn: (seconds: number) => (seconds === 1 ? 'Starting in a second…' : `Starting in ${seconds}…`),
+  skipTheWait: 'Skip the wait',
+  seriesStandings: 'Standings',
+  seriesChampion: (name: string) => `${name} takes the roulette`,
+  seriesTie: 'Tied at the top — no champion',
+  seriesEndedEarly: 'The roulette stopped early — not enough players left.',
+  spinAgain: 'Spin again!',
 
   round: (n: number) => `Round ${n}`,
   roundOver: 'Round over',
@@ -820,6 +879,7 @@ const en: Dict = {
     NOT_ENOUGH_PLAYERS: 'Not enough players are ready.',
     RESUME_FAILED: 'Your seat is gone. Join again.',
     RATE_LIMITED: 'Slow down a moment.',
+    SERIES_UNAVAILABLE: 'Nothing in the hat fits this many players. Tick a few more.',
   },
 };
 

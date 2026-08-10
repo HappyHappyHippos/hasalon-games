@@ -46,6 +46,18 @@ export const memesModule: GameModule = {
     return normalize(patch, asConfig(current));
   },
 
+  // Length scales with the room too — the reveal/vote/result loop runs once per
+  // entry — but far less steeply than Skribbl's, since only that inner loop
+  // grows and the writing phase is shared. Trimming the vote clock is the
+  // cheapest saving: it is per-entry, so ten seconds off is ten seconds ×
+  // everyone.
+  seriesConfig(_playerCount, pace) {
+    const base = defaultConfig();
+    if (pace === 'quick') return { ...base, rounds: 2, writeSeconds: 45, voteSeconds: 10 };
+    if (pace === 'long') return { ...base, rounds: 4, writeSeconds: 60, voteSeconds: 12 };
+    return { ...base, rounds: 3, writeSeconds: 60, voteSeconds: 12 };
+  },
+
   create(seats: GameSeat[], config: GameConfig, seed: number): GameInstance {
     const state = createState(seats, asConfig(config), seed);
     return {

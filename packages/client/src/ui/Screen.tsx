@@ -2,7 +2,7 @@ import { type JSX, type ReactNode, type RefObject } from 'react';
 import type { RoomView } from '@mg/shared';
 import { useStore } from '../store';
 import { useT } from '../strings';
-import { MatchOver, Paused } from './MatchOverlays';
+import { MatchEndOverlay, Paused } from './MatchOverlays';
 import { VoiceBar } from './VoiceBar';
 import { useHasTouch } from './useTouchControls';
 
@@ -52,6 +52,11 @@ export function Screen({
       <aside className="rail">
         <div className="rail__head">
           <span className="rail__round">{t.round(round || 1)}</span>
+          {room.series && (
+            <span className="rail__leg">
+              {t.legOf(room.series.index + 1, room.series.lineup.length)}
+            </span>
+          )}
         </div>
         <div className="rail__list">{hud}</div>
         <VoiceBar compact />
@@ -89,7 +94,7 @@ export function Screen({
         )}
 
         {room.phase === 'matchOver' && (
-          <MatchOver room={room} mySeat={mySeat} winnerSeat={winnerSeat} isHost={isHost} />
+          <MatchEndOverlay room={room} mySeat={mySeat} winnerSeat={winnerSeat} isHost={isHost} />
         )}
       </div>
     </main>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type JSX } from 'react
 import { TICK_RATE, type RoomView } from '@mg/shared';
 import { useStore } from '../../store';
 import { useT } from '../../strings';
-import { MatchOver, Paused } from '../../ui/MatchOverlays';
+import { MatchEndOverlay, Paused } from '../../ui/MatchOverlays';
 import { VoiceBar } from '../../ui/VoiceBar';
 import { Composer } from './Composer';
 import { MemeCard } from './MemeCard';
@@ -105,7 +105,7 @@ export function MemesScreen({ room, mySeat }: Props): JSX.Element {
       <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
       {warning && <p className="sr-only" role="status" aria-live="polite">{warning}</p>}
       {room.paused && room.phase === 'playing' && <Paused room={room} spectating={mySeat < 0} />}
-      {room.phase === 'matchOver' && <MatchOver room={room} mySeat={mySeat} winnerSeat={winnerSeat} isHost={room.players.find((player) => player.id === playerId)?.isHost ?? false} />}
+      {room.phase === 'matchOver' && <MatchEndOverlay room={room} mySeat={mySeat} winnerSeat={winnerSeat} isHost={room.players.find((player) => player.id === playerId)?.isHost ?? false} />}
     </main>
   );
 }

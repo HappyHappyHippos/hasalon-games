@@ -66,6 +66,17 @@ export const tanksModule: GameModule = {
     };
   },
 
+  // The only game with a hard per-round clock, so a leg here has a real
+  // ceiling: `targetWins × (roundSeconds + countdown + roundOver)`. A quick leg
+  // tightens both, since a maze round that reaches the timeout is a draw and
+  // advances nobody.
+  seriesConfig(_playerCount, pace) {
+    const base = defaultConfig();
+    if (pace === 'quick') return { ...base, targetWins: 2, roundSeconds: 60 };
+    if (pace === 'long') return { ...base, targetWins: 5, roundSeconds: 90 };
+    return { ...base, targetWins: 3, roundSeconds: 90 };
+  },
+
   create(seats: GameSeat[], config: GameConfig, seed: number): GameInstance {
     const state = createState(seats, asConfig(config), seed);
     let pending: TankEvent[] = [];

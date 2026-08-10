@@ -269,6 +269,36 @@ export function createApp(options: AppOptions): App {
         return;
       }
 
+      case 'series':
+        if (!requireHost(client, room, player)) return;
+        if (room.phase === 'playing') {
+          client.sendError('ALREADY_STARTED', 'You cannot change the roulette mid-match.');
+          return;
+        }
+        room.setSeriesSetup(message.setup ?? {});
+        return;
+
+      case 'seriesStart':
+        if (!requireHost(client, room, player)) return;
+        if (room.phase === 'playing') {
+          client.sendError('ALREADY_STARTED', 'The match has already started.');
+          return;
+        }
+        if (!room.startSeries()) {
+          client.sendError(
+            'SERIES_UNAVAILABLE',
+            'No games in the hat suit this many players right now.',
+          );
+        }
+        return;
+
+      case 'seriesSkip':
+        if (!requireHost(client, room, player)) return;
+        // Ignored outside a wait rather than an error, matching `game` — the
+        // host tapping as the timer runs out is routine, not a mistake.
+        room.skipSeriesWait();
+        return;
+
       case 'rematch':
         if (!requireHost(client, room, player)) return;
         room.rematch();

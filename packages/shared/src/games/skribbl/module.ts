@@ -60,6 +60,20 @@ export const skribblModule: GameModule = {
     return normalize(patch, asConfig(current));
   },
 
+  // The only game whose length scales *linearly* with the room, because
+  // `rounds` means "how many times the whole table draws" — so a leg costs
+  // `rounds × playerCount × (pick + drawSeconds + reveal)`. Three rounds at
+  // eight players is half an hour, which is not a leg, it is an evening. The
+  // round count therefore drops as the room grows, and even `long` stays at two
+  // for a full table.
+  seriesConfig(playerCount, pace) {
+    const base = defaultConfig();
+    const big = playerCount >= 6;
+    if (pace === 'quick') return { ...base, rounds: 1, drawSeconds: 40 };
+    if (pace === 'long') return { ...base, rounds: big ? 2 : 3, drawSeconds: 70 };
+    return { ...base, rounds: big ? 1 : 2, drawSeconds: 60 };
+  },
+
   create(seats: GameSeat[], config: GameConfig, seed: number): GameInstance {
     const state = createState(seats, asConfig(config), seed);
     let tick = 0;

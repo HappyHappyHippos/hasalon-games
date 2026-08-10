@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX } from 'react';
-import { colorFor } from '@mg/shared';
+import { colorFor, eligibleGames } from '@mg/shared';
 import { useStore } from '../store';
 import { useT } from '../strings';
 import { socket } from '../net/socket';
@@ -7,6 +7,7 @@ import { AppearancePicker } from '../ui/AppearancePicker';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
 import { GamePicker } from '../ui/GamePicker';
+import { SeriesSetup } from '../ui/SeriesSetup';
 import { VoiceBar } from '../ui/VoiceBar';
 import { useVoice } from '../ui/useVoice';
 import { CLIENT_GAMES } from '../games/registry';
@@ -37,6 +38,14 @@ export function LobbyScreen(): JSX.Element {
   const readyPlayers = room.players.filter((p) => p.ready && p.connected);
   const canStart = readyPlayers.length >= game.meta.minPlayers;
   const overflow = Math.max(0, readyPlayers.length - game.meta.maxPlayers);
+
+  const rouletteOn = room.seriesSetup.enabled;
+  // What the draw would actually produce right now, so the button can say it —
+  // and stay disabled rather than fail when the hat holds nothing that fits.
+  const legCount = Math.min(
+    room.seriesSetup.rounds,
+    eligibleGames(room.seriesSetup.pool, readyPlayers.length).length,
+  );
   const takenColors = new Set(
     room.players.filter((p) => p.id !== playerId).map((p) => p.colorIndex),
   );
@@ -186,43 +195,66 @@ export function LobbyScreen(): JSX.Element {
           </header>
 
           <section className="lobby__choice">
-            <GamePicker
-              selected={room.gameId}
-              canChoose={isHost}
-              onSelect={(gameId) => socket.setGame(gameId)}
+            <SeriesSetup
+              setup={room.seriesSetup}
+              isHost={isHost}
+              readyCount={readyPlayers.length}
             />
 
-            <div className="sticker lobby__settings">
-              <h2 className="eyebrow">{t.gameSettings(t.games[game.meta.id].name)}</h2>
-              <SettingsPanel
-                settings={room.settings}
-                isHost={isHost}
-                playerCount={room.players.length}
-                onChange={(patch) => socket.setSettings(patch)}
-              />
-            </div>
+            {/* One game or a whole run, never both at once — the picker and the
+                hat would be two different answers to the same question. */}
+            {!rouletteOn && (
+              <>
+                <GamePicker
+                  selected={room.gameId}
+                  canChoose={isHost}
+                  onSelect={(gameId) => socket.setGame(gameId)}
+                />
+
+                <div className="sticker lobby__settings">
+                  <h2 className="eyebrow">{t.gameSettings(t.games[game.meta.id].name)}</h2>
+                  <SettingsPanel
+                    settings={room.settings}
+                    isHost={isHost}
+                    playerCount={room.players.length}
+                    onChange={(patch) => socket.setSettings(patch)}
+                  />
+                </div>
+              </>
+            )}
           </section>
         </div>
 
         <footer className="sticker lobby__foot">
-          {isHost && (
-            <Button
-              variant="primary"
-              size="lg"
-              disabled={!canStart}
-              onClick={() => socket.start()}
-              title={canStart ? undefined : t.needReady(game.meta.minPlayers)}
-            >
-              {t.startGame(t.games[game.meta.id].name)}
-            </Button>
-          )}
+          {isHost &&
+            (rouletteOn ? (
+              <Button
+                variant="primary"
+                size="lg"
+                disabled={legCount === 0}
+                onClick={() => socket.startSeries()}
+                title={legCount === 0 ? t.errors.SERIES_UNAVAILABLE : undefined}
+              >
+                {t.startSeries(legCount)}
+              </Button>
+            ) : (
+              <Button
+                variant="primary"
+                size="lg"
+                disabled={!canStart}
+                onClick={() => socket.start()}
+                title={canStart ? undefined : t.needReady(game.meta.minPlayers)}
+              >
+                {t.startGame(t.games[game.meta.id].name)}
+              </Button>
+            ))}
 
           <Button variant="ghost" onClick={() => socket.leave()}>
             {t.leave}
           </Button>
         </footer>
 
-        {overflow > 0 && (
+        {overflow > 0 && !rouletteOn && (
           <div className="lobby__notes">
             <p className="muted small center">
               {t.overflow(t.games[game.meta.id].name, game.meta.maxPlayers, overflow)}

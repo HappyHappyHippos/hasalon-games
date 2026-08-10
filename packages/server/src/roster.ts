@@ -39,7 +39,10 @@ export interface RoomPlayer {
   /** Seat in the running match, or -1 if not playing this match. */
   seat: number;
   score: number;
-  /** Never reset between matches or game switches — see `PlayerView.totalScore`. */
+  /**
+   * Never reset between matches or game switches; the one exception is starting
+   * a roulette series, which zeroes it — see `PlayerView.totalScore`.
+   */
   totalScore: number;
   /** Their mic is live. Display only — the audio is peer-to-peer. */
   voice: boolean;

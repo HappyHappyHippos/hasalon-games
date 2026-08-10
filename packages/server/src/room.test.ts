@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TICK_MS } from '@mg/shared';
-import type { GameConfig, GameInstance, GameSnapshot, Identity, ServerMessage } from '@mg/shared';
+import { GAMES, SERIES_BREAK_MS, TICK_MS } from '@mg/shared';
+import type {
+  GameConfig,
+  GameInstance,
+  GameSnapshot,
+  Identity,
+  SeriesSetup,
+  ServerMessage,
+} from '@mg/shared';
 import { COUNTDOWN_TICKS, IN_RIGHT } from '@mg/shared/gunmayhem';
 import { Room, type RoomPlayer } from './Room';
 import { Client } from './Client';
@@ -502,22 +509,23 @@ describe('Room total score', () => {
     setInstanceScores(room, { [a.id]: 3, [b.id]: 2, [c.id]: 1 });
     endMatch(room, a.seat);
 
-    expect(a.totalScore).toBe(1);
-    expect(b.totalScore).toBe(0);
-    expect(c.totalScore).toBe(-1);
+    // Three players: 3 for the win, 2, then 1. Nobody goes backwards.
+    expect(a.totalScore).toBe(3);
+    expect(b.totalScore).toBe(2);
+    expect(c.totalScore).toBe(1);
 
     // A new match clears the per-match score but never the running total —
     // that's the entire point of keeping it a separate field.
     expect(room.restart()).toBe(true);
     expect(a.score).toBe(0);
-    expect(a.totalScore).toBe(1);
+    expect(a.totalScore).toBe(3);
 
     setInstanceScores(room, { [a.id]: 1, [b.id]: 3, [c.id]: 2 });
     endMatch(room, b.seat);
 
-    expect(a.totalScore).toBe(1 + -1);
-    expect(b.totalScore).toBe(0 + 1);
-    expect(c.totalScore).toBe(-1 + 0);
+    expect(a.totalScore).toBe(3 + 1);
+    expect(b.totalScore).toBe(2 + 3);
+    expect(c.totalScore).toBe(1 + 2);
 
     room.dispose();
   });
@@ -534,9 +542,10 @@ describe('Room total score', () => {
     setInstanceScores(room, { [a.id]: 5, [b.id]: 5 });
     endMatch(room, null);
 
-    // Tied for 1st/2nd (2 players): rank 0 gets 0, rank 1 gets -1. Pool is -1. Share is -0.5.
-    expect(a.totalScore).toBe(-0.5);
-    expect(b.totalScore).toBe(-0.5);
+    // Tied for 1st/2nd (2 players): rank 0 is worth 2, rank 1 is worth 1. Pool
+    // is 3, so they take 1.5 each.
+    expect(a.totalScore).toBe(1.5);
+    expect(b.totalScore).toBe(1.5);
 
     room.dispose();
   });
@@ -558,13 +567,354 @@ describe('Room total score', () => {
     setInstanceScores(room, { [a.id]: 2, [b.id]: 1 });
     endMatch(room, a.seat);
 
-    expect(a.totalScore).toBe(0);
-    expect(b.totalScore).toBe(-1);
+    expect(a.totalScore).toBe(2);
+    expect(b.totalScore).toBe(1);
     expect(spectator.totalScore).toBe(0);
 
     // Switching games in the lobby must not touch it either.
     room.setGame('skribbl');
-    expect(a.totalScore).toBe(0);
+    expect(a.totalScore).toBe(2);
+
+    room.dispose();
+  });
+});
+
+describe('Room series', () => {
+  function endMatch(room: Room, winnerSeat: number | null): void {
+    (room as unknown as { endMatch(winnerSeat: number | null): void }).endMatch(winnerSeat);
+  }
+
+  function settingsByGame(room: Room): Record<string, GameConfig> {
+    return (room as unknown as { settingsByGame: Record<string, GameConfig> }).settingsByGame;
+  }
+
+  /** A lobby of `count` ready players with the roulette configured. */
+  function lobby(count: number, setup: Partial<SeriesSetup> = {}) {
+    const room = new Room('TEST');
+    const players = Array.from({ length: count }, (_, i) =>
+      room.addPlayer(fakeClient(), identity(`P${i}`, i))!,
+    );
+    for (const p of players) room.setReady(p, true);
+    room.setSeriesSetup({ enabled: true, ...setup });
+    return { room, players };
+  }
+
+  function startedMatches(room: Room): ServerMessage[] {
+    const client = room.players[0]!.client as unknown as { sent: ServerMessage[] };
+    return client.sent.filter((m) => m.t === 'matchStarted');
+  }
+
+  it('draws a distinct lineup and opens on the reveal', () => {
+    const { room } = lobby(3, { rounds: 4 });
+    expect(room.startSeries()).toBe(true);
+
+    const series = room.seriesView!;
+    expect(series.phase).toBe('reveal');
+    expect(series.lineup).toHaveLength(4);
+    expect(new Set(series.lineup).size).toBe(4);
+    expect(series.until).toBeGreaterThan(Date.now());
+    // The reveal reads as a lobby to everything that predates the series.
+    expect(room.phase).toBe('lobby');
+
+    room.dispose();
+  });
+
+  it('refuses to start when nothing in the hat fits the room', () => {
+    // Gun Mayhem alone, with seven people: nothing drawable.
+    const { room } = lobby(7, { pool: ['gunmayhem'] });
+    expect(room.startSeries()).toBe(false);
+    expect(room.seriesView).toBeNull();
+
+    const empty = lobby(3, { pool: [] });
+    expect(empty.room.startSeries()).toBe(false);
+
+    room.dispose();
+    empty.room.dispose();
+  });
+
+  it('never draws a game the room has outgrown', () => {
+    const { room, players } = lobby(7, { rounds: 5 });
+    for (let run = 0; run < 50; run++) {
+      expect(room.startSeries()).toBe(true);
+      expect(room.seriesView!.lineup).not.toContain('gunmayhem');
+      // Back to a lobby to draw again — a live series refuses to be redrawn,
+      // and `rematch` clears ready, so put it back.
+      room.rematch();
+      for (const p of players) room.setReady(p, true);
+    }
+    room.dispose();
+  });
+
+  it('clamps the lineup to the games actually available', () => {
+    const { room } = lobby(3, { rounds: 6, pool: ['tanks', 'gravity'] });
+    expect(room.startSeries()).toBe(true);
+    expect(room.seriesView!.lineup).toHaveLength(2);
+    room.dispose();
+  });
+
+  it('zeroes the running totals and leaves the host settings untouched', () => {
+    const { room, players } = lobby(3);
+    room.setGame('tanks');
+    room.setSettings({ targetWins: 15, roundSeconds: 180 });
+    const before = structuredClone(settingsByGame(room));
+    for (const p of players) p.totalScore = 17;
+
+    expect(room.startSeries()).toBe(true);
+
+    for (const p of players) expect(p.totalScore).toBe(0);
+    // The direct assertion that a series is not allowed to spend the host's
+    // configuration: byte-for-byte the same object graph afterwards.
+    expect(settingsByGame(room)).toEqual(before);
+
+    room.dispose();
+  });
+
+  it('runs a leg on the series preset, not on the lobby config', () => {
+    const { room } = lobby(3, { rounds: 2, pace: 'quick', pool: ['tanks'] });
+    room.setGame('tanks');
+    room.setSettings({ targetWins: 15, roundSeconds: 180 });
+
+    expect(room.startSeries()).toBe(true);
+    expect(room.skipSeriesWait()).toBe(true);
+
+    expect(room.gameId).toBe('tanks');
+    const live = room.settings;
+    if (live.game !== 'tanks') throw new Error('expected a tanks leg');
+    expect(live).toEqual(GAMES.tanks.seriesConfig(3, 'quick'));
+    expect(live.targetWins).not.toBe(15);
+
+    // And the host's own settings are still sitting there untouched.
+    const saved = settingsByGame(room).tanks;
+    if (saved!.game !== 'tanks') throw new Error('expected saved tanks config');
+    expect(saved.targetWins).toBe(15);
+
+    room.dispose();
+  });
+
+  it('puts the host settings back once the series ends', () => {
+    const { room } = lobby(3, { rounds: 2, pool: ['tanks'] });
+    room.setGame('tanks');
+    room.setSettings({ targetWins: 15 });
+    expect(room.startSeries()).toBe(true);
+    expect(room.skipSeriesWait()).toBe(true);
+
+    room.rematch();
+
+    const back = room.settings;
+    if (back.game !== 'tanks') throw new Error('expected tanks');
+    expect(back.targetWins).toBe(15);
+    expect(room.seriesView).toBeNull();
+
+    room.dispose();
+  });
+
+  it('advances to the next leg when the break elapses, keeping seats stable', () => {
+    vi.useFakeTimers();
+    try {
+      const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+      expect(room.startSeries()).toBe(true);
+      expect(room.skipSeriesWait()).toBe(true);
+
+      const seatsBefore = players.map((p) => p.seat);
+      const firstLeg = room.gameId;
+
+      endMatch(room, 0);
+      expect(room.seriesView!.phase).toBe('break');
+      expect(room.seriesView!.index).toBe(0);
+
+      vi.advanceTimersByTime(SERIES_BREAK_MS + 50);
+
+      expect(room.seriesView!.phase).toBe('leg');
+      expect(room.seriesView!.index).toBe(1);
+      expect(room.gameId).not.toBe(firstLeg);
+      // The same people in the same chairs — a leg change must not reshuffle.
+      expect(players.map((p) => p.seat)).toEqual(seatsBefore);
+
+      room.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('records each leg winner by player id', () => {
+    const { room, players } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
+    expect(room.startSeries()).toBe(true);
+    expect(room.skipSeriesWait()).toBe(true);
+
+    const winner = players.find((p) => p.seat === 1)!;
+    endMatch(room, 1);
+
+    // An id, not a seat: seats are handed out afresh every leg.
+    expect(room.seriesView!.legWinners).toEqual([winner.id]);
+
+    room.dispose();
+  });
+
+  it('crowns the series after the last leg and arms nothing', () => {
+    vi.useFakeTimers();
+    try {
+      const { room } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
+      expect(room.startSeries()).toBe(true);
+      expect(room.skipSeriesWait()).toBe(true);
+
+      endMatch(room, 0);
+      vi.advanceTimersByTime(SERIES_BREAK_MS + 50);
+      expect(room.seriesView!.index).toBe(1);
+
+      endMatch(room, 0);
+      expect(room.seriesView!.phase).toBe('over');
+      expect(room.seriesView!.aborted).toBe(false);
+      expect(room.seriesView!.until).toBeNull();
+
+      const before = startedMatches(room).length;
+      vi.advanceTimersByTime(SERIES_BREAK_MS * 4);
+      expect(startedMatches(room)).toHaveLength(before);
+
+      room.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('ends the series early when the next leg cannot be seated', () => {
+    vi.useFakeTimers();
+    try {
+      const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+      expect(room.startSeries()).toBe(true);
+      expect(room.skipSeriesWait()).toBe(true);
+
+      endMatch(room, 0);
+      const before = startedMatches(room).length;
+
+      // Two of the three wander off during the break.
+      room.detach(players[1]!.client!);
+      room.detach(players[2]!.client!);
+
+      vi.advanceTimersByTime(SERIES_BREAK_MS + 50);
+
+      expect(room.seriesView!.phase).toBe('over');
+      expect(room.seriesView!.aborted).toBe(true);
+      expect(room.phase).toBe('matchOver');
+      expect(startedMatches(room)).toHaveLength(before);
+
+      room.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('lets the host skip a break, and ignores a second press', () => {
+    vi.useFakeTimers();
+    try {
+      const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+      expect(room.startSeries()).toBe(true);
+      expect(room.skipSeriesWait()).toBe(true);
+
+      endMatch(room, 0);
+      const before = startedMatches(room).length;
+
+      expect(room.skipSeriesWait()).toBe(true);
+      expect(startedMatches(room)).toHaveLength(before + 1);
+
+      // The double tap. And then the timer it raced, which must also do nothing.
+      room.skipSeriesWait();
+      vi.advanceTimersByTime(SERIES_BREAK_MS * 2);
+      expect(startedMatches(room)).toHaveLength(before + 1);
+      expect(room.seriesView!.index).toBe(1);
+
+      room.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('cancels a pending break when the host goes back to the lobby', () => {
+    vi.useFakeTimers();
+    try {
+      const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+      expect(room.startSeries()).toBe(true);
+      expect(room.skipSeriesWait()).toBe(true);
+      endMatch(room, 0);
+
+      const before = startedMatches(room).length;
+      room.rematch();
+      vi.advanceTimersByTime(SERIES_BREAK_MS * 3);
+
+      expect(room.seriesView).toBeNull();
+      expect(room.phase).toBe('lobby');
+      expect(startedMatches(room)).toHaveLength(before);
+
+      room.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves no timer behind when a room with a pending break is disposed', () => {
+    vi.useFakeTimers();
+    try {
+      const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+      expect(room.startSeries()).toBe(true);
+      expect(room.skipSeriesWait()).toBe(true);
+      endMatch(room, 0);
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+      room.dispose();
+
+      // The point: a stray break would fire `advanceLeg` into a torn-down room.
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('refuses a restart during a break, so a scored leg cannot be scored twice', () => {
+    const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+    expect(room.startSeries()).toBe(true);
+    expect(room.skipSeriesWait()).toBe(true);
+
+    endMatch(room, 0);
+    const totals = players.map((p) => p.totalScore);
+    expect(totals.some((t) => t > 0)).toBe(true);
+
+    expect(room.restart()).toBe(false);
+    expect(players.map((p) => p.totalScore)).toEqual(totals);
+
+    room.dispose();
+  });
+
+  it('still allows a restart mid-leg', () => {
+    const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+    expect(room.startSeries()).toBe(true);
+    expect(room.skipSeriesWait()).toBe(true);
+    expect(room.seriesView!.phase).toBe('leg');
+
+    expect(room.restart()).toBe(true);
+
+    room.dispose();
+  });
+
+  it('will not let the picker or a plain start fight the lineup', () => {
+    const { room } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
+    expect(room.startSeries()).toBe(true);
+
+    const drawn = room.gameId;
+    room.setGame('skribbl');
+    expect(room.gameId).toBe(drawn);
+    expect(room.start()).toBe(false);
+
+    room.dispose();
+  });
+
+  it('keeps the host roulette settings for a second spin', () => {
+    const { room } = lobby(3, { rounds: 2, pace: 'quick', pool: ['tanks', 'gravity'] });
+    expect(room.startSeries()).toBe(true);
+    room.rematch();
+
+    expect(room.seriesView).toBeNull();
+    const setup = room.view().seriesSetup;
+    expect(setup).toMatchObject({ enabled: true, rounds: 2, pace: 'quick' });
+    expect(setup.pool).toEqual(['tanks', 'gravity']);
 
     room.dispose();
   });

@@ -760,3 +760,184 @@ describe('reconnection', () => {
     expect(update.room.players).toHaveLength(1);
   });
 });
+
+describe('roulette series', () => {
+  /**
+   * Drive every client into a wall, but on its own schedule.
+   *
+   * Achtung is the one game that reliably ends under synthetic input — hold a
+   * turn and you spiral into your own trail within seconds — which is why both
+   * of the tests below pick it for the leg they need to actually finish. Left
+   * idle, a Tank Trouble round runs its full clock and scores a draw, so
+   * `targetWins` is never reached at all.
+   *
+   * The per-client duty cycle is the part that took a run to learn. Sending
+   * every client the *same* turn traces congruent curves that close on
+   * themselves at the same instant, so all three die on one tick, and a round
+   * where nobody outlives anybody scores nothing. The match then runs forever
+   * at a target it can never reach. Different duty cycles, different radii,
+   * staggered deaths, and somebody wins the round.
+   */
+  function spiral(clients: TestClient[]): () => void {
+    let n = 0;
+    const timer = setInterval(() => {
+      n += 1;
+      clients.forEach((client, k) => {
+        client.send({ t: 'input', i: (n + k * 3) % (4 + k) === 0 ? 0 : 1 });
+      });
+    }, 60);
+    return () => clearInterval(timer);
+  }
+
+  async function reveal(host: TestClient, setup: Record<string, unknown>) {
+    host.send({ t: 'series', setup: { enabled: true, pace: 'quick', ...setup } });
+    host.send({ t: 'seriesStart' });
+    return host.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'room' }> =>
+        m.t === 'room' && m.room.series?.phase === 'reveal',
+    );
+  }
+
+  it('advances between legs, and catches a mid-break joiner up', async () => {
+    const clients = await makeLobby(3);
+    const [host, guest] = clients;
+    const stop = spiral(clients);
+
+    try {
+      // Both games are in the hat, but only Achtung reliably finishes under
+      // this input, so re-draw until it comes out first. The reveal is skipped
+      // rather than waited out, so a re-draw costs nothing.
+      let lineup: string[] = [];
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const drawn = await reveal(host!, { rounds: 2, pool: ['achtung', 'gravity'] });
+        lineup = drawn.room.series!.lineup;
+        expect(lineup).toHaveLength(2);
+        expect(new Set(lineup).size).toBe(2);
+        expect(drawn.room.series!.until).toBeGreaterThan(Date.now());
+        if (lineup[0] === 'achtung') break;
+        host!.send({ t: 'rematch' });
+        for (const client of clients) client.send({ t: 'ready', ready: true });
+        await host!.waitFor(
+          (m): m is Extract<ServerMessage, { t: 'room' }> =>
+            m.t === 'room' && m.room.series === null && m.room.players.every((p) => p.ready),
+        );
+      }
+      expect(lineup[0]).toBe('achtung');
+
+      // The draw is broadcast, not answered to whoever asked for it.
+      await guest!.waitFor(
+        (m): m is Extract<ServerMessage, { t: 'room' }> =>
+          m.t === 'room' && m.room.series?.phase === 'reveal',
+      );
+
+      // Skipping the waits is what keeps this off two 8-second sleeps.
+      host!.send({ t: 'seriesSkip' });
+      const firstLeg = await guest!.next('matchStarted');
+      expect(firstLeg.room.gameId).toBe('achtung');
+      expect(firstLeg.room.series!.phase).toBe('leg');
+      expect(firstLeg.room.series!.index).toBe(0);
+      // The leg runs on the series preset, not on anything the host configured.
+      expect(firstLeg.room.settings).toMatchObject({ game: 'achtung', winByTwo: false });
+
+      // A finished leg has to announce the break in the very message that ends
+      // it, or every client learns what happens next a round trip late.
+      const firstEnd = await guest!.next('matchEnded', 40_000);
+      expect(firstEnd.room.series!.phase).toBe('break');
+      expect(firstEnd.room.series!.index).toBe(0);
+      expect(firstEnd.room.series!.legWinners).toHaveLength(1);
+      expect(firstEnd.room.series!.until).toBeGreaterThan(Date.now());
+
+      // Someone arriving during the break has no live match to catch up on, so
+      // everything they need has to be in the room view itself.
+      const latecomer = await connect();
+      latecomer.send({
+        t: 'join',
+        v: PROTOCOL_VERSION,
+        code: host!.code,
+        identity: { name: 'Late', colorIndex: 5, hat: 0, face: 0 },
+      });
+      const seen = (await latecomer.next('welcome')).room.series;
+      expect(seen).not.toBeNull();
+      expect(seen!.phase).toBe('break');
+      expect(seen!.lineup).toEqual(lineup);
+      expect(seen!.legWinners).toHaveLength(1);
+      // An honest deadline, not a countdown restarted because they walked in.
+      expect(seen!.until).toBeGreaterThan(Date.now());
+
+      const seatsBefore = firstEnd.room.players
+        .filter((p) => p.seat >= 0)
+        .map((p) => [p.id, p.seat] as const);
+
+      host!.send({ t: 'seriesSkip' });
+      const secondLeg = await guest!.next('matchStarted');
+      expect(secondLeg.room.gameId).toBe(lineup[1]);
+      expect(secondLeg.room.series!.index).toBe(1);
+      // Same people, same chairs — a new leg must not reshuffle the room.
+      for (const [id, seat] of seatsBefore) {
+        expect(secondLeg.room.players.find((p) => p.id === id)?.seat).toBe(seat);
+      }
+    } finally {
+      stop();
+    }
+  }, 90_000);
+
+  it('crowns a champion when the last leg ends', async () => {
+    const clients = await makeLobby(3);
+    const [host] = clients;
+    const stop = spiral(clients);
+
+    try {
+      // One game in the hat and two legs asked for: the lineup clamps to what
+      // can actually be drawn, which makes this a one-leg series.
+      const drawn = await reveal(host!, { rounds: 2, pool: ['achtung'] });
+      expect(drawn.room.series!.lineup).toEqual(['achtung']);
+
+      host!.send({ t: 'seriesSkip' });
+      await host!.next('matchStarted');
+
+      const ended = await host!.next('matchEnded', 40_000);
+      expect(ended.room.series!.phase).toBe('over');
+      expect(ended.room.series!.aborted).toBe(false);
+      expect(ended.room.series!.until).toBeNull();
+      expect(ended.room.series!.legWinners).toHaveLength(1);
+
+      // Points on the board are what crown a champion, and the fixed placement
+      // table never takes any away.
+      expect(ended.room.players.some((p) => p.totalScore > 0)).toBe(true);
+      expect(ended.room.players.every((p) => p.totalScore >= 0)).toBe(true);
+    } finally {
+      stop();
+    }
+  }, 90_000);
+
+  it('refuses to draw when nothing in the hat fits the room', async () => {
+    const [host] = await makeLobby(2);
+
+    host!.send({ t: 'series', setup: { enabled: true, pool: [] } });
+    host!.send({ t: 'seriesStart' });
+    expect((await host!.next('error')).code).toBe('SERIES_UNAVAILABLE');
+
+    // Gun Mayhem seats six; a room of two is fine, so this one draws.
+    host!.send({ t: 'series', setup: { pool: ['gunmayhem'], rounds: 2 } });
+    host!.send({ t: 'seriesStart' });
+    const drawn = await host!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'room' }> =>
+        m.t === 'room' && m.room.series?.phase === 'reveal',
+    );
+    expect(drawn.room.series!.lineup).toEqual(['gunmayhem']);
+  });
+
+  it('keeps every series control host-only', async () => {
+    const clients = await makeLobby(2);
+    const guest = clients[1]!;
+
+    guest.send({ t: 'series', setup: { enabled: true } });
+    expect((await guest.next('error')).code).toBe('NOT_HOST');
+
+    guest.send({ t: 'seriesStart' });
+    expect((await guest.next('error')).code).toBe('NOT_HOST');
+
+    guest.send({ t: 'seriesSkip' });
+    expect((await guest.next('error')).code).toBe('NOT_HOST');
+  });
+});

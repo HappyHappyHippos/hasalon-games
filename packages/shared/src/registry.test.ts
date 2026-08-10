@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GAMES, isGameId } from './registry';
-import type { GameId, GameModule, GameSeat } from './gameModule';
+import type { GameId, GameModule, GameSeat, SeriesPace } from './gameModule';
 
 /**
  * The `GameModule` seam, asserted once for every game.
@@ -16,6 +16,7 @@ import type { GameId, GameModule, GameSeat } from './gameModule';
  */
 
 const ids = Object.keys(GAMES) as GameId[];
+const PACES: SeriesPace[] = ['quick', 'normal', 'long'];
 
 function seatsFor(module: GameModule): GameSeat[] {
   return Array.from({ length: module.meta.minPlayers }, (_, i) => ({
@@ -87,6 +88,40 @@ describe.each(ids)('%s', (id) => {
     for (const junk of [null, undefined, 42, 'nonsense', [], { game: 'not-a-game' }, { rounds: -5 }]) {
       const normalized = module.normalizeConfig(junk, config, module.meta.minPlayers);
       expect(normalized.game).toBe(id);
+    }
+  });
+
+  it('tags every series preset with its own id, at every size and pace', () => {
+    for (const pace of PACES) {
+      for (let n = module.meta.minPlayers; n <= module.meta.maxPlayers; n++) {
+        expect(module.seriesConfig(n, pace).game).toBe(id);
+      }
+    }
+  });
+
+  it('has series presets that survive its own normalizeConfig', () => {
+    // The one that matters. A preset outside this module's own clamps does not
+    // fail loudly — `normalizeConfig` snaps it back and the leg quietly runs at
+    // some other length than the table says. This is the assertion that turns
+    // that into a test failure instead.
+    for (const pace of PACES) {
+      for (let n = module.meta.minPlayers; n <= module.meta.maxPlayers; n++) {
+        const config = module.seriesConfig(n, pace);
+        expect(module.normalizeConfig(config, config, n)).toEqual(config);
+      }
+    }
+  });
+
+  it('runs a series preset for a few hundred ticks without throwing', () => {
+    for (const pace of PACES) {
+      const seats = seatsFor(module);
+      const instance = module.create(seats, module.seriesConfig(seats.length, pace), 4242);
+      expect(() => {
+        for (let i = 0; i < 300; i++) {
+          instance.stepTick();
+          if (i % 2 === 0) instance.snapshot();
+        }
+      }).not.toThrow();
     }
   });
 

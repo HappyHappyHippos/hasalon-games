@@ -75,6 +75,18 @@ export const gunMayhemModule: GameModule = {
     };
   },
 
+  // Two knobs to shorten a leg, and they do different things. `stocks` sets how
+  // long one round lasts; `targetWins` sets how many of them there are. A quick
+  // leg cuts the rounds short rather than dropping to a single round — one
+  // round is a coin flip, and a series leg that can be lost to one unlucky
+  // spawn is not worth playing.
+  seriesConfig(_playerCount, pace) {
+    const base = defaultConfig();
+    if (pace === 'quick') return { ...base, stocks: 2, targetWins: 2 };
+    if (pace === 'long') return { ...base, stocks: 4, targetWins: 3 };
+    return { ...base, stocks: 4, targetWins: 2 };
+  },
+
   create(seats: GameSeat[], config: GameConfig, seed: number): GameInstance {
     const state = createState(seats, asConfig(config), seed);
     let pending: GmEvent[] = [];

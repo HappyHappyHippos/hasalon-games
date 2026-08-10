@@ -11,7 +11,17 @@
  * per-player state.
  */
 import type { GameConfig, GameId } from './gameModule';
+import type { SeriesSetup, SeriesView } from './series';
 
+/**
+ * Three, and adding a fourth is a trap worth naming.
+ *
+ * Nothing reads this exhaustively — every consumer, on both sides, compares it
+ * with `===` or `!==`. So a new member here compiles everywhere and silently
+ * changes the meaning of fifteen call sites. Roulette mode wanted an
+ * "interstitial" state and rides `RoomView.series` instead: a break is a
+ * `matchOver` that happens to have something queued behind it.
+ */
 export type RoomPhase = 'lobby' | 'playing' | 'matchOver';
 
 /** A room holds more people than some games seat; the extras spectate. */
@@ -33,7 +43,12 @@ export interface PlayerView {
    * Placement points earned across every match played in this room so far,
    * regardless of which game — see `scoring.ts`. Unlike `score`, which is
    * scoped to the match currently in progress and reset to `0` every time one
-   * starts, this only ever grows for as long as the room exists.
+   * starts, this accumulates across matches and across game switches.
+   *
+   * It has exactly one reset: starting a roulette series zeroes it for
+   * everyone, because a series is a fresh competition and its champion is
+   * whoever tops this table at the end. Nothing else clears it — not `start`,
+   * not `restart`, not `rematch`.
    */
   totalScore: number;
   /**
@@ -54,17 +69,37 @@ export interface PlayerView {
 
 export interface RoomView {
   code: string;
-  /** The game the host has chosen. Changeable in the lobby. */
+  /** The game the host has chosen, or — during a series — the leg being played. */
   gameId: GameId;
   phase: RoomPhase;
   hostId: string;
-  /** Settings for the currently selected game only. */
+  /**
+   * Settings for the running match, or for the selected game while in the
+   * lobby. During a roulette leg this is the *series* config for that game, not
+   * whatever the host configured for it in the lobby — the client reads it to
+   * render (Achtung's turn rate comes from here), so it has to describe the
+   * match actually in progress.
+   */
   settings: GameConfig;
   players: PlayerView[];
   /** True while a seated player has the match frozen. Only ever set in 'playing'. */
   paused: boolean;
   /** Who pressed pause, so the overlay can say so and so their leaving can undo it. */
   pausedBy: string | null;
+  /** The host's roulette settings. Always present; only meaningful in the lobby. */
+  seriesSetup: SeriesSetup;
+  /**
+   * The roulette series in progress, or null.
+   *
+   * Everything about a running series lives here rather than in a one-shot
+   * message, which is what makes reconnecting into the middle of one work: a
+   * player who reloads during the break gets the lineup, the standings and an
+   * honest deadline in their very first `welcome`, with no replay logic.
+   *
+   * The lineup is public on purpose — it is the feature — so this does not
+   * breach the no-secrets rule at the top of this file.
+   */
+  series: SeriesView | null;
 }
 
 export const NAME_MAX_LENGTH = 14;

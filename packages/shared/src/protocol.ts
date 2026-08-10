@@ -2,7 +2,7 @@ import type { GameConfig, GameId, GameSnapshot } from './gameModule';
 import type { RoomView } from './roomTypes';
 
 /** Bump when the message shapes change so stale tabs fail loudly, not weirdly. */
-export const PROTOCOL_VERSION = 21;
+export const PROTOCOL_VERSION = 22;
 
 export const WS_PATH = '/ws';
 
@@ -40,6 +40,23 @@ export type ClientMessage =
   | { t: 'pause'; paused: boolean }
   /** Host only — same seats and settings, fresh match from round one. */
   | { t: 'restart' }
+  /**
+   * Host only, outside a match — the roulette settings. A partial patch, like
+   * `settings`; the server normalizes and keeps whatever is not mentioned.
+   */
+  | { t: 'series'; setup: unknown }
+  /**
+   * Host only — draw the lineup and open the reveal. Also the "spin again"
+   * button on the champion card.
+   *
+   * Separate from `start` rather than a branch inside it, because `start` means
+   * "play the game currently selected" and has to keep meaning that. Deciding
+   * between two modes inside the router is the kind of branch that belongs on
+   * neither side of it.
+   */
+  | { t: 'seriesStart' }
+  /** Host only — end the lineup reveal or the between-legs break now. */
+  | { t: 'seriesSkip' }
   | { t: 'leave' }
   /** Game-specific payload; the game module validates it. */
   | { t: 'input'; i: unknown }
@@ -73,7 +90,9 @@ export type ErrorCode =
   | 'ALREADY_STARTED'
   | 'NOT_ENOUGH_PLAYERS'
   | 'RESUME_FAILED'
-  | 'RATE_LIMITED';
+  | 'RATE_LIMITED'
+  /** Nothing drawable: an empty hat, or no game in it fits this many players. */
+  | 'SERIES_UNAVAILABLE';
 
 export type ServerMessage =
   /** Sent once on a successful create/join/resume. */

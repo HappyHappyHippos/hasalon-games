@@ -158,3 +158,21 @@ export class ServerClock {
 }
 
 export const clock = new ServerClock();
+
+/**
+ * Milliseconds from now until a `serverNow()` deadline, on the synced timeline.
+ *
+ * For the room's own countdowns — the roulette reveal, the break between legs —
+ * which ride on absolute deadlines rather than a remaining count so that a
+ * `room` re-broadcast can't restart them and a reconnecting client lands in the
+ * right place.
+ *
+ * Before the first pong lands there is no offset to apply, so this falls back to
+ * the raw wall-clock difference. `serverNow()` is milliseconds since the epoch
+ * for exactly this reason, and being a few tens of milliseconds out on the first
+ * frame of an eight-second countdown is not something anyone can see.
+ */
+export function msUntil(serverDeadline: number, now = performance.now()): number {
+  if (!clock.ready) return serverDeadline - Date.now();
+  return clock.toClientTime(serverDeadline, now) - now;
+}

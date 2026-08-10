@@ -15,6 +15,19 @@
  * Points for every seated player, keyed by id, from their finishing
  * `score` for the match that just ended (already game-appropriate — highest
  * is always best, ties share the points of the ranks they occupy).
+ *
+ * The table is one point per place, counting down from the size of the field:
+ * with five players the winner takes 5 and last place takes 1. Two properties
+ * are worth stating, because both are load-bearing for a roulette series and
+ * neither was true of the version this replaces:
+ *
+ * - **Nobody ever loses points.** Finishing last in a leg is worth less than
+ *   winning it, not worth less than not playing. A table that goes negative
+ *   makes a bad leg feel like a punishment and, in a two-player room, made the
+ *   running total capable only of going down.
+ * - **A bigger field is worth more.** Winning a six-player leg beats winning a
+ *   three-player one, which is what keeps the totals honest when somebody
+ *   drops out partway through a series.
  */
 export function placementPoints(finishers: ReadonlyArray<{ id: string; score: number }>): Record<string, number> {
   const sorted = [...finishers].sort((a, b) => b.score - a.score);
@@ -26,9 +39,9 @@ export function placementPoints(finishers: ReadonlyArray<{ id: string; score: nu
     let j = i;
     while (j < sorted.length && sorted[j]!.score === sorted[i]!.score) j += 1;
     // Tied players split the points of the ranks they collectively occupy —
-    // e.g. two people tied for 2nd/3rd each get (18 + 15) / 2.
+    // e.g. in a field of four, two tied for 2nd/3rd each get (3 + 2) / 2.
     let pool = 0;
-    for (let rank = i; rank < j; rank++) pool += (playerCount - 2 - rank);
+    for (let rank = i; rank < j; rank++) pool += (playerCount - rank);
     const share = pool / (j - i);
     for (let rank = i; rank < j; rank++) out[sorted[rank]!.id] = share;
     i = j;

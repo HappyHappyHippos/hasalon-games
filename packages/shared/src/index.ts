@@ -14,3 +14,4 @@ export * from './roomTypes';
 export * from './gameModule';
 export * from './registry';
 export * from './scoring';
+export * from './series';

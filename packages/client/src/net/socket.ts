@@ -262,6 +262,20 @@ class GameSocket {
     this.send({ t: 'restart' });
   }
 
+  setSeriesSetup(setup: unknown): void {
+    this.send({ t: 'series', setup });
+  }
+
+  /** Draw a lineup and open the reveal. Also "spin again" on the champion card. */
+  startSeries(): void {
+    this.send({ t: 'seriesStart' });
+  }
+
+  /** Cut the reveal or the between-legs break short. Host only, server-enforced. */
+  seriesSkip(): void {
+    this.send({ t: 'seriesSkip' });
+  }
+
   leave(): void {
     this.send({ t: 'leave' });
     saveSession(null);

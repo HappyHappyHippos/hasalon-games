@@ -5,6 +5,7 @@ import { useT } from '../strings';
 import { socket } from '../net/socket';
 import { Button } from './Button';
 import { Avatar } from './Avatar';
+import { SeriesInterstitial, SeriesOver } from './SeriesOverlays';
 
 /**
  * The two overlays every game ends up needing, wherever it puts its canvas.
@@ -163,8 +164,40 @@ export function MatchOver({
   );
 }
 
+/**
+ * What goes on top of a finished match — which is three different things once
+ * roulette mode exists: an ordinary match-over card, the breather between two
+ * legs, or the champion card at the end of a run.
+ *
+ * A dispatcher rather than three modes inside `MatchOver`, and mounted at the
+ * three places that already watch for `phase === 'matchOver'` (`Screen`, and
+ * Skribbl and Memes, which build their own layouts). Those sites stay a
+ * one-liner and never learn what a series is.
+ */
+export function MatchEndOverlay({
+  room,
+  mySeat,
+  winnerSeat,
+  isHost,
+}: {
+  room: RoomView;
+  mySeat: number;
+  winnerSeat: number | null;
+  isHost: boolean;
+}): JSX.Element {
+  const series = room.series;
+
+  if (series?.phase === 'break') {
+    return <SeriesInterstitial room={room} series={series} mySeat={mySeat} isHost={isHost} />;
+  }
+  if (series?.phase === 'over') {
+    return <SeriesOver room={room} series={series} mySeat={mySeat} isHost={isHost} />;
+  }
+  return <MatchOver room={room} mySeat={mySeat} winnerSeat={winnerSeat} isHost={isHost} />;
+}
+
 /** Reuses the room's own palette rather than inventing party colours from nothing. */
-const CONFETTI_COLORS = [
+export const CONFETTI_COLORS = [
   'var(--red)',
   'var(--yellow)',
   'var(--green)',

@@ -4160,3 +4160,343 @@ strong,
   .memes *::after { animation: none !important; transition: none !important; }
   .memes__reactions { display: none; }
 }
+
+/* ===========================================================================
+   Roulette — the lineup reveal, the hat, and the between-legs cards.
+
+   House rules apply throughout: hard offset shadows, never soft; no `rotate`
+   on cards. The one thing worth reading before editing: the spin below is
+   decoration only. Every decision about *what has landed* is made in JS
+   (`rouletteTiming.ts`), because the reduced-motion block at the bottom of this
+   file flattens every duration here to nothing.
+   =========================================================================== */
+
+/* --- The hat, in the lobby ------------------------------------------------ */
+
+.roulette-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+}
+
+.roulette-setup__blurb,
+.roulette-setup__hint {
+  margin: 0;
+  font-size: 13px;
+}
+
+.roulette-setup__hint {
+  margin-top: -6px;
+}
+
+.pool {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
+  gap: 10px;
+}
+
+.poolcard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: stretch;
+  padding: 7px;
+
+  background: var(--surface);
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+
+  /* Unpicked games read as *out*, not as missing — you can still see what you
+     are leaving behind. */
+  opacity: 0.5;
+  filter: grayscale(1);
+  transition: opacity 120ms ease, filter 120ms ease, transform 120ms ease;
+}
+
+.poolcard--on {
+  opacity: 1;
+  filter: none;
+  background: var(--accent);
+}
+
+.poolcard:hover:not(:disabled) {
+  transform: translateY(-2px);
+}
+
+.poolcard--locked {
+  cursor: not-allowed;
+  opacity: 0.32;
+}
+
+.poolcard__art .boxart {
+  width: 100%;
+  height: auto;
+  border-width: 2px;
+}
+
+.poolcard__name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.15;
+  text-align: center;
+}
+
+.poolcard__why {
+  font-size: 11px;
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+.poolcard__tick {
+  position: absolute;
+  top: -8px;
+  inset-inline-end: -6px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+/* --- The reveal ----------------------------------------------------------- */
+
+/* Above the match-over card (30), below the intro sting (60). */
+.roulette {
+  z-index: 50;
+}
+
+.roulette__card {
+  width: min(680px, 100%);
+  gap: 16px;
+}
+
+.roulette__reels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
+  gap: 12px;
+  justify-items: center;
+}
+
+.reel {
+  --reel-h: 78px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  width: 100%;
+  max-width: 132px;
+}
+
+.reel__window {
+  width: 100%;
+  height: var(--reel-h);
+  overflow: hidden;
+
+  background: var(--paper-2);
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+  /* Flat while spinning; the shadow snaps in on landing, which is what sells
+     the stop as a stop. */
+  box-shadow: 0 0 0 var(--ink);
+  transition: box-shadow 180ms ease;
+}
+
+.reel__strip {
+  display: flex;
+  flex-direction: column;
+  will-change: transform;
+  animation: roulette-spin 520ms linear infinite;
+  animation-delay: var(--reel-delay, 0ms);
+}
+
+.reel__cell {
+  display: block;
+  height: var(--reel-h);
+  padding: 4px;
+}
+
+.reel__cell .boxart {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-width: 2px;
+}
+
+.reel--landed .reel__window {
+  box-shadow: var(--shadow);
+  background: var(--accent);
+}
+
+.reel--landed .reel__strip {
+  animation: none;
+  transform: translateY(calc(var(--reel-h) * var(--land) * -1));
+  /* A touch of overshoot on the way in — a mechanism coming to rest, not a
+     value being assigned. */
+  transition: transform 220ms cubic-bezier(0.2, 1.4, 0.4, 1);
+}
+
+.reel--landed .reel__cell {
+  animation: roulette-stamp 180ms cubic-bezier(0.2, 1.6, 0.4, 1) 1;
+}
+
+.reel__leg {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+.reel__name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 14px;
+  line-height: 1.15;
+  text-align: center;
+  min-height: 1.15em;
+}
+
+.roulette--settled .roulette__reels {
+  animation: roulette-settle 320ms cubic-bezier(0.3, 1.4, 0.5, 1) 1;
+}
+
+@keyframes roulette-spin {
+  from { transform: translateY(0); }
+  to   { transform: translateY(calc(var(--reel-h) * -3)); }
+}
+
+@keyframes roulette-stamp {
+  from { transform: scale(1.08); }
+  to   { transform: scale(1); }
+}
+
+@keyframes roulette-settle {
+  0%   { transform: translateY(0); }
+  45%  { transform: translateY(-6px); }
+  100% { transform: translateY(0); }
+}
+
+/* --- Between legs --------------------------------------------------------- */
+
+.interstitial__winner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 18px;
+}
+
+.interstitial__next {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.gamecard--next {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  background: var(--accent);
+  box-shadow: var(--shadow);
+  cursor: default;
+}
+
+.gamecard--next .gamecard__art {
+  flex: 0 0 96px;
+}
+
+.gamecard--next .boxart {
+  width: 96px;
+  height: auto;
+}
+
+.interstitial__clock {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.interstitial__clock p {
+  margin: 0;
+}
+
+.interstitial__bar {
+  height: 10px;
+  background: var(--paper-2);
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+/* Driven by an inline `--progress` rather than a keyframe, so a reconnecting
+   client shows the time that is actually left instead of restarting a fill. */
+.interstitial__bar::after {
+  content: '';
+  display: block;
+  height: 100%;
+  width: var(--progress, 0%);
+  background: var(--ink);
+  transition: width 140ms linear;
+}
+
+/* --- The champion card ---------------------------------------------------- */
+
+.seriesover__run {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.seriesover__leg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.seriesover__leg--unplayed {
+  opacity: 0.35;
+}
+
+.seriesover__art .boxart {
+  width: 62px;
+  height: auto;
+  border-width: 2px;
+}
+
+.rail__leg {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 560px) {
+  .reel { --reel-h: 62px; max-width: 104px; }
+  .roulette__reels { gap: 8px; }
+  .seriesover__art .boxart { width: 48px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The reveal still waits out the server's deadline — the animation is what
+     goes, not the pacing. Everything is simply already landed. */
+  .reel__strip,
+  .reel--landed .reel__cell,
+  .roulette--settled .roulette__reels { animation: none !important; }
+  .reel--landed .reel__strip { transition: none !important; }
+}

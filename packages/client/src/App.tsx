@@ -8,6 +8,7 @@ import { HomeScreen } from './screens/HomeScreen';
 import { LobbyScreen } from './screens/LobbyScreen';
 import { renderGameScreen } from './games/registry';
 import { Intro } from './ui/Intro';
+import { RouletteReveal } from './ui/RouletteReveal';
 import { InstallPrompt } from './ui/InstallPrompt';
 import { OptionsMenu } from './ui/OptionsMenu';
 import { FullscreenButton } from './ui/FullscreenButton';
@@ -19,6 +20,7 @@ import { enableKeyboardOverlay } from './ui/mobileViewport';
 export function App(): JSX.Element {
   const room = useStore((s) => s.room);
   const mySeat = useStore(selectMySeat);
+  const playerId = useStore((s) => s.playerId);
   const lang = useStore((s) => s.lang);
 
   // Keeps a prompt-free audio path between willing listeners. Pure listeners
@@ -87,6 +89,15 @@ export function App(): JSX.Element {
       <InstallPrompt />
 
       {!room ? <HomeScreen /> : room.phase === 'lobby' ? <LobbyScreen /> : renderGameScreen(room, mySeat)}
+
+      {/* The lineup draw. Sits over the lobby, which is where everyone already
+          is — a reveal is a `lobby` phase with a series attached. */}
+      {room?.series?.phase === 'reveal' && (
+        <RouletteReveal
+          series={room.series}
+          isHost={room.players.find((p) => p.id === playerId)?.isHost ?? false}
+        />
+      )}
 
       {showIntro && inMatch && <Intro key={matchNonce} onDone={endIntro} />}
     </div>

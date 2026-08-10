@@ -4,11 +4,12 @@ import { placementPoints } from './scoring';
 /**
  * Cross-game standings.
  *
- * These tests pin the *invariants* — order is preserved, ties share the pool
- * they occupy, the result is a pure function of the scores — rather than the
- * exact numbers. See the note at the bottom of this file: the numbers
- * themselves look wrong, and hard-coding them here would turn a bug into a
- * specification.
+ * Most of these pin the *invariants* — order is preserved, ties share the pool
+ * they occupy, the result is a pure function of the scores — which is why they
+ * survived the table itself changing underneath them. The last three pin the
+ * numbers, which are now a decision rather than an accident: roulette mode
+ * crowns a champion from these totals, so "what is last place worth" stopped
+ * being an implementation detail.
  */
 
 function scores(...values: number[]): { id: string; score: number }[] {
@@ -74,26 +75,29 @@ describe('placementPoints', () => {
     );
   });
 
-  /**
-   * KNOWN ODDITY, deliberately asserted so it cannot change unnoticed.
-   *
-   * The award is `playerCount - 2 - rank`, so **last place always scores -1**,
-   * and in a two-player match the winner scores 0 — the only way that room's
-   * running total ever moves is down. The doc comment on `placementPoints`
-   * describes a different scheme entirely ("two people tied for 2nd/3rd each
-   * get (18 + 15) / 2", an F1-style 25/18/15/12 table), which is not what the
-   * code computes.
-   *
-   * Left as-is rather than quietly changed, because it decides what the
-   * cross-game leaderboard says and that is a gameplay call, not a cleanup.
-   */
-  it('currently gives last place a negative score (see note above)', () => {
-    expect(placementPoints(scores(10, 0))).toEqual({ p0: 0, p1: -1 });
+  it('counts down one point per place from the size of the field', () => {
+    expect(placementPoints(scores(10, 0))).toEqual({ p0: 2, p1: 1 });
     expect(placementPoints(scores(30, 20, 10, 0))).toEqual({
-      p0: 2,
-      p1: 1,
-      p2: 0,
-      p3: -1,
+      p0: 4,
+      p1: 3,
+      p2: 2,
+      p3: 1,
     });
+  });
+
+  it('never takes points away, at any field size', () => {
+    for (let n = 1; n <= 8; n++) {
+      const points = placementPoints(scores(...Array.from({ length: n }, (_, i) => n - i)));
+      for (const value of Object.values(points)) expect(value).toBeGreaterThan(0);
+    }
+  });
+
+  // Winning a big leg is worth more than winning a small one, which is what
+  // keeps a series table honest when somebody drops out halfway through.
+  it('pays the winner the size of the field', () => {
+    for (let n = 1; n <= 8; n++) {
+      const points = placementPoints(scores(...Array.from({ length: n }, (_, i) => n - i)));
+      expect(points.p0).toBe(n);
+    }
   });
 });

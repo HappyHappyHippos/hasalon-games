@@ -36,6 +36,13 @@ export interface GameSeat {
 
 export type GameStatus = 'running' | 'over';
 
+/**
+ * How long one leg of a roulette series should run. One knob for the whole
+ * series — each module decides for itself what "quick" means in its own units,
+ * because only it knows whether that is stocks, round wins, points or turns.
+ */
+export type SeriesPace = 'quick' | 'normal' | 'long';
+
 export interface GameMeta {
   id: GameId;
   name: string;
@@ -110,5 +117,21 @@ export interface GameModule {
   defaultConfig(playerCount: number): GameConfig;
   /** Clamp and validate host-supplied settings before they reach the sim. */
   normalizeConfig(patch: unknown, current: GameConfig, playerCount: number): GameConfig;
+  /**
+   * A complete config for one leg of a roulette series: short, self-contained,
+   * and independent of anything the host set in the lobby.
+   *
+   * Required rather than optional on purpose. The alternative — a table of
+   * per-game presets living next to the draw — would be a second copy of both
+   * the field names and the clamp ranges that already live here, and when the
+   * two drift the failure is silent, because `normalizeConfig` quietly snaps
+   * the out-of-range value back. This way a new game does not compile until it
+   * has decided how it plays in a series.
+   *
+   * Build from `defaultConfig` and override only the length knobs, so stages,
+   * levels, powerups and languages keep whatever the game considers normal.
+   * `playerCount` is here because not every game's length is independent of it.
+   */
+  seriesConfig(playerCount: number, pace: SeriesPace): GameConfig;
   create(seats: GameSeat[], config: GameConfig, seed: number): GameInstance;
 }

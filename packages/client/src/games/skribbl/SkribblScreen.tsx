@@ -13,7 +13,7 @@ import { Scoreboard } from './Scoreboard';
 import { Toolbar } from './Toolbar';
 import { WordBanner } from './WordBanner';
 import { WordPicker } from './WordPicker';
-import { MatchOver, Paused } from '../../ui/MatchOverlays';
+import { MatchEndOverlay, Paused } from '../../ui/MatchOverlays';
 import { VoiceBar } from '../../ui/VoiceBar';
 
 interface Props {
@@ -258,7 +258,7 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
         <Paused room={room} spectating={mySeat < 0} />
       )}
       {room.phase === 'matchOver' && (
-        <MatchOver
+        <MatchEndOverlay
           room={room}
           mySeat={mySeat}
           winnerSeat={winnerSeat}

@@ -56,6 +56,16 @@ export const gravityModule: GameModule = {
     };
   },
 
+  // Rounds are 15-30 seconds, so `targetWins` is the whole story here. `pace`
+  // is left at its default: a faster track also kills faster, so it shortens
+  // the leg either way and stacking both makes for a blur.
+  seriesConfig(_playerCount, pace) {
+    const base = defaultConfig();
+    if (pace === 'quick') return { ...base, targetWins: 2 };
+    if (pace === 'long') return { ...base, targetWins: 5 };
+    return { ...base, targetWins: 3 };
+  },
+
   create(seats: GameSeat[], config: GameConfig, seed: number): GameInstance {
     const state = createState(seats, asConfig(config), seed);
     let pending: GravityEvent[] = [];

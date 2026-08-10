@@ -65,6 +65,22 @@ export const achtungModule: GameModule = {
     };
   },
 
+  // `winByTwo` is off at every pace, which is a deliberate divergence from the
+  // lobby default. A win-by-two tail is unbounded — two players trading rounds
+  // at the target can run indefinitely — and a series has five more legs
+  // waiting behind this one. The target itself is also well under the lobby's
+  // `TARGET_SCORE_PER_OPPONENT` of 10 per opponent, which is the whole reason
+  // this method exists rather than reusing `defaultConfig`.
+  seriesConfig(playerCount, pace) {
+    const base = defaultConfig(playerCount);
+    const perOpponent = pace === 'quick' ? 3 : pace === 'long' ? 8 : 5;
+    return {
+      ...base,
+      targetScore: Math.max(1, playerCount - 1) * perOpponent,
+      winByTwo: false,
+    };
+  },
+
   create(seats: GameSeat[], config: GameConfig, seed: number): GameInstance {
     const state = createState(seats, asConfig(config), seed);
     let pending: AchtungEvent[] = [];

@@ -94,6 +94,8 @@ export function OptionsMenu(): JSX.Element {
 
   const inMatch = room !== null && room.phase !== 'lobby';
   const playing = room?.phase === 'playing';
+  const series = room?.series ?? null;
+  const canRestart = series === null || series.phase === 'leg';
   const isHost = room?.players.find((p) => p.id === playerId)?.isHost ?? false;
   const seated = mySeat >= 0;
   const meta = room ? GAMES[room.gameId].meta : null;
@@ -158,15 +160,20 @@ export function OptionsMenu(): JSX.Element {
             {inMatch &&
               (isHost ? (
                 <>
-                  <Button
-                    full
-                    onClick={() => {
-                      socket.restart();
-                      close();
-                    }}
-                  >
-                    {t.restartMatch}
-                  </Button>
+                  {/* Not offered between legs of a series: that leg is already
+                      on the board, and replaying it would score it twice. The
+                      server refuses it too. */}
+                  {canRestart && (
+                    <Button
+                      full
+                      onClick={() => {
+                        socket.restart();
+                        close();
+                      }}
+                    >
+                      {t.restartMatch}
+                    </Button>
+                  )}
                   <Button
                     variant="danger"
                     full

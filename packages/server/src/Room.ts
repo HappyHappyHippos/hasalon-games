@@ -1,8 +1,13 @@
 import {
   GAMES,
   ROOM_MAX_PLAYERS,
+  SERIES_BREAK_MS,
+  drawLineup,
+  eligibleGames,
   encode,
+  normalizeSeriesSetup,
   placementPoints,
+  revealDurationMs,
   type GameConfig,
   type GameId,
   type GameInstance,
@@ -16,6 +21,7 @@ import {
 } from '@mg/shared';
 import type { Client } from './Client';
 import { MatchClock } from './MatchClock';
+import { Series } from './Series';
 import {
   EMPTY_ROOM_TTL_MS,
   applyIdentity,
@@ -69,6 +75,25 @@ export class Room {
    */
   private settingsByGame: Record<GameId, GameConfig>;
 
+  /**
+   * The roulette series, if one is running. Owns the lineup, how far through it
+   * we are, and the timer for the waits between legs.
+   */
+  private readonly series = new Series({ advance: () => this.advanceLeg() });
+
+  /**
+   * The config the running match was actually created with, or null outside a
+   * match.
+   *
+   * A series leg runs on `module.seriesConfig`, not on whatever the host has
+   * configured for that game in the lobby — and the client *reads the config off
+   * the room view to render*, so the view has to describe the match in progress.
+   * Keeping it here rather than writing it into `settingsByGame` is what makes
+   * "a series never touches the host's settings" true rather than merely
+   * intended.
+   */
+  private legConfig: GameConfig | null = null;
+
   private instance: GameInstance | null = null;
   /** The last snapshot actually sent, replayed to anyone joining mid-match. */
   private lastSnapshot: GameSnapshot | null = null;
@@ -119,8 +144,18 @@ export class Room {
     return GAMES[this.gameId];
   }
 
-  get settings(): GameConfig {
+  /** What the host configured for this game in the lobby. A series never writes here. */
+  private get lobbySettings(): GameConfig {
     return this.settingsByGame[this.gameId];
+  }
+
+  /** What the running match is using — which during a series leg is not the same thing. */
+  get settings(): GameConfig {
+    return this.legConfig ?? this.lobbySettings;
+  }
+
+  get seriesView() {
+    return this.series.view();
   }
 
   // -------------------------------------------------------------------------
@@ -302,17 +337,27 @@ export class Room {
   }
 
   setGame(gameId: GameId): void {
-    if (this.phase === 'playing' || !(gameId in GAMES)) return;
+    // A running series owns `gameId` — it is the lineup's job to say what plays
+    // next, and letting the picker fight it mid-run would desync the two.
+    if (this.phase === 'playing' || this.series.active || !(gameId in GAMES)) return;
     this.gameId = gameId;
     this.broadcastRoom();
   }
 
   setSettings(patch: unknown): void {
+    // Normalized against the *lobby* config, never `this.settings`. During a
+    // series break those differ, and using the getter would fold a leg's
+    // shortened preset into what the host had saved for that game.
     this.settingsByGame[this.gameId] = this.module.normalizeConfig(
       patch,
-      this.settings,
+      this.lobbySettings,
       this.players.length,
     );
+    this.broadcastRoom();
+  }
+
+  setSeriesSetup(patch: unknown): void {
+    this.series.setup = normalizeSeriesSetup(patch, this.series.setup);
     this.broadcastRoom();
   }
 
@@ -331,6 +376,9 @@ export class Room {
   // -------------------------------------------------------------------------
 
   start(): boolean {
+    // The lineup decides what plays during a series; the plain start button is
+    // not a way out of it.
+    if (this.series.active) return false;
     if (!this.canStart()) return false;
 
     const seated = this.seatCandidates();
@@ -342,7 +390,7 @@ export class Room {
       p.seat = i;
     });
 
-    this.beginMatch(seated);
+    this.beginMatch(seated, this.lobbySettings);
     return true;
   }
 
@@ -350,14 +398,30 @@ export class Room {
    * Same settings, round one again. Distinct from `rematch`, which drops
    * everyone back to the lobby — this is the "that round was a write-off"
    * button, and it works both mid-match and from the match-over card.
+   */
+  restart(): boolean {
+    // Mid-leg is fine — a botched round is exactly what this is for. From a
+    // *break*, though, the finished leg has already been scored into everyone's
+    // total, and replaying it would score it a second time.
+    if (this.series.active && this.series.phase !== 'leg') return false;
+    return this.seatAndBegin();
+  }
+
+  /**
+   * Seat whoever is here and start a match.
    *
    * Existing players keep their seats, in order, and anyone who has been
    * watching gets any seat that is left. Seats are otherwise only handed out at
    * `start`, so without this someone who lost their session mid-match — or who
    * followed the link late — would spectate with dead controls until the whole
    * match ended, with no way for the host to let them in.
+   *
+   * Also how a series advances, which is why it reads `this.module` fresh: the
+   * caller sets `gameId` to the next leg first, and the *next* game's player
+   * range is what governs the seating. Returns false when there is nobody
+   * enough to play.
    */
-  restart(): boolean {
+  private seatAndBegin(): boolean {
     const max = this.module.meta.maxPlayers;
     const seated = this.players
       .filter((p) => p.seat >= 0 && p.client !== null)
@@ -376,16 +440,21 @@ export class Room {
     seated.forEach((p, i) => {
       p.seat = i;
     });
-    this.beginMatch(seated);
+
+    const config = this.series.active
+      ? this.module.seriesConfig(seated.length, this.series.setup.pace)
+      : this.lobbySettings;
+    this.beginMatch(seated, config);
     return true;
   }
 
-  /** The half of starting a match that `start` and `restart` agree on. */
-  private beginMatch(seated: RoomPlayer[]): void {
+  /** The half of starting a match that `start`, `restart` and a series leg agree on. */
+  private beginMatch(seated: RoomPlayer[], config: GameConfig): void {
     this.lastSnapshot = null;
+    this.legConfig = config;
     this.instance = this.module.create(
       seated.map((p) => ({ id: p.id, name: p.name, colorIndex: p.colorIndex })),
-      this.settings,
+      config,
       (Math.random() * 0xffffffff) >>> 0,
     );
 
@@ -397,8 +466,12 @@ export class Room {
 
   rematch(): void {
     this.clock.stop();
+    // Back to the lobby ends a series too, timer and all. `setup` survives, so
+    // the host's hat and pace are still there for the next spin.
+    this.series.reset();
     this.instance = null;
     this.lastSnapshot = null;
+    this.legConfig = null;
     this.phase = 'lobby';
     this.clock.clearPause();
     for (const p of this.players) {
@@ -406,6 +479,87 @@ export class Room {
       p.score = 0;
       p.ready = false;
     }
+    this.broadcastRoom();
+  }
+
+  // -------------------------------------------------------------------------
+  // Roulette series
+  // -------------------------------------------------------------------------
+
+  /**
+   * Draw a lineup and open the reveal. Also the "spin again" button.
+   *
+   * Returns false when there is nothing drawable — an empty hat, or no game in
+   * it that suits this many people.
+   */
+  startSeries(): boolean {
+    if (this.phase === 'playing') return false;
+    if (this.series.active && this.series.phase !== 'over') return false;
+
+    // In the lobby, `ready` is how the host says who is in. From the champion
+    // card it cannot be — `endMatch` cleared it — so a re-spin takes whoever is
+    // still here.
+    const roster =
+      this.phase === 'lobby' ? this.activePlayers.filter((p) => p.ready) : this.activePlayers;
+
+    const eligible = eligibleGames(this.series.setup.pool, roster.length);
+    const lineup = drawLineup(eligible, this.series.setup.rounds);
+    if (lineup.length === 0) return false;
+
+    this.series.reset();
+    this.clock.stop();
+    this.clock.clearPause();
+    this.instance = null;
+    this.lastSnapshot = null;
+    this.legConfig = null;
+
+    // A series is a fresh competition, and its champion is whoever tops this
+    // table at the end — so it starts from zero. The one place `totalScore` is
+    // ever reset; see the note on it in roomTypes.ts.
+    for (const p of this.players) {
+      p.score = 0;
+      p.totalScore = 0;
+    }
+
+    // Seats are deliberately left alone: `seatAndBegin` reads them, so spinning
+    // again from the champion card keeps the group that just finished.
+    this.phase = 'lobby';
+    this.series.begin(lineup, revealDurationMs(lineup.length));
+    this.broadcastRoom();
+    return true;
+  }
+
+  /** Host only — cut the reveal or the between-legs break short. */
+  skipSeriesWait(): boolean {
+    if (this.series.phase !== 'reveal' && this.series.phase !== 'break') return false;
+    this.advanceLeg();
+    return true;
+  }
+
+  /**
+   * A wait ended: play the next leg. The only path that starts one, shared by
+   * the timer and the host's skip — `consumeWait` is what stops both firing.
+   */
+  private advanceLeg(): void {
+    if (!this.series.consumeWait()) return;
+
+    if (this.series.phase !== 'reveal') this.series.index += 1;
+    this.series.beginLeg();
+    // Before seating, because the next game's own player range decides who fits.
+    this.gameId = this.series.lineup[this.series.index]!;
+    if (!this.seatAndBegin()) this.abortSeries();
+  }
+
+  /**
+   * Not enough people left to play the next leg.
+   *
+   * Ends the series where it stands and crowns whoever is ahead, rather than
+   * sending an error nobody would see after a reload. It is state, so it
+   * survives a reconnect and the card can say what happened.
+   */
+  private abortSeries(): void {
+    this.series.finish(true);
+    this.phase = 'matchOver';
     this.broadcastRoom();
   }
 
@@ -496,12 +650,32 @@ export class Room {
 
     this.phase = 'matchOver';
     for (const p of this.players) p.ready = false;
+
+    // Before the broadcast, not after: `matchEnded` carries a room view, and
+    // the view has to already say what happens next — that there is a break
+    // running, or that the series is over — or every client learns it a round
+    // trip late.
+    //
+    // This runs whichever way the match ended, including the room dropping
+    // below the minimum, which is deliberate: arming the break either way gives
+    // whoever dropped a few seconds to come back, and `advanceLeg` is the one
+    // place that decides whether the next leg can actually be seated.
+    if (this.series.phase === 'leg') {
+      const winner = this.players.find((p) => p.seat === winnerSeat);
+      this.series.legWinners.push(winner?.id ?? null);
+      if (this.series.index + 1 >= this.series.lineup.length) this.series.finish(false);
+      else this.series.armBreak(SERIES_BREAK_MS);
+    }
+
     this.broadcast({ t: 'matchEnded', room: this.view(), winnerSeat });
   }
 
   /** Called when the room is torn down, so no timer outlives it. */
   dispose(): void {
     this.clock.stop();
+    // The series timer is the room's only other one, and a stray break would
+    // fire `advanceLeg` into a room that no longer exists.
+    this.series.reset();
     for (const p of this.players) p.client?.close();
   }
 
@@ -518,6 +692,8 @@ export class Room {
       settings: this.settings,
       paused: this.paused,
       pausedBy: this.pausedBy,
+      seriesSetup: this.series.setup,
+      series: this.series.view(),
       players: this.players.map(
         (p): PlayerView => ({
           id: p.id,
