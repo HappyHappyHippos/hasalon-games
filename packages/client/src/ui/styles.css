@@ -4308,19 +4308,21 @@ strong,
   /* Flat while spinning; the shadow snaps in on landing, which is what sells
      the stop as a stop. */
   box-shadow: 0 0 0 var(--ink);
-  transition: box-shadow 180ms ease;
+  transition: transform 180ms ease, box-shadow 180ms ease;
 }
 
 .reel__strip {
   display: flex;
   flex-direction: column;
   will-change: transform;
-  animation: roulette-spin 520ms linear infinite;
-  animation-delay: var(--reel-delay, 0ms);
+  animation: roulette-spin-start 350ms cubic-bezier(0.32, 0, 0.67, 0) var(--reel-delay, 0ms) 1,
+             roulette-spin 220ms linear infinite calc(var(--reel-delay, 0ms) + 350ms);
 }
 
 .reel__cell {
-  display: block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   height: var(--reel-h);
   padding: 4px;
 }
@@ -4334,15 +4336,15 @@ strong,
 
 .reel--landed .reel__window {
   box-shadow: var(--shadow);
+  transform: translate(-2px, -2px);
   background: var(--accent);
 }
 
 .reel--landed .reel__strip {
   animation: none;
   transform: translateY(calc(var(--reel-h) * var(--land) * -1));
-  /* A touch of overshoot on the way in — a mechanism coming to rest, not a
-     value being assigned. */
-  transition: transform 220ms cubic-bezier(0.2, 1.4, 0.4, 1);
+  /* Smooth ease-out deceleration curve when landing into position. */
+  transition: transform 380ms cubic-bezier(0.12, 0.85, 0.25, 1.08);
 }
 
 .reel--landed .reel__cell {
@@ -4367,6 +4369,11 @@ strong,
 
 .roulette--settled .roulette__reels {
   animation: roulette-settle 320ms cubic-bezier(0.3, 1.4, 0.5, 1) 1;
+}
+
+@keyframes roulette-spin-start {
+  from { transform: translateY(0); }
+  to   { transform: translateY(calc(var(--reel-h) * -3)); }
 }
 
 @keyframes roulette-spin {
