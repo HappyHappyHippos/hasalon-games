@@ -15,7 +15,6 @@ import { MemeCard } from './MemeCard';
 
 export function Composer({ view }: { view: MemesPrivate }): JSX.Element {
   const t = useT();
-  const lang = useStore((state) => state.lang);
   const status = useStore((state) => state.status);
   const [texts, setTexts] = useState<string[]>(() => view.draft);
   const [positions, setPositions] = useState<MemeBoxPosition[]>(() => view.positions);
@@ -45,7 +44,6 @@ export function Composer({ view }: { view: MemesPrivate }): JSX.Element {
   useEffect(() => () => senderRef.current?.destroy(), []);
 
   const template = templateById(view.templateId);
-  const nudge = view.nudge ? (template?.nudge?.[lang] ?? view.nudge) : '';
   const usable = useMemo(
     () => (texts.join('').match(/[\p{L}\p{N}]/gu)?.length ?? 0) >= 2,
     [texts],
@@ -104,7 +102,6 @@ export function Composer({ view }: { view: MemesPrivate }): JSX.Element {
       </div>
       <div className="memes__fields">
         <h2>{view.submitted ? t.memesSubmitted : t.memesWrite}</h2>
-        {nudge && <p className="memes__nudge">{nudge}</p>}
         {!view.submitted && texts.map((text, index) => {
           const inputId = `meme-caption-${index}`;
           const counterId = `meme-caption-${index}-counter`;
