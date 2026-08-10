@@ -100,6 +100,10 @@ const he = {
   needsAtMost: (n: number) => `עד ${n} שחקנים`,
   needsAtLeast: (n: number) => `לפחות ${n} שחקנים`,
   poolCardState: (game: string, on: boolean) => (on ? `${game}: בכובע` : `${game}: בחוץ`),
+  poolDoesNotFit: (games: string[]) =>
+    games.length === 1
+      ? `${games[0]} לא מתאים למי שמוכן. הוציאו מהכובע או קראו לעוד אנשים.`
+      : `${games.length} משחקים בכובע לא מתאימים למי שמוכן. הוציאו אותם או קראו לעוד אנשים.`,
   rouletteSpinning: 'מגרילים…',
   rouletteLineup: 'זה מה שיצא!',
   legOf: (i: number, n: number) => `משחק ${i} מתוך ${n}`,
@@ -468,6 +472,7 @@ const he = {
     RESUME_FAILED: 'המקום שלכם כבר לא שמור. הצטרפו מחדש.',
     RATE_LIMITED: 'רגע, לאט יותר.',
     SERIES_UNAVAILABLE: 'אין משחקים בכובע שמתאימים לכמות הזאת. סמנו עוד.',
+    SERIES_POOL_UNFIT: 'יש בכובע משחק שלא מתאים למי שמוכן. הוציאו אותו או קראו לעוד אנשים.',
   } satisfies Record<ErrorCode, string>,
 };
 
@@ -541,6 +546,12 @@ const en: Dict = {
   needsAtMost: (n: number) => `Up to ${n} players`,
   needsAtLeast: (n: number) => `${n} players minimum`,
   poolCardState: (game: string, on: boolean) => (on ? `${game}: in the hat` : `${game}: out`),
+  // Named when it is one game, counted when it is several: a four-name list
+  // reads as noise, and each card already says why it doesn't fit.
+  poolDoesNotFit: (games: string[]) =>
+    games.length === 1
+      ? `${games[0]} doesn't suit everyone who's ready. Take it out, or get more people in.`
+      : `${games.length} games in the hat don't suit everyone who's ready. Take them out, or get more people in.`,
   rouletteSpinning: 'Drawing…',
   rouletteLineup: "Here's the run!",
   legOf: (i: number, n: number) => `Game ${i} of ${n}`,
@@ -888,6 +899,8 @@ const en: Dict = {
     RESUME_FAILED: 'Your seat is gone. Join again.',
     RATE_LIMITED: 'Slow down a moment.',
     SERIES_UNAVAILABLE: 'Nothing in the hat fits this many players. Tick a few more.',
+    SERIES_POOL_UNFIT:
+      "Something in the hat doesn't suit everyone who's ready. Take it out, or get more people in.",
   },
 };
 

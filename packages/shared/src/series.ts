@@ -161,6 +161,22 @@ export function eligibleGames(pool: readonly GameId[], playerCount: number): Gam
 }
 
 /**
+ * The complement of `eligibleGames`: what is in the hat that this many people
+ * cannot play, in pool order.
+ *
+ * The hat is pickable while the room is still filling up — a host alone in a
+ * fresh lobby can build the whole lineup before anyone arrives — so a pool
+ * full of games nobody can play yet is the normal state, not an error. What
+ * this list is for is the moment the host actually spins: an unfit game stops
+ * the draw and gets named, rather than being quietly left out of a lineup the
+ * host thought they had chosen.
+ */
+export function unfitGames(pool: readonly GameId[], playerCount: number): GameId[] {
+  const fits = new Set(eligibleGames(pool, playerCount));
+  return dedupe(pool.filter(isGameId)).filter((id) => !fits.has(id));
+}
+
+/**
  * Draw the lineup: a shuffle of the eligible games, cut to length.
  *
  * Distinct by construction rather than by rejection, and **clamped** when the

@@ -7,6 +7,7 @@ import {
   defaultSeriesSetup,
   drawLineup,
   eligibleGames,
+  unfitGames,
   normalizeSeriesSetup,
   revealDurationMs,
 } from './series';
@@ -52,6 +53,36 @@ describe('eligibleGames', () => {
 
   it('returns an empty list for an empty pool', () => {
     expect(eligibleGames([], 4)).toEqual([]);
+  });
+});
+
+describe('unfitGames', () => {
+  it('names what the room has outgrown', () => {
+    expect(unfitGames(ALL, 7)).toEqual(['gunmayhem']);
+    expect(unfitGames(ALL, 6)).toEqual([]);
+  });
+
+  it('names everything when the room is below every minimum', () => {
+    expect(unfitGames(ALL, 1).sort()).toEqual([...ALL].sort());
+    expect(unfitGames(ALL, 0).sort()).toEqual([...ALL].sort());
+  });
+
+  it('is the exact complement of eligibleGames', () => {
+    for (const count of [0, 1, 2, 5, 6, 7, 8, 9]) {
+      const fits = eligibleGames(ALL, count);
+      const unfit = unfitGames(ALL, count);
+      expect([...fits, ...unfit].sort()).toEqual([...ALL].sort());
+      expect(fits.filter((id) => unfit.includes(id))).toEqual([]);
+    }
+  });
+
+  it('ignores junk ids and dedupes, like its counterpart', () => {
+    const pool = ['gunmayhem', 'nope', 'gunmayhem', ''] as unknown as GameId[];
+    expect(unfitGames(pool, 7)).toEqual(['gunmayhem']);
+  });
+
+  it('returns an empty list for an empty pool', () => {
+    expect(unfitGames([], 4)).toEqual([]);
   });
 });
 

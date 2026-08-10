@@ -4,6 +4,7 @@ import {
   SERIES_BREAK_MS,
   drawLineup,
   eligibleGames,
+  unfitGames,
   encode,
   normalizeSeriesSetup,
   placementPoints,
@@ -487,20 +488,36 @@ export class Room {
   // -------------------------------------------------------------------------
 
   /**
+   * Who the draw counts. In the lobby, `ready` is how the host says who is in.
+   * From the champion card it cannot be — `endMatch` cleared it — so a re-spin
+   * takes whoever is still here.
+   */
+  private seriesRoster(): RoomPlayer[] {
+    return this.phase === 'lobby' ? this.activePlayers.filter((p) => p.ready) : this.activePlayers;
+  }
+
+  /**
+   * The games in the hat this roster cannot play. Non-empty is what
+   * `startSeries` refuses on, and what the router turns into an error naming
+   * them — see the note on `unfitGames` for why they are not simply dropped.
+   */
+  unfitPoolGames(): GameId[] {
+    return unfitGames(this.series.setup.pool, this.seriesRoster().length);
+  }
+
+  /**
    * Draw a lineup and open the reveal. Also the "spin again" button.
    *
    * Returns false when there is nothing drawable — an empty hat, or no game in
-   * it that suits this many people.
+   * it that suits this many people — and when the hat holds a game this roster
+   * cannot play. Ask `unfitPoolGames` which of the two it was.
    */
   startSeries(): boolean {
     if (this.phase === 'playing') return false;
     if (this.series.active && this.series.phase !== 'over') return false;
 
-    // In the lobby, `ready` is how the host says who is in. From the champion
-    // card it cannot be — `endMatch` cleared it — so a re-spin takes whoever is
-    // still here.
-    const roster =
-      this.phase === 'lobby' ? this.activePlayers.filter((p) => p.ready) : this.activePlayers;
+    const roster = this.seriesRoster();
+    if (unfitGames(this.series.setup.pool, roster.length).length > 0) return false;
 
     const eligible = eligibleGames(this.series.setup.pool, roster.length);
     const lineup = drawLineup(eligible, this.series.setup.rounds);

@@ -927,6 +927,40 @@ describe('roulette series', () => {
     expect(drawn.room.series!.lineup).toEqual(['gunmayhem']);
   });
 
+  it('refuses to draw while the hat holds a game the ready roster cannot play', async () => {
+    const [host, guest] = await makeLobby(2);
+
+    // One of the two un-readies, so the roster the draw counts is a single
+    // person and nothing in the hat seats one. The pool is deliberately fine
+    // for the room — it is the *ready* roster that does not fit, which is the
+    // distinction this error exists to make.
+    guest!.send({ t: 'ready', ready: false });
+    await host!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'room' }> =>
+        m.t === 'room' && m.room.players.filter((p) => p.ready).length === 1,
+    );
+
+    host!.send({ t: 'series', setup: { enabled: true, pool: ['tanks'], rounds: 1 } });
+    host!.send({ t: 'seriesStart' });
+    const refusal = await host!.next('error');
+    expect(refusal.code).toBe('SERIES_POOL_UNFIT');
+    // The message names the game, so the host knows which one to take out.
+    expect(refusal.message).toContain('Tank');
+
+    // Ready up again and the same hat draws — nothing about it changed.
+    guest!.send({ t: 'ready', ready: true });
+    await host!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'room' }> =>
+        m.t === 'room' && m.room.players.filter((p) => p.ready).length === 2,
+    );
+    host!.send({ t: 'seriesStart' });
+    const drawn = await host!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'room' }> =>
+        m.t === 'room' && m.room.series?.phase === 'reveal',
+    );
+    expect(drawn.room.series!.lineup).toEqual(['tanks']);
+  });
+
   it('keeps every series control host-only', async () => {
     const clients = await makeLobby(2);
     const guest = clients[1]!;

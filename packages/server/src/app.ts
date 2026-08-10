@@ -18,6 +18,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
+  GAMES,
   PROTOCOL_VERSION,
   WS_PATH,
   isFaceIndex,
@@ -285,10 +286,21 @@ export function createApp(options: AppOptions): App {
           return;
         }
         if (!room.startSeries()) {
-          client.sendError(
-            'SERIES_UNAVAILABLE',
-            'No games in the hat suit this many players right now.',
-          );
+          // Two different failures, and telling them apart is the whole point:
+          // "nothing fits" wants more games ticked, "these don't fit" wants
+          // one un-ticked or more people in the room.
+          const unfit = room.unfitPoolGames();
+          if (unfit.length > 0) {
+            client.sendError(
+              'SERIES_POOL_UNFIT',
+              `Not everyone who is ready can play ${unfit.map((id) => GAMES[id].meta.name).join(', ')}.`,
+            );
+          } else {
+            client.sendError(
+              'SERIES_UNAVAILABLE',
+              'No games in the hat suit this many players right now.',
+            );
+          }
         }
         return;
 

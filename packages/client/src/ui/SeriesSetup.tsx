@@ -26,8 +26,10 @@ import { Toggle } from './Toggle';
  * of thing it is today.
  *
  * Eligibility is computed here from the same `eligibleGames` the server draws
- * with, so a game the room has outgrown is visibly locked rather than silently
- * absent from the lineup.
+ * with, so a game the room has outgrown is visibly marked rather than silently
+ * absent from the lineup. Marked, not disabled: the hat gets built while the
+ * room is still filling up, and a card the host cannot tick because nobody has
+ * arrived yet is a dead end. The spin is what enforces it.
  */
 
 const PACES: SeriesPace[] = ['quick', 'normal', 'long'];
@@ -43,10 +45,11 @@ export function SeriesSetup({ setup, isHost, playerCount }: Props): JSX.Element 
   const t = useT();
   const eligible = eligibleGames(setup.pool, playerCount);
 
-  // Never offer more legs than there are games to fill them. The server clamps
-  // too — someone can always join between this render and the draw — but a
-  // stepper that stops where the lineup stops is the honest version.
-  const maxRounds = Math.max(MIN_SERIES_ROUNDS, Math.min(MAX_SERIES_ROUNDS, eligible.length));
+  // Bounded by what's in the hat, not by who has shown up yet — a host
+  // building the hat before anyone else has joined can still plan for the
+  // party they're expecting. `startSeries` on the server is the thing that
+  // actually enforces fit against whoever is ready when the wheel spins.
+  const maxRounds = Math.max(MIN_SERIES_ROUNDS, Math.min(MAX_SERIES_ROUNDS, setup.pool.length));
 
   const patch = (next: Partial<Setup>): void => socket.setSeriesSetup(next);
 
@@ -57,7 +60,7 @@ export function SeriesSetup({ setup, isHost, playerCount }: Props): JSX.Element 
   };
 
   return (
-    <div className="sticker roulette-setup">
+    <div className={`sticker roulette-setup${setup.enabled ? ' roulette-setup--open' : ''}`}>
       <Toggle
         label={t.rouletteMode}
         checked={setup.enabled}
@@ -104,7 +107,12 @@ export function SeriesSetup({ setup, isHost, playerCount }: Props): JSX.Element 
                   role="checkbox"
                   aria-checked={on}
                   aria-label={t.poolCardState(t.games[id].name, on)}
-                  disabled={!isHost || !fits}
+                  // Pickable whatever the room size: the host builds the hat
+                  // while people are still arriving, so "too few players" is
+                  // the normal state here, not a reason to lock the card. It
+                  // still shows why it doesn't fit, and the roulette refuses
+                  // to spin until it does.
+                  disabled={!isHost}
                   className={`poolcard${on ? ' poolcard--on' : ''}${fits ? '' : ' poolcard--locked'}`}
                   style={{ '--accent': game.accent } as CSSProperties}
                   onClick={() => togglePool(id)}

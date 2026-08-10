@@ -1,5 +1,5 @@
 import { useEffect, useState, type JSX } from 'react';
-import { colorFor, eligibleGames } from '@mg/shared';
+import { colorFor, eligibleGames, unfitGames } from '@mg/shared';
 import { useStore } from '../store';
 import { useT } from '../strings';
 import { socket } from '../net/socket';
@@ -53,7 +53,13 @@ export function LobbyScreen(): JSX.Element {
     room.seriesSetup.rounds,
     eligibleGames(room.seriesSetup.pool, connectedPlayers.length).length,
   );
-  const canStartSeries = everyoneReady && readyLegCount > 0;
+  // The hat is pickable before the room fills, so it can hold a game the
+  // people who are ready cannot play. The server refuses that draw rather than
+  // dropping the game from it, and this mirrors the refusal so the button is
+  // dead before it is pressed instead of after.
+  const unfitPool = unfitGames(room.seriesSetup.pool, readyPlayers.length);
+  const canStartSeries = everyoneReady && unfitPool.length === 0 && readyLegCount > 0;
+  const unfitNames = unfitPool.map((id) => t.games[id].name);
 
   const takenColors = new Set(
     room.players.filter((p) => p.id !== playerId).map((p) => p.colorIndex),
@@ -191,7 +197,9 @@ export function LobbyScreen(): JSX.Element {
                 <p className="muted small center" style={{ marginTop: '0.5rem' }}>
                   {!everyoneReady
                     ? t.needReady(2)
-                    : t.errors.SERIES_UNAVAILABLE}
+                    : unfitPool.length > 0
+                      ? t.poolDoesNotFit(unfitNames)
+                      : t.errors.SERIES_UNAVAILABLE}
                 </p>
               )}
             </div>
@@ -249,9 +257,11 @@ export function LobbyScreen(): JSX.Element {
                 title={
                   !everyoneReady
                     ? t.needReady(2)
-                    : readyLegCount === 0
-                      ? t.errors.SERIES_UNAVAILABLE
-                      : undefined
+                    : unfitPool.length > 0
+                      ? t.poolDoesNotFit(unfitNames)
+                      : readyLegCount === 0
+                        ? t.errors.SERIES_UNAVAILABLE
+                        : undefined
                 }
               >
                 {t.startSeries(roomLegCount)}

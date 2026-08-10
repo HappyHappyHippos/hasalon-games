@@ -2361,6 +2361,16 @@ strong,
   transform: translate(var(--lift-sm), var(--lift-sm));
   box-shadow: none;
 }
+.options svg,
+.pausebtn svg,
+.fullscreenbtn svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+  color: var(--ink);
+  flex-shrink: 0;
+  pointer-events: none;
+}
 /* Out of the way during a match, but never quite invisible. Bottom-right is
    where the shooting thumb lives and the gear used to sit on top of the
    biggest button on the pad — mid-match it always moves to the top corner,
@@ -4491,6 +4501,12 @@ strong,
   gap: 12px;
   padding: 14px;
   background: #ff6482;
+  transition: background-color 150ms ease;
+}
+
+.roulette-setup--open,
+.roulette-setup:has(.roulette-setup__blurb) {
+  background: var(--surface);
 }
 
 .roulette-setup__blurb,
@@ -4524,17 +4540,10 @@ strong,
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
   cursor: pointer;
-
-  /* Unpicked games read as *out*, not as missing — you can still see what you
-     are leaving behind. */
-  opacity: 0.5;
-  filter: grayscale(1);
   transition: opacity 120ms ease, filter 120ms ease, transform 120ms ease;
 }
 
 .poolcard--on {
-  opacity: 1;
-  filter: none;
   background: var(--accent);
 }
 
@@ -4542,9 +4551,13 @@ strong,
   transform: translateY(-2px);
 }
 
+/* Dimming is reserved for "cannot play yet" — an unpicked-but-playable card
+   stays full colour, since the accent background and tick on `--on` already
+   say what's in the hat without also having to grey out everything else. */
 .poolcard--locked {
   cursor: not-allowed;
-  opacity: 0.32;
+  opacity: 0.5;
+  filter: grayscale(1);
 }
 
 .poolcard__art {

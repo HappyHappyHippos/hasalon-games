@@ -92,7 +92,14 @@ export type ErrorCode =
   | 'RESUME_FAILED'
   | 'RATE_LIMITED'
   /** Nothing drawable: an empty hat, or no game in it fits this many players. */
-  | 'SERIES_UNAVAILABLE';
+  | 'SERIES_UNAVAILABLE'
+  /**
+   * Something in the hat does not suit the people who are ready. Distinct from
+   * `SERIES_UNAVAILABLE`, which means the draw came up with nothing at all:
+   * here there is a perfectly good lineup available and the host is being told
+   * to fix the hat instead of having a pick silently dropped from it.
+   */
+  | 'SERIES_POOL_UNFIT';
 
 export type ServerMessage =
   /** Sent once on a successful create/join/resume. */

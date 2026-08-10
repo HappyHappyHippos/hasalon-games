@@ -632,9 +632,24 @@ describe('Room series', () => {
     empty.room.dispose();
   });
 
-  it('never draws a game the room has outgrown', () => {
-    const { room, players } = lobby(7, { rounds: 5 });
+  it('refuses the draw while the hat holds a game the room has outgrown', () => {
+    // Seven people and the whole hat: Gun Mayhem seats six. It used to be
+    // dropped from the lineup silently, which meant a host could tick it and
+    // never be told it would not be played. Now the spin stops and names it.
+    const { room } = lobby(7, { rounds: 5 });
+    expect(room.startSeries()).toBe(false);
+    expect(room.unfitPoolGames()).toEqual(['gunmayhem']);
+    expect(room.seriesView).toBeNull();
+    room.dispose();
+  });
+
+  it('draws once the unfit game is out of the hat', () => {
+    const { room, players } = lobby(7, {
+      rounds: 5,
+      pool: ['tanks', 'achtung', 'gravity', 'skribbl', 'memes'],
+    });
     for (let run = 0; run < 50; run++) {
+      expect(room.unfitPoolGames()).toEqual([]);
       expect(room.startSeries()).toBe(true);
       expect(room.seriesView!.lineup).not.toContain('gunmayhem');
       // Back to a lobby to draw again — a live series refuses to be redrawn,
@@ -642,6 +657,16 @@ describe('Room series', () => {
       room.rematch();
       for (const p of players) room.setReady(p, true);
     }
+    room.dispose();
+  });
+
+  it('counts only who is ready when deciding what does not fit', () => {
+    // Six ready and a seventh who never readied: Gun Mayhem still fits, so the
+    // hat is fine. The roster the draw uses is the ready one, not the room.
+    const { room, players } = lobby(7, { rounds: 5 });
+    room.setReady(players[6]!, false);
+    expect(room.unfitPoolGames()).toEqual([]);
+    expect(room.startSeries()).toBe(true);
     room.dispose();
   });
 
