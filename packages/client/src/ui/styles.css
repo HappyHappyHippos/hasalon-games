@@ -4194,7 +4194,7 @@ strong,
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(104px, 1fr));
   gap: 12px;
-  padding: 4px 8px 8px 4px;
+  padding: 4px 8px 12px 4px;
 }
 
 .poolcard {
@@ -4204,7 +4204,7 @@ strong,
   gap: 8px;
   align-items: center;
   justify-content: center;
-  padding: 10px 8px;
+  padding: 10px 8px 14px 8px;
 
   background: var(--surface);
   border: var(--outline);
@@ -4239,6 +4239,7 @@ strong,
   display: flex;
   align-items: center;
   justify-content: center;
+  padding-bottom: 4px;
 }
 
 .poolcard__art .boxart {
@@ -4297,7 +4298,7 @@ strong,
   grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
   gap: 16px;
   justify-items: center;
-  padding: 6px 12px 12px 6px;
+  padding: 6px 12px 14px 6px;
 }
 
 .reel {
@@ -4308,7 +4309,7 @@ strong,
   align-items: center;
   width: 100%;
   max-width: 132px;
-  padding: 2px;
+  padding: 2px 2px 8px 2px;
 }
 
 .reel__window {
@@ -4338,7 +4339,7 @@ strong,
   align-items: center;
   justify-content: center;
   height: var(--reel-h);
-  padding: 6px;
+  padding: 8px 8px 12px 8px;
 }
 
 .reel__cell .boxart {
