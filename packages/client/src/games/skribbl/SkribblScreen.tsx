@@ -164,30 +164,30 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
           <span className="skribbl__round">{t.skribblRound(round || 1, total)}</span>
         </div>
 
-        <div className="skribbl__wordwrap">
-          {phase === 'drawing' || phase === 'reveal' ? (
-            <WordBanner
-              masked={view?.masked ?? ''}
-              dir={dir}
-              word={isDrawer && phase === 'drawing' ? secret?.word : undefined}
-              revealed={phase === 'reveal'}
-            />
-          ) : (
-            <p className="skribbl__hint">
-              {phase === 'picking'
-                ? isDrawer
-                  ? t.skribblYourTurn
-                  : t.skribblChoosing(drawerName)
-                : t.skribblGetReady}
-            </p>
-          )}
-        </div>
-
         {/* Memes and Skribbl build their own chrome rather than using `Screen`,
             which is the only reason they were the two games with no microphone
             toggle on the surface. */}
         <VoiceBar compact />
       </header>
+
+      <div className="skribbl__wordwrap">
+        {phase === 'drawing' || phase === 'reveal' ? (
+          <WordBanner
+            masked={view?.masked ?? ''}
+            dir={dir}
+            word={isDrawer && phase === 'drawing' ? secret?.word : undefined}
+            revealed={phase === 'reveal'}
+          />
+        ) : (
+          <p className="sticker skribbl__hint">
+            {phase === 'picking'
+              ? isDrawer
+                ? t.skribblYourTurn
+                : t.skribblChoosing(drawerName)
+              : t.skribblGetReady}
+          </p>
+        )}
+      </div>
 
       <div className="skribbl__body">
         <aside className="skribbl__side">

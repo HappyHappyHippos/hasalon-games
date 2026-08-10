@@ -50,7 +50,7 @@ export function WordBanner({ masked, dir, word, revealed = false }: Props): JSX.
 
   return (
     <div
-      className={`wordbanner${revealed ? ' wordbanner--revealed' : ''}`}
+      className={`sticker wordbanner${revealed ? ' wordbanner--revealed' : ''}`}
       dir={dir}
       // Read as a whole rather than letter by letter, which is what a screen
       // reader would otherwise do with one span per character.

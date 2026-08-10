@@ -1,4 +1,4 @@
-import type { CSSProperties, JSX } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type JSX } from 'react';
 import { BRUSH_SIZES, INK_COLORS } from '@mg/shared/skribbl';
 import { socket } from '../../net/socket';
 import { sfx } from '../../audio';
@@ -16,63 +16,137 @@ interface Props {
 /**
  * The drawer's tools. Only ever mounted for the drawer.
  *
- * The eraser is not a mode — it is white, which is the paper colour. That is
- * one fewer piece of state to hold and to get out of step, and it behaves
- * exactly the way people expect a whiteboard pen to.
+ * Compact by default with pressable active color indicator. Clicking opens
+ * an expandable sticker popover containing color palette & brush thickness options.
  */
 export function Toolbar({ color, size, mode, onColor, onSize, onMode }: Props): JSX.Element {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const toolbarRef = useRef<HTMLDivElement>(null);
   const t = useT();
 
-  return (
-    <div className="skribbl__tools">
-      <div className="skribbl__swatches" role="radiogroup" aria-label={t.skribblColour}>
-        {INK_COLORS.map((hex, index) => (
-          <button
-            key={hex}
-            type="button"
-            role="radio"
-            aria-checked={color === index}
-            aria-label={index === 1 ? t.skribblEraser : `${t.skribblColour} ${index + 1}`}
-            className={`skribbl__swatch${color === index ? ' skribbl__swatch--on' : ''}`}
-            style={{ '--swatch': hex } as CSSProperties}
-            onClick={() => {
-              sfx.click();
-              onColor(index);
-              onMode('pen');
-            }}
-          />
-        ))}
-      </div>
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onClick = (event: PointerEvent): void => {
+      if (toolbarRef.current && !toolbarRef.current.contains(event.target as Node)) {
+        setPickerOpen(false);
+      }
+    };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setPickerOpen(false);
+    };
+    window.addEventListener('pointerdown', onClick);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerdown', onClick);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [pickerOpen]);
 
-      <div className="skribbl__sizes" role="radiogroup" aria-label={t.skribblBrush}>
-        {BRUSH_SIZES.map((brush, index) => (
-          <button
-            key={brush}
-            type="button"
-            role="radio"
-            aria-checked={size === index}
-            aria-label={`${t.skribblBrush} ${index + 1}`}
-            className={`skribbl__size${size === index ? ' skribbl__size--on' : ''}`}
-            onClick={() => {
-              sfx.click();
-              onSize(index);
-              onMode('pen');
-            }}
-          >
-            {/* Scaled down from canvas units so the dot reads as the real nib. */}
-            <span
-              className="skribbl__nib"
-              style={{ width: `${brush / 2.2}px`, height: `${brush / 2.2}px` }}
-            />
-          </button>
-        ))}
-      </div>
+  const activeHex = INK_COLORS[color] ?? '#000000';
+  const currentBrush = BRUSH_SIZES[size] ?? 4;
+
+  return (
+    <div className="skribbl__tools" ref={toolbarRef}>
+      {pickerOpen && (
+        <div className="sticker skribbl__picker-popover" role="dialog" aria-label={t.skribblColour}>
+          <div className="skribbl__picker-header">
+            <span className="eyebrow">{t.skribblColour}</span>
+            <button
+              type="button"
+              className="skribbl__picker-close"
+              aria-label="Close"
+              onClick={() => {
+                sfx.click();
+                setPickerOpen(false);
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="skribbl__picker-section">
+            <div className="skribbl__swatches" role="radiogroup" aria-label={t.skribblColour}>
+              {INK_COLORS.map((hex, index) => (
+                <button
+                  key={hex}
+                  type="button"
+                  role="radio"
+                  aria-checked={color === index}
+                  aria-label={index === 1 ? t.skribblEraser : `${t.skribblColour} ${index + 1}`}
+                  className={`skribbl__swatch${color === index ? ' skribbl__swatch--on' : ''}`}
+                  style={{ '--swatch': hex } as CSSProperties}
+                  onClick={() => {
+                    sfx.click();
+                    onColor(index);
+                    onMode('pen');
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="skribbl__picker-section skribbl__picker-section--brush">
+            <span className="eyebrow skribbl__section-label">{t.skribblBrush}</span>
+            <div className="skribbl__brush-segmented" role="radiogroup" aria-label={t.skribblBrush}>
+              {BRUSH_SIZES.map((brush, index) => {
+                const lineHeights = [2.5, 5, 9, 14];
+                const lh = lineHeights[index] ?? 4;
+                return (
+                  <button
+                    key={brush}
+                    type="button"
+                    role="radio"
+                    aria-checked={size === index}
+                    aria-label={`${t.skribblBrush} ${index + 1}`}
+                    className={`skribbl__brush-segment${size === index ? ' skribbl__brush-segment--active' : ''}`}
+                    onClick={() => {
+                      sfx.click();
+                      onSize(index);
+                      onMode('pen');
+                    }}
+                  >
+                    <span
+                      className="skribbl__brush-line"
+                      style={{
+                        height: `${lh}px`,
+                        backgroundColor: activeHex === '#ffffff' ? '#14110f' : activeHex,
+                      }}
+                    />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="skribbl__acts">
         <button
           type="button"
+          className={`skribbl__act skribbl__act--color${pickerOpen ? ' skribbl__act--on' : ''}`}
+          aria-label={t.skribblColour}
+          aria-expanded={pickerOpen}
+          onClick={() => {
+            sfx.click();
+            setPickerOpen((open) => !open);
+          }}
+        >
+          <span
+            className="skribbl__color-preview"
+            style={{ '--swatch': activeHex } as CSSProperties}
+          >
+            <span
+              className="skribbl__color-nib"
+              style={{ width: `${Math.max(6, Math.round(currentBrush / 2.2))}px`, height: `${Math.max(6, Math.round(currentBrush / 2.2))}px` }}
+            />
+          </span>
+          <span className="skribbl__color-arrow" aria-hidden="true">{pickerOpen ? '▲' : '▼'}</span>
+        </button>
+
+        <button
+          type="button"
           className={`skribbl__act skribbl__act--fill${mode === 'fill' ? ' skribbl__act--on' : ''}`}
-          style={{ '--fill-color': INK_COLORS[color] } as CSSProperties}
+          style={{ '--fill-color': activeHex } as CSSProperties}
           onClick={() => {
             sfx.click();
             onMode(mode === 'fill' ? 'pen' : 'fill');
