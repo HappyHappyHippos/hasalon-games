@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { roundRect, shade } from './canvasDraw';
+import { hexToRgba, roundRect, shade } from './canvasDraw';
 
 /**
- * These two helpers were private copies in three renderers, and the copies had
+ * These helpers were private copies in three renderers, and the copies had
  * drifted. The tests that matter are the ones pinning the *differences* that
  * merging them resolved, because nothing else would notice if they came back.
  */
@@ -91,5 +91,12 @@ describe('shade', () => {
 
   it('accepts a hex colour with or without the leading hash', () => {
     expect(shade('ff0000', -0.5)).toBe(shade('#ff0000', -0.5));
+  });
+});
+
+describe('hexToRgba', () => {
+  it('converts six-digit hex colours for canvas gradient stops', () => {
+    expect(hexToRgba('#14a0ff', 0.4)).toBe('rgba(20, 160, 255, 0.4)');
+    expect(hexToRgba('000000', 0)).toBe('rgba(0, 0, 0, 0)');
   });
 });

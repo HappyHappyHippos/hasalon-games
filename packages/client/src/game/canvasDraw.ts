@@ -56,3 +56,13 @@ export function shade(hex: string, amount: number): string {
   };
   return `rgb(${channel(16)}, ${channel(8)}, ${channel(0)})`;
 }
+
+/** Convert a `#rrggbb` colour to an rgba() string for canvas gradients/fills. */
+export function hexToRgba(hex: string, alpha: number): string {
+  const value = hex.replace('#', '');
+  const num = Number.parseInt(value, 16);
+  const r = (num >> 16) & 0xff;
+  const g = (num >> 8) & 0xff;
+  const b = num & 0xff;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}

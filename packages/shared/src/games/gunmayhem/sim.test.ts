@@ -496,9 +496,13 @@ describe('knockback tuning (#32)', () => {
 
     const shooter = state.players[0]!;
     const victim = state.players[1]!;
-    shooter.x = 200;
+    // Start close enough to the blast line that this measures launch distance,
+    // not the separate hard KO at 100 damage. The old x=200 setup put the
+    // boundary 1,275 units away, so both tunings reached 100 after nine pistol
+    // hits and died through the damage rule before knockback could differ.
+    victim.x = constMod.BLAST_RIGHT - 600;
+    shooter.x = victim.x - 45;
     shooter.facing = 1;
-    victim.x = shooter.x + 45;
     victim.y = shooter.y;
     victim.invuln = 0;
 
