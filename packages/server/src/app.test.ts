@@ -705,6 +705,37 @@ describe('match', () => {
     });
   }, 15_000);
 
+  it('runs Broken Telephone with two players and keeps prompts private during handoff', async () => {
+    const [host, guest] = await makeLobby(2);
+    host!.send({ t: 'game', gameId: 'telephone' });
+    host!.send({ t: 'settings', settings: { writeSeconds: 15, drawSeconds: 20, voteSeconds: 5 } });
+    host!.send({ t: 'start' });
+    await Promise.all([host!.next('matchStarted'), guest!.next('matchStarted')]);
+    await host!.waitFor(
+      (message): message is Extract<ServerMessage, { t: 'snapshot' }> =>
+        message.t === 'snapshot' && message.snap.game === 'telephone' && message.snap.phase === 'contributing' && message.snap.task === 'prompt',
+    );
+
+    host!.send({ t: 'input', i: { k: 'submitText', text: 'host-private-prompt' } });
+    guest!.send({ t: 'input', i: { k: 'submitText', text: 'guest-private-prompt' } });
+
+    const [hostPrivate, guestPrivate] = await Promise.all([host, guest].map((client) => client!.waitFor(
+      (message): message is Extract<ServerMessage, { t: 'private' }> => {
+        if (message.t !== 'private') return false;
+        const value = message.data as { task?: unknown; previous?: { text?: unknown } } | null;
+        return value?.task === 'drawing' && typeof value.previous?.text === 'string';
+      },
+    )));
+    const hostText = (hostPrivate.data as { previous: { text: string } }).previous.text;
+    const guestText = (guestPrivate.data as { previous: { text: string } }).previous.text;
+    expect(hostText).toBe('guest-private-prompt');
+    expect(guestText).toBe('host-private-prompt');
+
+    const latestSnapshot = [...host!.received].reverse().find((message) => message.t === 'snapshot');
+    expect(JSON.stringify(latestSnapshot)).not.toContain('host-private-prompt');
+    expect(JSON.stringify(latestSnapshot)).not.toContain('guest-private-prompt');
+  }, 15_000);
+
   it('starts Meme Machine with two players', async () => {
     const [host, guest] = await makeLobby(2);
     host!.send({ t: 'game', gameId: 'memes' });
