@@ -82,6 +82,9 @@
 .telephone__album {
   width: min(100%, 900px);
   min-height: 0;
+  padding-right: calc(var(--lift-lg) + 2px);
+  padding-bottom: calc(var(--lift-lg) + 2px);
+  box-sizing: border-box;
 }
 
 .telephone__composer {
@@ -154,11 +157,12 @@
 }
 
 .telephone__draw {
+  width: min(100%, 1100px);
   height: 100%;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  grid-template-rows: auto auto minmax(0, 1fr);
   justify-items: stretch;
-  gap: clamp(6px, 1.3vh, 12px);
+  gap: clamp(9px, 1.5vh, 15px);
 }
 
 .telephone__draw > .eyebrow {
@@ -171,26 +175,46 @@
   overflow: auto;
 }
 
+.telephone__draw-stage {
+  width: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: clamp(9px, 1.5vh, 15px);
+}
+
+.telephone__draw-controls {
+  width: 100%;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: clamp(9px, 1.5vh, 15px);
+}
+
 .telephone__paper {
-  width: min(100%, 720px);
+  width: 100%;
   max-width: 100%;
   height: auto;
-  max-height: 100%;
+  max-height: calc(100% - 70px);
   aspect-ratio: 4 / 3;
-  margin-inline: auto;
-  align-self: center;
-  justify-self: center;
+  flex: none;
   box-sizing: border-box;
 }
 
 .telephone__draw .skribbl__tools {
   min-width: 0;
+  max-width: 100%;
+  flex: none;
   padding: 6px 8px;
+  box-sizing: border-box;
 }
 
-.telephone__draw > .btn {
+.telephone__draw-controls > .btn {
   min-width: 190px;
-  justify-self: center;
 }
 
 .telephone__waiting,
@@ -219,7 +243,7 @@
   width: min(100%, 1000px);
   display: flex;
   flex-direction: column;
-  gap: clamp(8px, 1.5vh, 14px);
+  gap: clamp(11px, 1.8vh, 18px);
 }
 
 .telephone__album-head {
@@ -237,7 +261,7 @@
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
   justify-items: center;
-  gap: clamp(8px, 1.5vh, 14px);
+  gap: clamp(11px, 1.8vh, 18px);
   animation: telephone-focus-in 360ms cubic-bezier(0.2, 0.9, 0.25, 1) both;
 }
 
@@ -274,7 +298,7 @@
   height: 100%;
   padding: clamp(9px, 1.8vh, 14px);
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   align-items: center;
 }
 
@@ -302,16 +326,6 @@
   font: 800 clamp(1.25rem, 5vw, 2.8rem)/1.25 var(--font-display);
 }
 
-.telephone__step-award {
-  position: absolute;
-  inset-block-start: 10px;
-  inset-inline-end: 12px;
-  padding: 5px 9px;
-  border: 2px solid var(--ink);
-  border-radius: 999px;
-  background: var(--green);
-}
-
 .telephone__focus-action {
   width: min(100%, 680px);
   flex: none;
@@ -323,9 +337,101 @@
   display: none;
 }
 
-.telephone__focus-action .memes__vote,
-.telephone__focus-action .memes__result {
-  width: 100%;
+.telephone__heart-faces {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  direction: ltr;
+  padding: 4px 8px;
+}
+
+.telephone__heart-faces > span {
+  margin-inline-end: 5px;
+  color: var(--red);
+  font-size: 1.45rem;
+  line-height: 1;
+  text-shadow: 2px 2px 0 var(--ink);
+}
+
+.telephone__heart-faces > div {
+  flex: none;
+  filter: drop-shadow(2px 2px 0 var(--ink));
+}
+
+.telephone__heart-faces > div + div {
+  margin-inline-start: -7px;
+}
+
+.telephone__heart-button {
+  min-width: 190px;
+  min-height: 58px;
+  padding: 8px 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  color: var(--ink);
+  font: 900 1rem/1 var(--font-display);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.telephone__heart-button span {
+  color: var(--red);
+  font-size: 2rem;
+  line-height: 1;
+  transition: transform 160ms cubic-bezier(0.2, 1.5, 0.4, 1);
+}
+
+.telephone__heart-button--on {
+  color: #fff;
+  background: var(--red);
+  transform: translate(var(--lift), var(--lift));
+  box-shadow: none;
+}
+
+.telephone__heart-button--on span {
+  color: #fff;
+  transform: scale(1.18);
+}
+
+.telephone__heart-own {
+  margin: 0;
+  padding: 11px 18px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--yellow);
+  box-shadow: var(--shadow-sm);
+  font: 800 0.95rem/1.2 var(--font-display);
+  text-align: center;
+}
+
+.telephone__heart-result {
+  min-width: min(100%, 260px);
+  padding: 10px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  border: 3px solid var(--ink);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: winner-pop 320ms both;
+}
+
+.telephone__heart-result output {
+  color: var(--red);
+  font: 900 clamp(1.5rem, 5vw, 2.25rem)/1 var(--font-display);
+}
+
+.telephone__heart-result strong {
+  color: color-mix(in srgb, var(--green) 75%, var(--ink));
 }
 
 .telephone__complete {
@@ -342,7 +448,7 @@
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   grid-auto-rows: minmax(0, 1fr);
-  gap: clamp(5px, 1vw, 10px);
+  gap: clamp(9px, 1.2vw, 14px);
 }
 
 .telephone__reveal-item--compact {
@@ -351,8 +457,8 @@
   padding-block: 6px;
   padding-inline: 34px 8px;
   display: grid;
-  grid-template-columns: minmax(74px, 0.8fr) minmax(0, 1.5fr);
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(108px, 0.9fr) minmax(0, 1.5fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: 2px 8px;
   border-width: 2px;
   border-radius: var(--radius-sm);
@@ -382,6 +488,8 @@
 
 .telephone__reveal-item--compact .telephone__reveal-author {
   grid-column: 1;
+  grid-row: 2;
+  align-self: start;
   min-height: 0;
   margin: 0;
   gap: 5px;
@@ -404,7 +512,7 @@
 .telephone__reveal-item--compact .telephone__preview-canvas,
 .telephone__reveal-item--compact .telephone__reveal-text {
   grid-column: 2;
-  grid-row: 1 / -1;
+  grid-row: 1 / 3;
   align-self: center;
 }
 
@@ -427,11 +535,26 @@
   line-height: 1.12;
 }
 
-.telephone__reveal-item--compact .telephone__step-award {
-  inset-block-start: 4px;
-  inset-inline-end: 4px;
-  padding: 2px 5px;
-  font-size: 10px;
+.telephone__heart-faces--compact {
+  position: static;
+  min-height: 20px;
+  width: 100%;
+  max-width: 100%;
+  grid-column: 2;
+  grid-row: 3;
+  justify-content: flex-end;
+  overflow: hidden;
+  padding: 0;
+}
+
+.telephone__heart-faces--compact > span {
+  margin-inline-end: 2px;
+  font-size: 0.9rem;
+  text-shadow: 1px 1px 0 var(--ink);
+}
+
+.telephone__heart-faces--compact > div + div {
+  margin-inline-start: -9px;
 }
 
 @keyframes telephone-focus-in {
@@ -495,28 +618,25 @@
   .telephone__top strong { font-size: 0.82rem; }
   .telephone__clock { width: 40px; height: 40px; border-width: 2px; font-size: 1rem; }
   .telephone__phase { padding: 7px; padding-block-end: max(7px, env(safe-area-inset-bottom)); }
-  .telephone__composer { gap: 9px; }
+  .telephone__composer { gap: 12px; }
   .telephone__composer textarea { min-height: 100px; padding: 12px; }
   .telephone__composer-foot .btn { min-height: 44px; }
-  .telephone__draw { gap: 5px; }
+  .telephone__draw { gap: 9px; }
   .telephone__draw .skribbl__tools { padding: 4px; }
   .telephone__draw .skribbl__acts { flex-wrap: nowrap; gap: 3px; }
   .telephone__draw .skribbl__act { min-height: 40px; padding-inline: 7px; }
-  .telephone__draw > .btn { min-height: 42px; padding-block: 7px; }
-  .telephone__album { gap: 6px; }
+  .telephone__draw-controls > .btn { min-height: 42px; padding-block: 7px; }
+  .telephone__album { gap: 9px; }
   .telephone__album-head h1 { font-size: clamp(1.25rem, 6vw, 1.65rem); }
-  .telephone__focus { gap: 7px; }
+  .telephone__focus { gap: 10px; }
   .telephone__focus-label { padding: 4px 9px; font-size: 0.8rem; }
   .telephone__reveal-item--focus { padding: 7px; }
   .telephone__reveal-item--focus .telephone__preview-canvas { width: min(100%, calc(38dvh * 4 / 3)); max-height: 38dvh; }
   .telephone__reveal-author { min-height: 30px; margin-block-end: 4px; font-size: 0.82rem; }
-  .telephone__focus-action .memes__vote { gap: 5px; }
-  .telephone__focus-action .memes__vote h2 { font-size: 1rem; }
-  .telephone__focus-action .memes__vote-buttons { gap: 5px; }
-  .telephone__focus-action .memes__vote-button { min-height: 44px; padding: 4px; }
-  .telephone__focus-action .memes__result { gap: 7px; }
+  .telephone__heart-button { min-height: 52px; }
+  .telephone__heart-result { padding-block: 7px; }
   .telephone__complete { padding: 6px 12px; }
-  .telephone__lineage { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .telephone__lineage { grid-template-columns: minmax(0, 1fr); gap: 7px; }
   .telephone__reveal-item--compact { padding-block: 3px; }
 }
 
@@ -524,14 +644,25 @@
   .telephone__top { min-height: 52px; padding-block: 4px; }
   .telephone__clock { width: 36px; height: 36px; }
   .telephone__phase { padding: 5px; }
-  .telephone__draw { grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr) auto; }
+  .telephone__draw { grid-template-rows: auto minmax(0, 1fr); gap: 5px; }
   .telephone__draw > .eyebrow { display: none; }
-  .telephone__draw > .telephone__previous-text { grid-column: 1 / -1; grid-row: 1; }
-  .telephone__paper { width: auto; height: 100%; grid-column: 1; grid-row: 2 / -1; }
-  .telephone__draw .skribbl__tools { grid-column: 2; grid-row: 2; align-self: end; max-width: 330px; }
-  .telephone__draw > .btn { grid-column: 2; grid-row: 3; align-self: start; }
+  .telephone__draw > .telephone__previous-text { grid-row: 1; max-height: 12dvh; padding-block: 5px; }
+  .telephone__draw-stage { grid-row: 2; gap: 5px; }
+  .telephone__paper { width: auto; height: calc(100% - 67px); max-height: none; }
+  .telephone__draw-controls { gap: 5px; flex-wrap: nowrap; }
+  .telephone__draw .skribbl__tools { position: relative; z-index: auto; grid-area: auto; width: auto; margin: 0; align-self: auto; }
   .telephone__reveal-item--focus .telephone__preview-canvas { width: min(100%, calc(42dvh * 4 / 3)); max-height: 42dvh; }
   .telephone__lineage { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Wide viewports are height-bound. Size the 4:3 sheet from the available
+   drawing row there; portrait screens size it from their full width instead. */
+@media (min-aspect-ratio: 4 / 3) and (min-height: 561px) {
+  .telephone__paper {
+    width: auto;
+    height: calc(100% - 70px);
+    max-height: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

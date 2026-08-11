@@ -11,6 +11,8 @@ interface Props {
   onColor: (index: number) => void;
   onSize: (index: number) => void;
   onMode: (mode: 'pen' | 'fill') => void;
+  onUndo?: () => void;
+  onClear?: () => void;
 }
 
 /**
@@ -19,7 +21,7 @@ interface Props {
  * Compact by default with pressable active color indicator. Clicking opens
  * an expandable sticker popover containing color palette & brush thickness options.
  */
-export function Toolbar({ color, size, mode, onColor, onSize, onMode }: Props): JSX.Element {
+export function Toolbar({ color, size, mode, onColor, onSize, onMode, onUndo, onClear }: Props): JSX.Element {
   const [pickerOpen, setPickerOpen] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const t = useT();
@@ -159,6 +161,7 @@ export function Toolbar({ color, size, mode, onColor, onSize, onMode }: Props): 
           className="skribbl__act"
           onClick={() => {
             sfx.click();
+            onUndo?.();
             socket.sendInputReliable({ k: 'undo' });
           }}
         >
@@ -169,6 +172,7 @@ export function Toolbar({ color, size, mode, onColor, onSize, onMode }: Props): 
           className="skribbl__act skribbl__act--danger"
           onClick={() => {
             sfx.click();
+            onClear?.();
             socket.sendInputReliable({ k: 'clear' });
           }}
         >

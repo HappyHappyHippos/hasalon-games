@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
 import { TICK_RATE, colorFor, type RoomView } from '@mg/shared';
 import { DEFAULT_COLOR, DEFAULT_SIZE, OP_CLEAR } from '@mg/shared/skribbl';
-import type { TelephonePrevious, TelephoneRevealStep, TelephoneVote } from '@mg/shared/telephone';
+import type { TelephonePrevious, TelephonePrivate, TelephoneRevealStep } from '@mg/shared/telephone';
 import { useStore } from '../../store';
 import { useT } from '../../strings';
 import { socket } from '../../net/socket';
@@ -12,9 +12,8 @@ import { VoiceBar } from '../../ui/VoiceBar';
 import { InkSurface } from '../skribbl/InkSurface';
 import { attachDrawInput, type DrawInput } from '../skribbl/input';
 import { Toolbar } from '../skribbl/Toolbar';
-import { VotePanel } from '../memes/VotePanel';
-import { RatingResultCard } from '../memes/ResultCard';
 import { connectTelephoneDraftInk } from './draftBus';
+import { LocalInkHistory } from './localInk';
 import './telephone.css';
 
 function DrawingPreview({ ink, className = '' }: { ink: readonly number[]; className?: string }): JSX.Element {
@@ -64,7 +63,9 @@ function TextComposer({ task, previous, initial, submitted }: { task: 'prompt' |
 function DrawingComposer({ previous, submitted }: { previous: TelephonePrevious | null; submitted: boolean }): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const hitRef = useRef<HTMLDivElement>(null);
+  const surfaceRef = useRef<InkSurface | null>(null);
   const inputRef = useRef<DrawInput | null>(null);
+  const historyRef = useRef(new LocalInkHistory());
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [size, setSize] = useState(DEFAULT_SIZE);
   const [mode, setMode] = useState<'pen' | 'fill'>('pen');
@@ -72,12 +73,16 @@ function DrawingComposer({ previous, submitted }: { previous: TelephonePrevious 
   useEffect(() => {
     if (!canvasRef.current || !hitRef.current) return;
     const ink = new InkSurface(canvasRef.current);
+    surfaceRef.current = ink;
     ink.start();
-    const disconnectDraft = connectTelephoneDraftInk((restored) => ink.apply([OP_CLEAR, ...restored]));
-    const input = attachDrawInput(hitRef.current, ink);
+    const disconnectDraft = connectTelephoneDraftInk((restored) => {
+      historyRef.current.replace(restored);
+      ink.apply([OP_CLEAR, ...restored]);
+    });
+    const input = attachDrawInput(hitRef.current, ink, (ops) => historyRef.current.append(ops));
     input.enabled = true;
     inputRef.current = input;
-    return () => { disconnectDraft(); input.destroy(); ink.stop(); inputRef.current = null; };
+    return () => { disconnectDraft(); input.destroy(); ink.stop(); surfaceRef.current = null; inputRef.current = null; };
   }, []);
   useEffect(() => {
     if (!inputRef.current) return;
@@ -88,9 +93,15 @@ function DrawingComposer({ previous, submitted }: { previous: TelephonePrevious 
     <section className="telephone__draw">
       <p className="eyebrow">{t.telephoneDrawTitle}</p>
       <Previous value={previous} />
-      <div className="telephone__paper" ref={hitRef}><canvas ref={canvasRef} /></div>
-      <Toolbar color={color} size={size} mode={mode} onColor={setColor} onSize={setSize} onMode={setMode} />
-      <Button size="lg" tone="var(--violet)" onClick={() => socket.sendInputReliable({ k: 'submitDrawing' })}>{t.telephoneSubmitDrawing}</Button>
+      <div className="telephone__draw-stage">
+        <div className="telephone__paper" ref={hitRef}><canvas ref={canvasRef} /></div>
+        <div className="telephone__draw-controls">
+          <Toolbar color={color} size={size} mode={mode} onColor={setColor} onSize={setSize} onMode={setMode}
+            onUndo={() => surfaceRef.current?.apply(historyRef.current.undo())}
+            onClear={() => surfaceRef.current?.apply(historyRef.current.clear())} />
+          <Button size="lg" tone="var(--violet)" onClick={() => socket.sendInputReliable({ k: 'submitDrawing' })}>{t.telephoneSubmitDrawing}</Button>
+        </div>
+      </div>
     </section>
   );
 }
@@ -99,6 +110,43 @@ function revealLabel(step: TelephoneRevealStep, t: ReturnType<typeof useT>): str
   if (step.kind === 'prompt') return t.telephoneOriginalPrompt;
   if (step.kind === 'drawing') return t.telephoneDrawingReveal;
   return t.telephoneGuessReveal;
+}
+
+function HeartFaces({ seats, room, compact = false }: { seats: readonly number[]; room: RoomView; compact?: boolean }): JSX.Element | null {
+  const t = useT();
+  if (seats.length === 0) return null;
+  return (
+    <div className={`telephone__heart-faces${compact ? ' telephone__heart-faces--compact' : ''}`} aria-label={t.telephoneLikeCount(seats.length)}>
+      <span aria-hidden="true">♥</span>
+      {seats.map((seat) => {
+        const player = room.players.find((candidate) => candidate.seat === seat);
+        return player ? <div key={seat} title={player.name}><Avatar colorIndex={player.colorIndex} hat={player.hat} face={player.face} name={player.name} size={compact ? 22 : 30} /></div> : null;
+      })}
+    </div>
+  );
+}
+
+function HeartPanel({ mine }: { mine: TelephonePrivate | null }): JSX.Element {
+  const t = useT();
+  if (mine?.isAuthor) return <p className="telephone__heart-own">{t.telephoneYours}</p>;
+  const liked = mine?.liked ?? false;
+  return (
+    <button type="button" className={`telephone__heart-button${liked ? ' telephone__heart-button--on' : ''}`}
+      aria-pressed={liked} onClick={() => socket.sendInputReliable({ k: 'like', on: !liked })}>
+      <span aria-hidden="true">♥</span>
+      <b>{liked ? t.telephoneUnlike : t.telephoneLike}</b>
+    </button>
+  );
+}
+
+function HeartResult({ step }: { step: TelephoneRevealStep }): JSX.Element {
+  const t = useT();
+  return (
+    <section className="telephone__heart-result">
+      <output><span aria-hidden="true">♥</span> {step.likedBy.length}</output>
+      <strong>{t.telephoneAward(step.award ?? 0)}</strong>
+    </section>
+  );
 }
 
 function RevealItem({ step, room, compact = false, index = 0 }: { step: TelephoneRevealStep; room: RoomView; compact?: boolean; index?: number }): JSX.Element {
@@ -112,7 +160,8 @@ function RevealItem({ step, room, compact = false, index = 0 }: { step: Telephon
         {author ? <><Avatar colorIndex={author.colorIndex} hat={author.hat} face={author.face} name={author.name} size={36} /><strong style={{ color: colorFor(author.colorIndex) }}>{author.name}</strong></> : <strong>{t.telephoneMysteryArtist}</strong>}
       </div>
       {step.kind === 'drawing' ? <DrawingPreview ink={step.ink ?? []} /> : <p className="telephone__reveal-text" dir="auto">{step.text || t.telephoneNoText}</p>}
-      {(step.award ?? 0) > 0 && <b className="telephone__step-award">+{step.award}</b>}
+      {!compact && <HeartFaces seats={step.likedBy} room={room} />}
+      {compact && <HeartFaces seats={step.likedBy} room={room} compact />}
     </article>
   );
 }
@@ -124,7 +173,7 @@ function Reveal({ room, mySeat: _mySeat }: { room: RoomView; mySeat: number }): 
   if (!view) return <div className="telephone__waiting"><h2>{t.telephoneRevealTitle}</h2></div>;
   const current = view.revealed[view.revealed.length - 1];
   const currentIndex = view.revealed.length - 1;
-  const result = view.phase === 'result' && current?.kind === 'drawing';
+  const result = view.phase === 'result' && current;
   const complete = view.phase === 'chainComplete';
   return (
     <section className={`telephone__album${complete ? ' telephone__album--complete' : ' telephone__album--focus'}`} aria-live="polite">
@@ -147,8 +196,8 @@ function Reveal({ room, mySeat: _mySeat }: { room: RoomView; mySeat: number }): 
           </div>
           <RevealItem step={current} room={room} index={currentIndex} />
           <div className="telephone__focus-action">
-            {view.phase === 'voting' && current.kind === 'drawing' && <VotePanel stage={{ ballots: view.ballots, eligible: view.eligible }} mine={mine} labels={[t.telephoneGood, t.telephoneMeh, t.telephoneBad]} title={t.telephoneVoteTitle} yours={t.telephoneYours} ballotsText={t.telephoneBallots} onVote={(vote: TelephoneVote) => socket.sendInputReliable({ k: 'vote', v: vote })} />}
-            {result && current.tally && <RatingResultCard room={room} authorSeat={current.authorSeat} tally={current.tally} award={current.award ?? 0} labels={[t.telephoneGood, t.telephoneMeh, t.telephoneBad]} byText={t.telephoneBy} awardText={t.telephoneAward} />}
+            {view.phase === 'voting' && <HeartPanel mine={mine} />}
+            {result && <HeartResult step={current} />}
           </div>
         </div>
       ) : null}
