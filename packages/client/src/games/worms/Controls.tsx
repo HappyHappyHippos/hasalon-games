@@ -1,5 +1,7 @@
-import { useRef, type JSX } from 'react';
+import { useCallback, useEffect, useRef, type JSX } from 'react';
 import { IN_AIM_DOWN, IN_AIM_UP, IN_FIRE, IN_JUMP, IN_LEFT, IN_RIGHT } from '@mg/shared/worms';
+import { Thumbstick, type StickVector } from '../../ui/Thumbstick';
+import { newStickState, stickToBits } from './stickBits';
 
 interface Props {
   onButton: (bit: number, down: boolean) => void;
@@ -7,28 +9,65 @@ interface Props {
   targeting: boolean;
 }
 
+const STICK_BITS = [IN_LEFT, IN_RIGHT, IN_JUMP];
+
 /**
- * On-screen controls.
- *
- * `meta.touchSupported` is an unenforced claim — nothing in the client reads it
- * — so this is the thing that actually makes Worms playable on a phone, which
- * is most of the phones this site runs on.
- *
- * The layout follows the turn: walking on the left thumb, aiming and firing on
- * the right, and nothing in the middle, because the middle is where you drag
- * the camera. Fire is deliberately the biggest target on the screen: it is
- * hold-to-charge, so a thumb that slips off it mid-charge fires early, and
- * firing early is the single most annoying way to lose a turn.
+ * On-screen controls for Worms: a thumbstick on the left for movement and jumping,
+ * and aim/fire controls on the right thumb.
  */
 export function Controls({ onButton, targeting }: Props): JSX.Element | null {
+  const stick = useRef(newStickState());
+  const stickBits = useRef(0);
+  const lastVector = useRef<StickVector | null>(null);
+
+  useEffect(() => {
+    return () => {
+      for (const bit of STICK_BITS) {
+        if ((stickBits.current & bit) !== 0) {
+          onButton(bit, false);
+        }
+      }
+      stickBits.current = 0;
+    };
+  }, [onButton]);
+
+  const applyVector = useCallback(
+    (vector: StickVector) => {
+      const next = stickToBits(vector, stick.current, performance.now());
+      const previous = stickBits.current;
+      if (next === previous) return;
+      stickBits.current = next;
+      for (const bit of STICK_BITS) {
+        const was = (previous & bit) !== 0;
+        const is = (next & bit) !== 0;
+        if (was !== is) onButton(bit, is);
+      }
+    },
+    [onButton],
+  );
+
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      if (lastVector.current) applyVector(lastVector.current);
+    }, 16);
+    return () => window.clearInterval(timer);
+  }, [applyVector]);
+
+  const onMove = useCallback(
+    (vector: StickVector) => {
+      if (vector.x === 0 && vector.y === 0) lastVector.current = null;
+      else lastVector.current = vector;
+      applyVector(vector);
+    },
+    [applyVector],
+  );
+
   if (targeting) return null;
 
   return (
     <div className="worms__pad">
       <div className="worms__pad-side worms__pad-side--walk">
-        <HoldButton bit={IN_LEFT} label="◀" onButton={onButton} />
-        <HoldButton bit={IN_JUMP} label="⤴" onButton={onButton} />
-        <HoldButton bit={IN_RIGHT} label="▶" onButton={onButton} />
+        <Thumbstick className="stick--pad" onMove={onMove} />
       </div>
       <div className="worms__pad-side worms__pad-side--aim">
         <div className="worms__pad-aim">
@@ -43,11 +82,6 @@ export function Controls({ onButton, targeting }: Props): JSX.Element | null {
 
 /**
  * A button that reports down and up.
- *
- * `setPointerCapture` is what makes a hold survive the thumb drifting off the
- * button, which on a phone it always does — without it the browser retargets
- * the pointer, `pointerup` never arrives here, and the button stays stuck down
- * for the rest of the turn.
  */
 function HoldButton({
   bit,

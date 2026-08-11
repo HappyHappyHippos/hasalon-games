@@ -46,7 +46,7 @@ export const WORM_HALF_H = 12;
 export const WORM_HIT_R = 13;
 
 export const WALK_SPEED = 82;
-export const JUMP_VY = -300;
+export const JUMP_VY = -350;
 export const JUMP_VX = 105;
 
 /**
