@@ -2892,9 +2892,6 @@ strong,
   .netbadge__jitter {
     display: none;
   }
-  .worms__banner {
-    inset-block-start: calc(48px + env(safe-area-inset-top));
-  }
 }
 
 /* Landscape phone: ~350-390px of height total, so every row the roster wraps
@@ -4875,27 +4872,24 @@ strong,
 }
 
 .worms__banner {
-  position: absolute;
-  inset-block-start: 10px;
-  inset-inline: 0;
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 14px;
-  pointer-events: none;
-  z-index: 3;
+  gap: 6px;
+  flex: none;
+  pointer-events: auto;
 }
 
 .worms__clock {
-  min-width: 46px;
-  padding: 2px 10px;
-  border: var(--outline);
+  min-width: 34px;
+  padding: 2px 7px;
+  border: 2px solid var(--ink);
   border-radius: var(--radius-sm);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 22px;
+  font-size: 15px;
+  line-height: 1.2;
   text-align: center;
   color: var(--ink);
 }
@@ -4906,23 +4900,24 @@ strong,
 .worms__wind {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px 10px;
-  border: var(--outline);
+  gap: 5px;
+  padding: 2px 7px;
+  border: 2px solid var(--ink);
   border-radius: var(--radius-sm);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
 }
 .worms__wind-label {
-  font-size: 11px;
+  font-size: 10px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   color: var(--ink-soft);
 }
 .worms__wind-track {
   position: relative;
-  width: 92px;
-  height: 8px;
+  width: 50px;
+  height: 6px;
   border-radius: 999px;
   background: var(--paper-2);
   overflow: hidden;
@@ -4937,15 +4932,16 @@ strong,
 }
 
 .worms__cue {
-  padding: 3px 12px;
-  border: var(--outline);
+  padding: 2px 8px;
+  border: 2px solid var(--ink);
   border-radius: 999px;
   background: var(--red);
   color: var(--surface);
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 14px;
+  font-size: 12px;
   box-shadow: var(--shadow-sm);
+  white-space: nowrap;
 }
 
 /* The weapon strip. Ten items, so it scrolls rather than shrinking below a

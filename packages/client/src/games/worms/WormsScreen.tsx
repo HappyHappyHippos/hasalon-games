@@ -115,7 +115,12 @@ export function WormsScreen({ room, mySeat }: Props): JSX.Element {
       room={room}
       mySeat={mySeat}
       canvasRef={canvasRef}
-      hud={<WormsHud room={room} mySeat={mySeat} />}
+      hud={
+        <>
+          <WormsBanner mySeat={mySeat} />
+          <WormsHud room={room} mySeat={mySeat} />
+        </>
+      }
       controls={
         <>
           <canvas
@@ -129,7 +134,6 @@ export function WormsScreen({ room, mySeat }: Props): JSX.Element {
             onPointerCancel={onPointerUp}
             onWheel={onWheel}
           />
-          <WormsBanner mySeat={mySeat} />
           {mySeat >= 0 && showTouch && myTurn && (
             <Controls
               targeting={targeting}
