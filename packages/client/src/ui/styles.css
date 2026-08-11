@@ -4944,71 +4944,229 @@ strong,
   white-space: nowrap;
 }
 
-/* The weapon strip. Ten items, so it scrolls rather than shrinking below a
-   thumb-sized target on a phone.
-
-   Centred with `inset-inline: 0` and an auto inline margin rather than the
-   usual `inset-inline-start: 50%` plus `translateX(-50%)`. Those two do not
-   compose: the offset is logical and flips in Hebrew while the transform is
-   physical and does not, so in RTL the strip left the screen entirely. */
-.worms__weapons {
-  position: absolute;
-  inset-block-end: 10px;
-  inset-inline: 0;
-  margin-inline: auto;
-  width: fit-content;
-  display: flex;
-  gap: 6px;
-  max-width: min(96%, 620px);
-  overflow-x: auto;
-  padding: 6px;
-  border: var(--outline);
-  border-radius: var(--radius);
-  background: rgba(253, 246, 232, 0.92);
-  box-shadow: var(--shadow-sm);
+/* Active Weapon Trigger Button & Selector Bar */
+.worms__weapon-trigger {
   pointer-events: auto;
-  scrollbar-width: none;
-}
-.worms__weapons::-webkit-scrollbar {
-  display: none;
-}
-
-.worms__weapon {
   position: relative;
-  flex: 0 0 auto;
-  width: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   height: 46px;
-  border: 2px solid var(--ink);
+  padding: 0 10px;
+  border: 3px solid rgba(255, 255, 255, 0.85);
   border-radius: var(--radius-sm);
   background: var(--surface);
-  font-size: 20px;
-  line-height: 1;
+  color: var(--ink);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 14px;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
-.worms__weapon--on {
+.worms__weapon-trigger:active {
+  transform: translate(1px, 1px);
+  background: var(--yellow);
+}
+.worms__weapon-trigger-ammo {
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 11px;
+  background: var(--yellow);
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--ink);
+}
+.worms__weapon-trigger-arrow {
+  font-size: 10px;
+  color: var(--ink-soft);
+}
+
+.worms__desktop-trigger-bar {
+  position: absolute;
+  inset-block-end: 14px;
+  inset-inline-end: 14px;
+  z-index: 5;
+  pointer-events: auto;
+}
+
+/* Weapon Selector Modal Overlay */
+.worms__picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.worms__picker-panel {
+  width: 100%;
+  max-width: 520px;
+  max-height: 85vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border: var(--outline);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.worms__picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2px solid var(--paper-3);
+  padding-bottom: 8px;
+}
+
+.worms__picker-title {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 0;
+}
+
+.worms__picker-close {
+  width: 32px;
+  height: 32px;
+  border: var(--outline);
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--ink);
+  font-weight: 800;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.worms__picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.worms__picker-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 2px solid var(--ink-soft);
+  border-radius: var(--radius-sm);
+  background: var(--paper);
+  color: var(--ink);
+  cursor: pointer;
+  text-align: start;
+  transition: all 120ms ease;
+}
+
+.worms__picker-card:hover:not(:disabled) {
+  border-color: var(--ink);
+  background: var(--yellow);
+  transform: translateY(-1px);
+}
+
+.worms__picker-card--selected {
+  border-color: var(--ink);
   background: var(--yellow);
   box-shadow: var(--shadow-sm);
 }
-.worms__weapon:disabled {
-  opacity: 0.4;
-  cursor: default;
+
+.worms__picker-card--empty {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
-.worms__weapon-key {
-  position: absolute;
-  inset-block-start: 1px;
-  inset-inline-start: 3px;
-  font-family: var(--font-ui);
-  font-size: 9px;
-  font-weight: 700;
-  color: var(--ink-soft);
+
+.worms__picker-card-icon {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ink);
 }
-.worms__weapon-ammo {
-  position: absolute;
-  inset-block-end: 1px;
-  inset-inline-end: 3px;
-  font-family: var(--font-ui);
-  font-size: 10px;
+
+.worms__picker-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.worms__picker-card-name {
+  font-family: var(--font-display);
   font-weight: 800;
+  font-size: 13px;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.worms__picker-card-type {
+  font-size: 10px;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
+.worms__picker-card-ammo {
+  flex: none;
+  font-family: var(--font-ui);
+  font-weight: 800;
+  font-size: 12px;
+  padding: 1px 6px;
+  background: var(--surface);
+  border: 1px solid var(--ink);
+  border-radius: 999px;
+}
+
+.worms__picker-info {
+  background: var(--paper-2);
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.worms__picker-info-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.worms__picker-info-name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.worms__picker-info-badge {
+  margin-inline-start: auto;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--yellow);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--ink);
+}
+
+.worms__picker-info-desc {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
   color: var(--ink);
 }
 

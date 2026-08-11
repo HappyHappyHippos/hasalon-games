@@ -1,21 +1,39 @@
 import { useCallback, useEffect, useRef, type JSX } from 'react';
-import { IN_AIM_DOWN, IN_AIM_UP, IN_FIRE, IN_JUMP, IN_LEFT, IN_RIGHT } from '@mg/shared/worms';
+import {
+  IN_AIM_DOWN,
+  IN_AIM_UP,
+  IN_FIRE,
+  IN_JUMP,
+  IN_LEFT,
+  IN_RIGHT,
+  type WormsWeaponId,
+} from '@mg/shared/worms';
 import { Thumbstick, type StickVector } from '../../ui/Thumbstick';
 import { newStickState, stickToBits } from './stickBits';
+import { WormsWeaponIcon } from './WormsWeaponIcons';
 
 interface Props {
   onButton: (bit: number, down: boolean) => void;
   /** Hidden while a map-targeting weapon wants the whole screen for aiming. */
   targeting: boolean;
+  currentWeapon: WormsWeaponId;
+  ammo: Record<string, number>;
+  onOpenPicker: () => void;
 }
 
 const STICK_BITS = [IN_LEFT, IN_RIGHT, IN_JUMP];
 
 /**
  * On-screen controls for Worms: a thumbstick on the left for movement and jumping,
- * and aim/fire controls on the right thumb.
+ * aim/fire controls and weapon selector button on the right thumb.
  */
-export function Controls({ onButton, targeting }: Props): JSX.Element | null {
+export function Controls({
+  onButton,
+  targeting,
+  currentWeapon,
+  ammo,
+  onOpenPicker,
+}: Props): JSX.Element | null {
   const stick = useRef(newStickState());
   const stickBits = useRef(0);
   const lastVector = useRef<StickVector | null>(null);
@@ -70,6 +88,19 @@ export function Controls({ onButton, targeting }: Props): JSX.Element | null {
         <Thumbstick className="stick--pad" onMove={onMove} />
       </div>
       <div className="worms__pad-side worms__pad-side--aim">
+        <button
+          type="button"
+          className="worms__weapon-trigger"
+          onClick={onOpenPicker}
+          aria-label="Select weapon"
+        >
+          <WormsWeaponIcon id={currentWeapon} size={24} />
+          <span className="worms__weapon-trigger-ammo">
+            {ammo[currentWeapon] !== undefined ? ammo[currentWeapon] : '∞'}
+          </span>
+          <span className="worms__weapon-trigger-arrow">▾</span>
+        </button>
+
         <div className="worms__pad-aim">
           <HoldButton bit={IN_AIM_UP} label="▲" onButton={onButton} />
           <HoldButton bit={IN_AIM_DOWN} label="▼" onButton={onButton} />

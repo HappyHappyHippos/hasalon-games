@@ -1,4 +1,4 @@
-import { useEffect, useRef, type JSX, type PointerEvent as ReactPointerEvent } from 'react';
+import { useState, useEffect, useRef, type JSX, type PointerEvent as ReactPointerEvent } from 'react';
 import { colorFor, type RoomView } from '@mg/shared';
 import { TICK_RATE } from '@mg/shared';
 import { WEAPONS, isWeaponId, weaponsFor, type WormsWeaponId } from '@mg/shared/worms';
@@ -11,6 +11,8 @@ import { useT } from '../../strings';
 import { WormsRenderer } from './Renderer';
 import { attachWormsInput } from './input';
 import { Controls } from './Controls';
+import { WeaponPickerModal } from './WeaponPickerModal';
+import { WormsWeaponIcon } from './WormsWeaponIcons';
 
 interface Props {
   room: RoomView;
@@ -22,17 +24,29 @@ export function WormsScreen({ room, mySeat }: Props): JSX.Element {
   const rendererRef = useRef<WormsRenderer | null>(null);
   const inputRef = useRef<ReturnType<typeof attachWormsInput> | null>(null);
   const showTouch = useShowTouchControls();
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const hud = useStore((s) => s.hud);
   const worms = hud.worms;
   const settings = room.settings.game === 'worms' ? room.settings : null;
-  const weapon = worms?.weapon ?? 'bazooka';
+  const weapon = (worms?.weapon ?? 'bazooka') as WormsWeaponId;
   const targeting = isWeaponId(weapon) ? WEAPONS[weapon].needsTarget === true : false;
   const myTurn = worms?.activeSeat === mySeat && mySeat >= 0;
 
-  // Constructed once per mount, deliberately: the renderer owns its animation
-  // frame, and rebuilding it whenever a prop changes would restart the loop
-  // several times a second. Live data reaches it through `setContext`.
+  // Key shortcuts (e.g. `Q` or `Tab`) open weapon picker modal
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent): void => {
+      if (!myTurn) return;
+      if (e.code === 'KeyQ' || e.code === 'Tab') {
+        e.preventDefault();
+        setPickerOpen((prev) => !prev);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [myTurn]);
+
+  // Constructed once per mount
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -71,14 +85,6 @@ export function WormsScreen({ room, mySeat }: Props): JSX.Element {
     rendererRef.current?.setContext({ mySeat, colorBySeat, nameBySeat, paused: room.paused });
   }, [room.players, room.paused, mySeat]);
 
-  /**
-   * Dragging pans; a tap on a map-targeting weapon places the mark.
-   *
-   * The distinction is the drag threshold, not the button: on a phone there is
-   * no second button, and requiring a long-press to pan would make inspecting
-   * the battlefield — the thing you spend a Worms turn doing — feel like a
-   * gesture you have to get right.
-   */
   const drag = useRef<{ id: number; x: number; y: number; moved: number } | null>(null);
 
   const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>): void => {
@@ -110,6 +116,8 @@ export function WormsScreen({ room, mySeat }: Props): JSX.Element {
     rendererRef.current?.zoomBy(event.deltaY < 0 ? 1.12 : 1 / 1.12, event.clientX, event.clientY);
   };
 
+  const selectableWeapons = weaponsFor(settings?.extrasEnabled ?? true);
+
   return (
     <Screen
       room={room}
@@ -124,9 +132,6 @@ export function WormsScreen({ room, mySeat }: Props): JSX.Element {
       controls={
         <>
           <canvas
-            // A transparent sheet over the arena purely to catch pointers. The
-            // real canvas belongs to `Screen`, and reaching into its ref from
-            // here to attach listeners would make two components own it.
             className="worms__pointer"
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
@@ -137,17 +142,37 @@ export function WormsScreen({ room, mySeat }: Props): JSX.Element {
           {mySeat >= 0 && showTouch && myTurn && (
             <Controls
               targeting={targeting}
+              currentWeapon={weapon}
+              ammo={worms?.ammo ?? {}}
+              onOpenPicker={() => setPickerOpen(true)}
               onButton={(bit, down) => inputRef.current?.setButton(bit, down)}
             />
           )}
-          {mySeat >= 0 && myTurn && (
-            <WeaponStrip
-              extrasEnabled={settings?.extrasEnabled ?? true}
-              current={weapon}
-              ammo={worms?.ammo ?? {}}
-              onPick={(id) => inputRef.current?.selectWeapon(id)}
-            />
+
+          {mySeat >= 0 && myTurn && !showTouch && (
+            <div className="worms__desktop-trigger-bar">
+              <button
+                type="button"
+                className="worms__weapon-trigger"
+                onClick={() => setPickerOpen(true)}
+              >
+                <WormsWeaponIcon id={weapon} size={24} />
+                <span className="worms__weapon-trigger-ammo">
+                  {worms?.ammo[weapon] !== undefined ? worms.ammo[weapon] : '∞'}
+                </span>
+                <span className="worms__weapon-trigger-arrow">▾</span>
+              </button>
+            </div>
           )}
+
+          <WeaponPickerModal
+            open={pickerOpen}
+            onClose={() => setPickerOpen(false)}
+            weapons={selectableWeapons}
+            current={weapon}
+            ammo={worms?.ammo ?? {}}
+            onPick={(id) => inputRef.current?.selectWeapon(id)}
+          />
         </>
       }
     />
@@ -177,9 +202,6 @@ function WormsBanner({ mySeat }: { mySeat: number }): JSX.Element | null {
             className="worms__wind-fill"
             style={{
               width: `${Math.abs(wind) * 50}%`,
-              // Physical left/right, and deliberately not logical: this is a
-              // compass, not text. It points the way the wind blows in the
-              // world, which does not mirror with the interface language.
               left: wind >= 0 ? '50%' : `${50 - Math.abs(wind) * 50}%`,
             }}
           />
@@ -190,73 +212,6 @@ function WormsBanner({ mySeat }: { mySeat: number }): JSX.Element | null {
     </div>
   );
 }
-
-function WeaponStrip({
-  extrasEnabled,
-  current,
-  ammo,
-  onPick,
-}: {
-  extrasEnabled: boolean;
-  current: string;
-  ammo: Record<string, number>;
-  onPick: (id: WormsWeaponId) => void;
-}): JSX.Element {
-  return (
-    <div className="worms__weapons">
-      {weaponsFor(extrasEnabled).map((id, index) => {
-        const left = ammo[id];
-        const empty = left !== undefined && left <= 0;
-        return (
-          <button
-            key={id}
-            type="button"
-            disabled={empty}
-            className={`worms__weapon${current === id ? ' worms__weapon--on' : ''}`}
-            onClick={() => onPick(id)}
-            aria-label={id}
-          >
-            <span className="worms__weapon-key" dir="ltr">
-              {(index + 1) % 10}
-            </span>
-            <span className="worms__weapon-icon" aria-hidden="true">
-              {WEAPON_GLYPHS[id]}
-            </span>
-            {left !== undefined && (
-              <span className="worms__weapon-ammo" dir="ltr">
-                {left}
-              </span>
-            )}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
- * One glyph per weapon.
- *
- * Text, not drawings, and that is a compromise rather than a preference — the
- * repo's convention is vector glyphs (see `tanks/Renderer.ts:drawPickupGlyph`)
- * precisely because emoji render differently on every platform. Ten weapons is
- * ten little icons to draw; this gets the strip working and readable, and the
- * next pass can replace it without touching anything else.
- */
-const WEAPON_GLYPHS: Record<WormsWeaponId, string> = {
-  bazooka: '🚀',
-  grenade: '💣',
-  shotgun: '🔫',
-  bat: '🏏',
-  cluster: '🎆',
-  dynamite: '🧨',
-  homing: '🎯',
-  mine: '💥',
-  airstrike: '✈️',
-  teleport: '🌀',
-  clusterlet: '·',
-  strikeBomb: '·',
-};
 
 function WormsHud({ room, mySeat }: Props): JSX.Element {
   const hud = useStore((s) => s.hud);
