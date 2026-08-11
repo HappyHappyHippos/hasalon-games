@@ -37,6 +37,10 @@ export interface HudPlayer {
   submitted?: boolean;
   /** Meme Machine: cast a ballot on the staged entry. */
   voted?: boolean;
+  /** Worms: total health across this seat's living worms. */
+  health?: number;
+  /** Worms: how many of this seat's worms are still alive. */
+  wormsLeft?: number;
 }
 
 /**
@@ -60,6 +64,30 @@ export interface SkribblHud {
   rounds: number;
 }
 
+/**
+ * Worms' slice of the HUD.
+ *
+ * The turn clock, the wind and the current weapon are all React, for the same
+ * reason Skribbl's word is: they are read, not watched, and `requestAnimationFrame`
+ * stops dead in a backgrounded tab. Coming back to find a frozen turn timer
+ * would be indistinguishable from the game having hung.
+ */
+export interface WormsHud {
+  /** Seat whose turn it is, or -1 between turns. */
+  activeSeat: number;
+  /** Ticks left on the turn or retreat clock. */
+  turnTicks: number;
+  /** -1000..1000. Sign is the direction it blows. */
+  wind: number;
+  weapon: string;
+  /** Seconds on the grenade fuse. */
+  fuse: number;
+  /** Shots left, for the weapons that are limited. */
+  ammo: Record<string, number>;
+  /** Charge on the shot being held, 0..1000. */
+  power: number;
+}
+
 /** Meme Machine is entirely React-rendered, so its latest whole stage view lives here. */
 export interface MemesHud {
   phaseTicks: number;
@@ -78,6 +106,7 @@ export interface Hud {
   countdown: number;
   players: HudPlayer[];
   skribbl?: SkribblHud;
+  worms?: WormsHud;
   memes?: MemesHud;
 }
 

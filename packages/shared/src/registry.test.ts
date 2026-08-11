@@ -27,7 +27,7 @@ function seatsFor(module: GameModule): GameSeat[] {
 }
 
 describe('registry', () => {
-  it('registers all six games', () => {
+  it('registers all seven games', () => {
     expect(ids.sort()).toEqual([
       'achtung',
       'gravity',
@@ -35,6 +35,7 @@ describe('registry', () => {
       'memes',
       'skribbl',
       'tanks',
+      'worms',
     ]);
   });
 
@@ -168,7 +169,15 @@ describe.each(ids)('%s', (id) => {
     const instance = module.create(seats, module.defaultConfig(seats.length), 7);
     if (!instance.privateFor) return;
 
-    expect(instance.privateFor('nobody')).toBeNull();
+    // Worms is the one deliberate exception, and it is worth being precise
+    // about why. What it puts on this channel is its crater list, which is not
+    // a secret — it is public state that happens to need the channel's
+    // *delivery* semantics (pushed on change, re-sent after a reconnect). Every
+    // client needs it to draw the ground, spectators included, and a spectator
+    // is not seated and is therefore indistinguishable in here from an unknown
+    // id. For every other game this channel carries something one player may
+    // see and the rest may not, and a stranger must get nothing.
+    if (id !== 'worms') expect(instance.privateFor('nobody')).toBeNull();
 
     // `Room` calls this once per player per broadcast and diffs the result, so
     // repeated calls must agree. A draining implementation would answer once

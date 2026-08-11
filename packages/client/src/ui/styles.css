@@ -4844,3 +4844,270 @@ strong,
   .roulette--settled .roulette__reels { animation: none !important; }
   .reel--landed .reel__strip { transition: none !important; }
 }
+
+/* ---------------------------------------------------------------------------
+ * Worms
+ *
+ * Almost all of the game is canvas, so this is the furniture around it: the
+ * turn clock and wind gauge, the weapon strip, the touch pad, and the invisible
+ * sheet that catches camera drags.
+ *
+ * Hard offset shadows only, and nothing rotated — see the note at the top of
+ * `tokens.css`. Layout is logical-property first; the two physical exceptions
+ * are commented where they are, and both are for the same reason: a compass and
+ * a thumbstick describe the *world*, which does not mirror with the language.
+ * ------------------------------------------------------------------------- */
+
+/* A transparent sheet over the arena, purely to catch pointers. The arena's own
+   canvas belongs to `Screen`, and attaching listeners to it from the game
+   screen would give one element two owners. */
+.worms__pointer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: auto;
+  touch-action: none;
+  background: transparent;
+}
+
+.worms__banner {
+  position: absolute;
+  inset-block-start: 10px;
+  inset-inline: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  pointer-events: none;
+}
+
+.worms__clock {
+  min-width: 46px;
+  padding: 2px 10px;
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 22px;
+  text-align: center;
+  color: var(--ink);
+}
+.worms__clock--mine {
+  background: var(--yellow);
+}
+
+.worms__wind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.worms__wind-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+.worms__wind-track {
+  position: relative;
+  width: 92px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--paper-2);
+  overflow: hidden;
+}
+.worms__wind-fill {
+  /* Physical `left`, deliberately. This is a compass needle: it points the way
+     the wind blows across the map, and the map does not flip in Hebrew. */
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: var(--orange);
+}
+
+.worms__cue {
+  padding: 3px 12px;
+  border: var(--outline);
+  border-radius: 999px;
+  background: var(--red);
+  color: var(--surface);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 14px;
+  box-shadow: var(--shadow-sm);
+}
+
+/* The weapon strip. Ten items, so it scrolls rather than shrinking below a
+   thumb-sized target on a phone.
+
+   Centred with `inset-inline: 0` and an auto inline margin rather than the
+   usual `inset-inline-start: 50%` plus `translateX(-50%)`. Those two do not
+   compose: the offset is logical and flips in Hebrew while the transform is
+   physical and does not, so in RTL the strip left the screen entirely. */
+.worms__weapons {
+  position: absolute;
+  inset-block-end: 10px;
+  inset-inline: 0;
+  margin-inline: auto;
+  width: fit-content;
+  display: flex;
+  gap: 6px;
+  max-width: min(96%, 620px);
+  overflow-x: auto;
+  padding: 6px;
+  border: var(--outline);
+  border-radius: var(--radius);
+  background: rgba(253, 246, 232, 0.92);
+  box-shadow: var(--shadow-sm);
+  pointer-events: auto;
+  scrollbar-width: none;
+}
+.worms__weapons::-webkit-scrollbar {
+  display: none;
+}
+
+.worms__weapon {
+  position: relative;
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  border: 2px solid var(--ink);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+.worms__weapon--on {
+  background: var(--yellow);
+  box-shadow: var(--shadow-sm);
+}
+.worms__weapon:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.worms__weapon-key {
+  position: absolute;
+  inset-block-start: 1px;
+  inset-inline-start: 3px;
+  font-family: var(--font-ui);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.worms__weapon-ammo {
+  position: absolute;
+  inset-block-end: 1px;
+  inset-inline-end: 3px;
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+/* Touch controls: walking under the left thumb, aiming and firing under the
+   right, and nothing across the middle — the middle is where the camera drag
+   has to stay reachable.
+
+   `direction: ltr` is deliberate and load-bearing, and is the same exception
+   Gun Mayhem's stick makes. Left it to inherit and in Hebrew the whole pad
+   mirrored: walking moved under the right thumb and firing under the left. A
+   player pushing the left button expects the worm to go left — the interface
+   language has no opinion about which way the world is. */
+.worms__pad {
+  position: absolute;
+  inset: 0;
+  direction: ltr;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0 calc(env(safe-area-inset-right, 0px) + 10px) calc(env(safe-area-inset-bottom, 0px) + 58px)
+    calc(env(safe-area-inset-left, 0px) + 10px);
+  pointer-events: none;
+}
+.worms__pad-side {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.worms__pad-aim {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.worms__btn {
+  pointer-events: auto;
+  width: 46px;
+  height: 46px;
+  border: 3px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  background: rgba(20, 17, 15, 0.55);
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 15px;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.worms__btn:active {
+  background: rgba(255, 210, 63, 0.7);
+  color: var(--ink);
+}
+/* Fire is the biggest target on the screen on purpose: it is hold-to-charge,
+   and a thumb sliding off it mid-charge fires the shot early. */
+.worms__btn--big {
+  width: 66px;
+  height: 66px;
+  font-size: 22px;
+}
+
+/* The stage picker in the lobby. Chips rather than a carousel, because three
+   options fit on one line and a carousel for three is a worse control. */
+.worms__stagepick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.worms__stagepick-label {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-soft);
+}
+.worms__stagepick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.worms__stagechip {
+  padding: 6px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: var(--surface);
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+.worms__stagechip--on {
+  background: var(--orange);
+  box-shadow: var(--shadow-sm);
+}
+.worms__stagechip:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Whose turn it is, in the score rail. */
+.hudcard--turn {
+  outline: 3px solid var(--yellow);
+  outline-offset: 2px;
+}

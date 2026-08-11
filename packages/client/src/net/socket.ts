@@ -35,6 +35,11 @@ import { feed } from './feed';
 // Game-specific, and the only such import here. See `inkBus` for why this
 // cannot ride the throttled HUD mirror like everything else does.
 import { receiveSkribbl, resetInk } from '../games/skribbl/inkBus';
+// Worms' terrain, for the same reason: it must not be dropped and no React
+// component displays it. Unlike the ink it is not a secret — see the note on
+// `worms/sim.ts:buildTerrainPrivate` for why it rides this channel anyway.
+import { terrainBus } from '../games/worms/terrainBus';
+import type { WormsTerrainPrivate } from '@mg/shared/worms';
 import type { MemesPrivate } from '@mg/shared/memes';
 import { clock } from './clock';
 import { voice } from './voice';
@@ -49,6 +54,7 @@ import {
   type MemesHud,
   type Secret,
   type SkribblHud,
+  type WormsHud,
 } from '../store';
 
 /**
@@ -431,9 +437,19 @@ class GameSocket {
       case 'memes':
         store.setMemesPrivate((data as MemesPrivate | null) ?? null);
         store.setSecret(null);
+        terrainBus.reset();
         return;
       case 'skribbl':
         store.setSecret((data as Secret | null) ?? null);
+        store.setMemesPrivate(null);
+        terrainBus.reset();
+        return;
+      // Not a secret — the crater list, which every client needs to draw the
+      // ground. It is here because what it needs is this channel's *delivery*:
+      // pushed only when it changes, and re-sent after a reconnect.
+      case 'worms':
+        terrainBus.receive((data as WormsTerrainPrivate | null) ?? null);
+        store.setSecret(null);
         store.setMemesPrivate(null);
         return;
       // No hidden state; their `privateFor` returns null and the server never
@@ -445,6 +461,7 @@ class GameSocket {
       case undefined:
         store.setSecret(null);
         store.setMemesPrivate(null);
+        terrainBus.reset();
         return;
       default: {
         const never: never = gameId;
@@ -488,6 +505,7 @@ class GameSocket {
     let players: HudPlayer[];
     let skribbl: SkribblHud | undefined;
     let memes: MemesHud | undefined;
+    let worms: WormsHud | undefined;
     switch (snap.game) {
       case 'achtung':
         players = snap.players.map((p) => ({
@@ -511,6 +529,31 @@ class GameSocket {
           alive: p.al === 1,
         }));
         break;
+      case 'worms': {
+        // Seats, not worms: a player with two worms is one row in the rail, and
+        // what they want to know is how much health they have left in total.
+        const active = snap.worms.find((w) => w.i === snap.ac);
+        players = snap.seats.map((seat) => {
+          const mine = snap.worms.filter((w) => w.s === seat.s && w.al === 1);
+          return {
+            seat: seat.s,
+            score: seat.p,
+            alive: mine.length > 0,
+            health: mine.reduce((sum, w) => sum + w.hp, 0),
+            wormsLeft: mine.length,
+          };
+        });
+        worms = {
+          activeSeat: active?.s ?? -1,
+          turnTicks: snap.tt,
+          wind: snap.wd,
+          weapon: snap.seats.find((s) => s.s === active?.s)?.w ?? 'bazooka',
+          fuse: snap.seats.find((s) => s.s === active?.s)?.fz ?? 3,
+          ammo: (snap.seats.find((s) => s.s === active?.s)?.am ?? {}) as Record<string, number>,
+          power: active?.pw ?? 0,
+        };
+        break;
+      }
       case 'gunmayhem':
         players = snap.players.map((p) => ({
           seat: p.s,
@@ -560,7 +603,7 @@ class GameSocket {
         break;
     }
 
-    const hud: Hud = { phase: snap.phase, round: snap.round, countdown, players, skribbl, memes };
+    const hud: Hud = { phase: snap.phase, round: snap.round, countdown, players, skribbl, memes, worms };
     useStore.getState().setHud(hud);
   }
 }

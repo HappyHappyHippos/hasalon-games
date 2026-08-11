@@ -12,7 +12,7 @@ import {
   revealDurationMs,
 } from './series';
 
-const ALL: GameId[] = ['achtung', 'gravity', 'gunmayhem', 'memes', 'skribbl', 'tanks'];
+const ALL: GameId[] = ['achtung', 'gravity', 'gunmayhem', 'memes', 'skribbl', 'tanks', 'worms'];
 
 /**
  * A `random` that walks a fixed list, so a shuffle becomes an exact,
@@ -30,7 +30,7 @@ describe('eligibleGames', () => {
     expect(eligibleGames(ALL, 6)).toContain('gunmayhem');
     expect(eligibleGames(ALL, 7)).not.toContain('gunmayhem');
     expect(eligibleGames(ALL, 8)).not.toContain('gunmayhem');
-    expect(eligibleGames(ALL, 7)).toHaveLength(5);
+    expect(eligibleGames(ALL, 7)).toHaveLength(ALL.length - 1);
   });
 
   it('keeps everything for a room every game can seat', () => {

@@ -138,6 +138,7 @@ export class Room {
       memes: GAMES.memes.defaultConfig(3),
       skribbl: GAMES.skribbl.defaultConfig(2),
       tanks: GAMES.tanks.defaultConfig(2),
+      worms: GAMES.worms.defaultConfig(2),
     };
   }
 

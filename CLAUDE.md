@@ -8,7 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 a room, share the code/link, everyone joins, the host picks a game from a
 live game picker, then plays. No accounts, rooms live in memory only. The games
 that ship today: **Gun Mayhem** (2–6 player platform fighter, the priority —
-this is the flagship game and should get the most care), **Tank Trouble** (up to
+this is the flagship game and should get the most care), **Worms** (up to
+8-player turn-based artillery on destructible terrain), **Tank Trouble** (up to
 8-player top-down maze duel with ricocheting shells), **Achtung die Kurve** (up
 to 8-player curve/Snake game), **Gravity Guy** (up to 8-player one-button
 auto-run elimination race), **Skribbl** (up to 8-player draw and guess, Hebrew
@@ -192,7 +193,10 @@ And the ones no compiler catches, which is why they are worth writing down:
 - `client/public/music/<id>.mp3` and its `ATTRIBUTION.md` entry. **mp3 only.**
   Point the `TRACKS` entry at an existing file rather than a missing one while a
   real track is being sourced — silence reads as the Ogg bug all over again.
-- `server/src/room.test.ts` and `app.test.ts` enumerate games.
+- `server/src/room.test.ts` and `app.test.ts` enumerate games, and so do
+  `shared/src/registry.test.ts` (a literal id list), `shared/src/series.test.ts`
+  (`ALL`, plus a count that assumes exactly one game is unfit at seven players)
+  and `shared/src/series.ts:MAX_SERIES_ROUNDS`. `tsc` finds none of these.
 - Reuse rather than copy. All three of these are parameterised and already used
   by every game that needs them:
   - `client/games/bitInput.ts` — the whole 60 Hz sampler/tap-latch/
@@ -228,6 +232,16 @@ who reconnects must get their private view back.
 Unlike `snapshot()`, `privateFor` must **not** drain — it is called repeatedly
 and has to be cheap to answer with `null`, which is what it returns for every
 game that has no secrets.
+
+**Worms uses this channel for something that is not a secret**, and it is worth
+knowing why before assuming the name is the contract. What the channel really
+provides is *pushed on change, re-sent after a reconnect, replayed by
+`sendCatchUp`* — which is exactly what its crater list needs and what a snapshot
+cannot give it, since craters are far too big to re-send thirty times a second
+and a delta is not a world to someone who just joined. That also makes Worms the
+one game exempt from `registry.test.ts`'s "a stranger gets null" rule: spectators
+need the terrain to draw the ground, and a spectator is indistinguishable in
+there from an unknown id. See `docs/games/worms.md`.
 
 Routing a `private` message to the right slice is an **exhaustive switch** over
 `GameId` in `socket.ts:receivePrivate`, with a `never`-typed default. It used to
@@ -322,12 +336,13 @@ obvious once you know they exist:
 ### Per-game notes
 
 The details that only matter when you are inside one game live next to a
-pointer instead of in this file, so every session does not pay for all six.
+pointer instead of in this file, so every session does not pay for all seven.
 **Read the one you are touching before you touch it** — each is a list of
 things that cost real debugging time to learn.
 
 - **Achtung die Kurve** — [`docs/games/achtung.md`](docs/games/achtung.md)
 - **Gun Mayhem** — [`docs/games/gunmayhem.md`](docs/games/gunmayhem.md)
+- **Worms** — [`docs/games/worms.md`](docs/games/worms.md)
 - **Tank Trouble** — [`docs/games/tanks.md`](docs/games/tanks.md)
 - **Gravity Guy** — [`docs/games/gravity.md`](docs/games/gravity.md)
 - **Skribbl** — [`docs/games/skribbl.md`](docs/games/skribbl.md)

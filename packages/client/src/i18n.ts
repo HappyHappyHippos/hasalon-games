@@ -320,6 +320,21 @@ const he = {
         'הראשון שמגיע למספר הסיבובים שנקבע מנצח במשחק.',
       ],
     },
+    worms: {
+      name: 'תולעים',
+      tagline: 'תור אחרי תור, עד שלא נשארת אדמה',
+      controls: 'חצים להליכה ולכיוון · אנטר לקפיצה · רווח בלחיצה ארוכה לירי · 1-9 לבחירת נשק',
+      rules: [
+        'משחקים בתורות. בכל תור תולעת אחת הולכת, מכוונת, בוחרת נשק ויורה פעם אחת.',
+        'שתי תולעים לכל שחקן כשאתם עד ארבעה, ואחת לכל שחקן מעל זה.',
+        'הפיצוצים עושים חורים אמיתיים בקרקע — המפה שתסיימו בה היא לא זו שהתחלתם בה.',
+        'פיצוץ גם מזיק וגם מעיף, והקרקע מתחת לרגליים שלכם פשוט יכולה להיעלם.',
+        'נפילה מחוץ למפה הורגת מיד, לא משנה כמה חיים נשארו.',
+        'הרוח דוחפת רקטה וכמעט לא מזיזה רימון, והיא מתחלפת בכל תור.',
+        'החזיקו את כפתור הירי כדי לצבור עוצמה, ושחררו כדי לירות. נגיעה קצרה היא ירייה חלשה, לא ירייה שלא קרתה.',
+        'השחקן האחרון שנשארה לו תולעת בחיים מנצח.',
+      ],
+    },
   } satisfies Record<GameId, { name: string; tagline: string; controls: string; rules: string[] }>,
 
   // -------------------------------------------------------------------------
@@ -370,6 +385,23 @@ const he = {
   setRoundSeconds: 'שניות לסיבוב',
   setPace: 'קצב',
   paceLabels: ['רגוע', 'רגיל', 'מהיר'],
+  setTurnSeconds: 'שניות לתור',
+  setHealth: 'חיים לכל תולעת',
+  setWind: 'רוח',
+  setExtraWeapons: 'נשקים מיוחדים',
+  wormsStage: 'השדה',
+  wormsStageRandom: 'אקראי',
+  wormsStageNames: { green: 'האי', arctic: 'הקרחון', living_room: 'הסלון' },
+  wormsTurn: 'תורו של',
+  wormsYourTurn: 'התור שלכם!',
+  wormsWind: 'רוח',
+  wormsWeapon: 'נשק',
+  wormsFuse: (n: number) => `פתיל ${n}`,
+  wormsPower: 'עוצמה',
+  wormsRetreat: 'לברוח!',
+  wormsResolving: 'מחכים שהאבק ישקע',
+  wormsHint: 'גררו כדי להזיז את המצלמה · גלגלת לזום',
+  wormsPickTarget: 'בחרו יעד על המפה',
 
   // -------------------------------------------------------------------------
   // Identity
@@ -756,6 +788,21 @@ const en: Dict = {
         'First to the target number of rounds wins the match.',
       ],
     },
+    worms: {
+      name: 'Worms',
+      tagline: 'Take turns. Take the ground out from under them.',
+      controls: 'Arrows to walk and aim · Enter to jump · hold Space to fire · 1–9 to pick a weapon',
+      rules: [
+        'One worm moves at a time. Walk, aim, pick a weapon and take one shot.',
+        'Two worms each when there are four of you or fewer, one each above that.',
+        'Explosions blow real holes in the ground — the map you finish on is not the one you started on.',
+        'A blast throws you as well as hurting you, and the ground under you can simply stop being there.',
+        'Falling out of the world kills you outright, however much health you had left.',
+        'Wind pushes a rocket and barely touches a grenade. It changes every turn.',
+        'Hold the fire button to charge the shot; let go to launch. A tap is a weak shot, not no shot.',
+        'The last player with a worm still alive wins.',
+      ],
+    },
   },
 
   achtungEffects: {
@@ -803,6 +850,23 @@ const en: Dict = {
   setRoundSeconds: 'Seconds per round',
   setPace: 'Pace',
   paceLabels: ['Chill', 'Normal', 'Fast'],
+  setTurnSeconds: 'Seconds per turn',
+  setHealth: 'Health per worm',
+  setWind: 'Wind',
+  setExtraWeapons: 'Special weapons',
+  wormsStage: 'Battlefield',
+  wormsStageRandom: 'Random',
+  wormsStageNames: { green: 'Castaway', arctic: 'Cold Front', living_room: 'The Living Room' },
+  wormsTurn: 'Up next',
+  wormsYourTurn: 'Your turn!',
+  wormsWind: 'Wind',
+  wormsWeapon: 'Weapon',
+  wormsFuse: (n: number) => `Fuse ${n}`,
+  wormsPower: 'Power',
+  wormsRetreat: 'Run!',
+  wormsResolving: 'Waiting for the dust to settle',
+  wormsHint: 'Drag to move the camera · scroll to zoom',
+  wormsPickTarget: 'Pick a spot on the map',
 
 
   // -------------------------------------------------------------------------

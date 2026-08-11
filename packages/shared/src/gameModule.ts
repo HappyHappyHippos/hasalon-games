@@ -4,9 +4,17 @@ import type { GunMayhemConfig, GunMayhemSnapshot } from './games/gunmayhem/types
 import type { MemesConfig, MemesSnapshot } from './games/memes/types';
 import type { SkribblConfig, SkribblSnapshot } from './games/skribbl/types';
 import type { TanksConfig, TanksSnapshot } from './games/tanks/types';
+import type { WormsConfig, WormsSnapshot } from './games/worms/types';
 
 /** Every game the site knows about. */
-export type GameId = 'achtung' | 'gravity' | 'gunmayhem' | 'memes' | 'skribbl' | 'tanks';
+export type GameId =
+  | 'achtung'
+  | 'gravity'
+  | 'gunmayhem'
+  | 'memes'
+  | 'skribbl'
+  | 'tanks'
+  | 'worms';
 
 /**
  * Configs and snapshots are unions tagged with `game`, so both the server and
@@ -19,14 +27,16 @@ export type GameConfig =
   | GunMayhemConfig
   | MemesConfig
   | SkribblConfig
-  | TanksConfig;
+  | TanksConfig
+  | WormsConfig;
 export type GameSnapshot =
   | AchtungSnapshot
   | GravitySnapshot
   | GunMayhemSnapshot
   | MemesSnapshot
   | SkribblSnapshot
-  | TanksSnapshot;
+  | TanksSnapshot
+  | WormsSnapshot;
 
 export interface GameSeat {
   id: string;

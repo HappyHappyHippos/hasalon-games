@@ -1,11 +1,13 @@
 # Stage backdrops
 
-Painted stage art for Gun Mayhem and Tank Trouble. Both games look for a file
-by convention and fall back to procedural drawing when it is not there.
+Painted stage art for Gun Mayhem, Tank Trouble and Worms. Every game looks for a
+file by convention and falls back to procedural drawing when it is not there.
 
 ```
-packages/client/public/stages/gun_mayhem_stage_<levelId>.png   # Gun Mayhem
-packages/client/public/stages/tanks/tank_stage_<stageId>.png   # Tank Trouble
+packages/client/public/stages/gun_mayhem_stage_<levelId>.png       # Gun Mayhem
+packages/client/public/stages/tanks/tank_stage_<stageId>.png       # Tank Trouble
+packages/client/public/stages/worms/worms_stage_<stageId>_bg.png   # Worms, background
+packages/client/public/stages/worms/worms_stage_<stageId>_terrain.png  # Worms, terrain
 ```
 
 `<levelId>` is a Gun Mayhem `LevelId` from
@@ -31,6 +33,29 @@ pickups all have to stay readable on top, and busy art makes the game genuinely
 harder to play. The palettes in `levels.ts` are a good guide to the intended
 value range per stage.
 
+## Worms is a pair of layers, and both are generated
+
+Worms is the exception to "drop the file in". Its terrain is destructible, so it
+needs the painting **split in two** — a transparent silhouette the client punches
+craters out of, and a plate behind it so a crater reveals sky rather than a hole.
+Neither is hand-made and neither should be edited:
+
+```bash
+node scripts/derive-worms-terrain.mjs --overlay out/   # look at it first
+node scripts/derive-worms-terrain.mjs --write          # then emit
+```
+
+The source paintings live in `assets/stages/worms/`, outside `public/` because
+they are an input, not something the client ever loads. The same run also emits
+`packages/shared/src/games/worms/masks/<id>.ts`, the collision bitmask both the
+server and the client decode — so the mask and the artwork are the same shape by
+construction and cannot drift into invisible ledges and unstandable rock.
+
+Adding a Worms stage means adding the painting there and a `STAGES` entry in the
+script saying how it separates from its background. Read that file's header
+before guessing: two of the three existing stages need hand-authored help, and it
+records what was tried and what it cost.
+
 ## Fail-soft, by design
 
 A missing, 404ing or corrupt file is **not** an error. `game/images.ts` follows
@@ -54,3 +79,4 @@ rule the music in `../music/ATTRIBUTION.md` follows. Kenney
 | --- | --- | --- | --- | --- |
 | `gun_mayhem_stage_*.png` (9) | | | _unrecorded_ | |
 | `tanks/tank_stage_*.png` (6) | | | _unrecorded_ | |
+| `worms/worms_stage_*.png` (6) | | | _unrecorded_ | derived from `assets/stages/worms/` |

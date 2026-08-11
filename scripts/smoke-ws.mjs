@@ -537,6 +537,123 @@ memeGuest.send(JSON.stringify({ t: 'leave' }));
 memeReloaded.close();
 memeGuest.close();
 
+// ---------------------------------------------------------------------------
+// Worms: a whole turn, and terrain that actually changes
+// ---------------------------------------------------------------------------
+
+/**
+ * The one thing about Worms that cannot be checked anywhere but over the wire.
+ *
+ * Its terrain destruction does not travel in the snapshot — craters ride the
+ * `private` channel, because they are far too big to re-send thirty times a
+ * second and a delta is useless to anyone who joins late. So "does a shot
+ * actually change the map on the *other* client" is a question about the wire,
+ * not about the simulation, and no unit test can answer it.
+ */
+const wormHost = await connect('worm-host');
+wormHost.send(JSON.stringify({ t: 'create', v: PROTOCOL_VERSION, identity: identity('WormHost', 6) }));
+const wormWelcome = await next(wormHost, (m) => m.t === 'welcome', 'worm host welcome');
+const wormCode = wormWelcome.room.code;
+const wormGuest = await connect('worm-guest');
+wormGuest.send(JSON.stringify({ t: 'join', v: PROTOCOL_VERSION, code: wormCode, identity: identity('WormGuest', 7) }));
+await Promise.all([
+  next(wormGuest, (m) => m.t === 'welcome', 'worm guest welcome'),
+  next(wormHost, (m) => m.t === 'room' && m.room.players.length === 2, 'worm host sees guest'),
+]);
+
+wormHost.send(JSON.stringify({ t: 'game', gameId: 'worms' }));
+await next(wormHost, (m) => m.t === 'room' && m.room.gameId === 'worms', 'Worms selected');
+// A fixed stage and no wind, so this is the same shot every run.
+wormHost.send(JSON.stringify({ t: 'settings', settings: { stageId: 'green', windEnabled: false, turnSeconds: 20 } }));
+await next(wormHost, (m) => m.t === 'room' && m.room.settings.stageId === 'green', 'Worms stage pinned');
+wormHost.send(JSON.stringify({ t: 'ready', ready: true }));
+wormGuest.send(JSON.stringify({ t: 'ready', ready: true }));
+await next(wormHost, (m) => m.t === 'room' && m.room.players.every((player) => player.ready), 'worm players ready');
+
+const wormStarted = next(wormHost, (m) => m.t === 'matchStarted', 'worm match started');
+wormHost.send(JSON.stringify({ t: 'start' }));
+const wormMatch = await wormStarted;
+const wormHostSeat = wormMatch.room.players.find((p) => p.id === wormWelcome.playerId)?.seat;
+if (wormHostSeat === undefined || wormHostSeat < 0) throw new Error('worm host was not seated');
+
+// Two worms each at this room size — the thing that makes a two-player match a
+// game rather than a duel.
+const firstTurn = await next(
+  wormHost,
+  (m) => m.t === 'snapshot' && m.snap.game === 'worms' && m.snap.phase === 'turn' && m.snap.ac > 0,
+  'first Worms turn',
+);
+if (firstTurn.snap.worms.length !== 4) {
+  throw new Error(`expected four worms for two players, got ${firstTurn.snap.worms.length}`);
+}
+console.log(`  ✓ Worms dealt ${firstTurn.snap.worms.length} worms across 2 seats`);
+
+// Whoever is up, hold fire until the shot goes. Power charges off the held
+// button server-side, so this is the whole of "take a turn".
+const IN_FIRE_WORMS = 32;
+const activeSeat = firstTurn.snap.worms.find((w) => w.i === firstTurn.snap.ac)?.s;
+const shooter = activeSeat === wormHostSeat ? wormHost : wormGuest;
+const watcher = activeSeat === wormHostSeat ? wormGuest : wormHost;
+
+const boomSeen = next(
+  watcher,
+  (m) => m.t === 'snapshot' && m.snap.game === 'worms' && m.snap.events.some((e) => e.t === 'boom'),
+  'explosion on the other client',
+);
+const craterSeen = next(
+  watcher,
+  (m) => m.t === 'private' && Array.isArray(m.data?.c) && m.data.c.length > 0,
+  'crater on the other client',
+);
+
+let wormSeq = 1;
+const holdFire = setInterval(() => {
+  shooter.send(JSON.stringify({ t: 'input', i: { seq: wormSeq++, bits: IN_FIRE_WORMS } }));
+}, 16);
+let craters;
+try {
+  await boomSeen;
+  craters = await craterSeen;
+} finally {
+  clearInterval(holdFire);
+}
+
+const [cx, cy, cr] = craters.data.c[0];
+if (!Number.isInteger(cx) || !Number.isInteger(cy) || !(cr > 0)) {
+  throw new Error(`crater is not a sane integer tuple: ${JSON.stringify(craters.data.c[0])}`);
+}
+console.log(`  ✓ a Worms shot carved a ${cr}-unit crater at ${cx},${cy} and the other client was told`);
+
+// A client arriving mid-match has to get the whole map, not just what happens
+// next. This is the failure the `private` channel was chosen to avoid.
+const wormLate = await connect('worm-late');
+wormLate.send(JSON.stringify({
+  t: 'join',
+  v: PROTOCOL_VERSION,
+  code: wormCode,
+  identity: identity('WormLate', 2),
+}));
+await next(wormLate, (m) => m.t === 'welcome', 'late Worms joiner welcome');
+const lateTerrain = await next(
+  wormLate,
+  (m) => m.t === 'private' && Array.isArray(m.data?.c),
+  'late joiner is told the terrain',
+);
+if (lateTerrain.data.c.length < craters.data.c.length) {
+  throw new Error(
+    `a client joining mid-match got ${lateTerrain.data.c.length} craters, expected at least ${craters.data.c.length}`,
+  );
+}
+console.log(`  ✓ a client joining mid-match was sent all ${lateTerrain.data.c.length} craters`);
+
+wormHost.send(JSON.stringify({ t: 'leave' }));
+wormGuest.send(JSON.stringify({ t: 'leave' }));
+wormLate.send(JSON.stringify({ t: 'leave' }));
+wormHost.close();
+wormGuest.close();
+wormLate.close();
+
+
 console.log(`\nPASS — two clients shared a room over ${wsUrl.startsWith('wss') ? 'wss' : 'ws'}.`);
 if (rtt > 150) {
   console.log(`NOTE: median ${rtt.toFixed(0)}ms is high for a 60 Hz fighter. Check the deploy region.`);

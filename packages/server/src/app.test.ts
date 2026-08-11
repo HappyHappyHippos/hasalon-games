@@ -373,6 +373,10 @@ describe('match', () => {
       (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
         m.t === 'snapshot' && m.snap.phase === 'playing',
     );
+    // Narrowed by hand, because the predicate's return type says "a snapshot",
+    // not "an Achtung snapshot" — and not every game in the union has a
+    // `players` array any more.
+    if (playing.snap.game !== 'achtung') throw new Error(`expected achtung, got ${playing.snap.game}`);
     expect(playing.snap.players).toHaveLength(3);
     expect(playing.snap.tick).toBeGreaterThan(0);
   });
@@ -402,6 +406,84 @@ describe('match', () => {
     expect(winner.score).toBeGreaterThanOrEqual(1);
     expect(Math.max(...seated.map((p) => p.score))).toBe(winner.score);
   }, 30_000);
+
+  it('runs Worms, rotates turns between seats, and pushes terrain privately', async () => {
+    const clients = await makeLobby(2);
+    const [host, guest] = clients;
+
+    host!.send({ t: 'game', gameId: 'worms' });
+    // Pinned, so the shot below is the same shot every run.
+    host!.send({ t: 'settings', settings: { stageId: 'green', windEnabled: false, turnSeconds: 15 } });
+    host!.send({ t: 'start' });
+    const started = await host!.next('matchStarted');
+    const hostSeat = started.room.players.find((p) => p.id === host!.playerId)!.seat;
+
+    const firstTurn = await host!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+        m.t === 'snapshot' && m.snap.game === 'worms' && m.snap.phase === 'turn' && m.snap.ac > 0,
+    );
+    if (firstTurn.snap.game !== 'worms') throw new Error('wrong game');
+
+    // Two worms each at this room size, interleaved so nobody goes twice.
+    expect(firstTurn.snap.worms).toHaveLength(4);
+    expect(firstTurn.snap.seats).toHaveLength(2);
+    expect(firstTurn.snap.worms.every((w) => w.al === 1 && w.hp > 0)).toBe(true);
+    expect(firstTurn.snap.st).toBe('green');
+
+    const opening = firstTurn.snap;
+    const firstSeat = opening.worms.find((w) => w.i === opening.ac)!.s;
+    const shooter = firstSeat === hostSeat ? host! : guest!;
+
+    // Hold fire. Power charges off the held button server-side, so this is the
+    // whole of taking a turn — and it is the only way to make terrain change.
+    const IN_FIRE = 32;
+    let seq = 1;
+    const craterArrived = shooter.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'private' }> =>
+        m.t === 'private' &&
+        typeof m.data === 'object' &&
+        m.data !== null &&
+        Array.isArray((m.data as { c?: unknown }).c) &&
+        (m.data as { c: unknown[] }).c.length > 0,
+      20_000,
+    );
+    const holding = setInterval(() => {
+      shooter.send({ t: 'input', i: { seq: seq++, bits: IN_FIRE } });
+    }, 16);
+    let terrain;
+    try {
+      terrain = await craterArrived;
+    } finally {
+      clearInterval(holding);
+    }
+
+    // Craters travel on `private`, never in the snapshot — see the note on
+    // `worms/sim.ts:buildTerrainPrivate`. The snapshot only counts them.
+    const payload = terrain.data as { st: string; r: number; c: number[][] };
+    expect(payload.st).toBe('green');
+    expect(payload.r).toBe(1);
+    expect(payload.c[0]).toHaveLength(4);
+    expect(payload.c[0]!.every((n) => Number.isInteger(n))).toBe(true);
+
+    const afterShot = await shooter.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'snapshot' }> =>
+        m.t === 'snapshot' && m.snap.game === 'worms' && m.snap.tv > 0,
+    );
+    if (afterShot.snap.game !== 'worms') throw new Error('wrong game');
+    expect(afterShot.snap.tv).toBe(payload.c.length);
+    expect((afterShot.snap as unknown as Record<string, unknown>).craters).toBeUndefined();
+
+    // And the turn passes to the other seat.
+    const nextTurn = await host!.waitFor((m): m is Extract<ServerMessage, { t: 'snapshot' }> => {
+      if (m.t !== 'snapshot' || m.snap.game !== 'worms') return false;
+      const snap = m.snap;
+      if (snap.phase !== 'turn' || snap.ac <= 0) return false;
+      return snap.worms.find((w) => w.i === snap.ac)?.s !== firstSeat;
+    }, 20_000);
+    if (nextTurn.snap.game !== 'worms') throw new Error('wrong game');
+    const handedOver = nextTurn.snap;
+    expect(handedOver.worms.find((w) => w.i === handedOver.ac)!.s).not.toBe(firstSeat);
+  }, 40_000);
 
   it('seats only as many players as the game supports', async () => {
     // Gun Mayhem is six players; a fuller room means the rest spectate.

@@ -53,6 +53,11 @@ const TRACKS: Record<MusicTrack, string> = {
   // Skribbl deliberately shares the quiet lo-fi lobby bed. `play` notices the
   // URL is unchanged and lets it continue rather than restarting on match start.
   skribbl: '/music/lobby.mp3',
+  // ── ASSET SWAP POINT ──────────────────────────────────────────────────────
+  // Borrowing Tank Trouble's bed until Worms has its own. Pointed at a file
+  // that exists on purpose: a missing one is silence, and silence here is
+  // indistinguishable from the Ogg bug this comment block exists because of.
+  worms: '/music/tanks.mp3',
 };
 
 /** Long enough to feel deliberate, short enough not to overlap two melodies. */

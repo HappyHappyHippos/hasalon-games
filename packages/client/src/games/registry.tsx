@@ -27,6 +27,9 @@ import { MemesSettings } from './memes/Settings';
 import { TanksBoxArt } from './tanks/BoxArt';
 import { TanksScreen } from './tanks/TanksScreen';
 import { TanksSettings } from './tanks/Settings';
+import { WormsBoxArt } from './worms/BoxArt';
+import { WormsScreen } from './worms/WormsScreen';
+import { WormsSettings } from './worms/Settings';
 import { GravityBoxArt } from './gravity/BoxArt';
 import { GravityScreen } from './gravity/GravityScreen';
 import { GravitySettings } from './gravity/Settings';
@@ -98,6 +101,13 @@ export const CLIENT_GAMES: Record<GameId, ClientGame> = {
     Settings: GravitySettings,
     accent: 'var(--yellow)',
   },
+  worms: {
+    meta: GAMES.worms.meta,
+    BoxArt: WormsBoxArt,
+    Screen: WormsScreen,
+    Settings: WormsSettings,
+    accent: 'var(--orange)',
+  },
 };
 
 /**
@@ -106,6 +116,7 @@ export const CLIENT_GAMES: Record<GameId, ClientGame> = {
  */
 export const CLIENT_GAME_IDS: GameId[] = [
   'gunmayhem',
+  'worms',
   'tanks',
   'achtung',
   'gravity',

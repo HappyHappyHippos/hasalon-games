@@ -258,6 +258,36 @@ class Sfx {
     this.burst(0.16, 0.16, 900, 120);
   }
 
+  // -------------------------------------------------------------------------
+  // Worms
+  // -------------------------------------------------------------------------
+
+  /**
+   * Going into the water.
+   *
+   * Distinct from `ringOut` on purpose: in Gun Mayhem falling off is one of
+   * several ways to lose a stock, but in Worms it is the *only* thing that
+   * kills outright regardless of health, so it has to be instantly
+   * recognisable from across the room. Downward noise with a wet, closing
+   * filter rather than a tone.
+   */
+  splash(): void {
+    this.burst(0.34, 0.26, 2400, 140);
+    this.tone({ freq: 420, to: 90, duration: 0.3, gain: 0.1, type: 'sine' });
+  }
+
+  /**
+   * Your turn.
+   *
+   * Two notes up, and quiet. It fires once every few minutes per player, which
+   * is exactly the cadence at which a loud cue becomes irritating — and its
+   * whole job is to catch someone who looked away, not to be a fanfare.
+   */
+  yourTurn(): void {
+    this.tone({ freq: 590, duration: 0.1, gain: 0.11, type: 'triangle' });
+    this.tone({ freq: 880, duration: 0.14, gain: 0.11, type: 'triangle', delay: 0.1 });
+  }
+
   /**
    * The title sting under the intro splash.
    *
