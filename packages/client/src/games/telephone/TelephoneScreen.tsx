@@ -95,11 +95,19 @@ function DrawingComposer({ previous, submitted }: { previous: TelephonePrevious 
   );
 }
 
-function RevealItem({ step, room, current }: { step: TelephoneRevealStep; room: RoomView; current: boolean }): JSX.Element {
+function revealLabel(step: TelephoneRevealStep, t: ReturnType<typeof useT>): string {
+  if (step.kind === 'prompt') return t.telephoneOriginalPrompt;
+  if (step.kind === 'drawing') return t.telephoneDrawingReveal;
+  return t.telephoneGuessReveal;
+}
+
+function RevealItem({ step, room, compact = false, index = 0 }: { step: TelephoneRevealStep; room: RoomView; compact?: boolean; index?: number }): JSX.Element {
   const t = useT();
   const author = room.players.find((player) => player.seat === step.authorSeat);
   return (
-    <article className={`telephone__reveal-item${current ? ' telephone__reveal-item--current' : ''}`}>
+    <article className={`telephone__reveal-item${compact ? ' telephone__reveal-item--compact' : ' telephone__reveal-item--focus'}`}>
+      {compact && <span className="telephone__lineage-number" aria-hidden="true">{index + 1}</span>}
+      {compact && <p className="eyebrow telephone__lineage-kind">{revealLabel(step, t)}</p>}
       <div className="telephone__reveal-author">
         {author ? <><Avatar colorIndex={author.colorIndex} hat={author.hat} face={author.face} name={author.name} size={36} /><strong style={{ color: colorFor(author.colorIndex) }}>{author.name}</strong></> : <strong>{t.telephoneMysteryArtist}</strong>}
       </div>
@@ -115,16 +123,35 @@ function Reveal({ room, mySeat: _mySeat }: { room: RoomView; mySeat: number }): 
   const mine = useStore((state) => state.telephonePrivate);
   if (!view) return <div className="telephone__waiting"><h2>{t.telephoneRevealTitle}</h2></div>;
   const current = view.revealed[view.revealed.length - 1];
+  const currentIndex = view.revealed.length - 1;
   const result = view.phase === 'result' && current?.kind === 'drawing';
+  const complete = view.phase === 'chainComplete';
   return (
-    <section className="telephone__album">
-      <h1>{t.telephoneChain(view.revealChainIndex + 1, view.revealChainCount)}</h1>
-      <div className="telephone__timeline">
-        {view.revealed.map((step, index) => <RevealItem key={`${view.revealChainIndex}-${index}`} step={step} room={room} current={index === view.revealed.length - 1} />)}
+    <section className={`telephone__album${complete ? ' telephone__album--complete' : ' telephone__album--focus'}`} aria-live="polite">
+      <div className="telephone__album-head">
+        <p className="eyebrow">{t.telephoneChain(view.revealChainIndex + 1, view.revealChainCount)}</p>
+        <h1>{complete ? t.telephoneFullLineage : t.telephoneRevealTitle}</h1>
       </div>
-      {view.phase === 'voting' && current?.kind === 'drawing' && <VotePanel stage={{ ballots: view.ballots, eligible: view.eligible }} mine={mine} labels={[t.telephoneGood, t.telephoneMeh, t.telephoneBad]} title={t.telephoneVoteTitle} yours={t.telephoneYours} ballotsText={t.telephoneBallots} onVote={(vote: TelephoneVote) => socket.sendInputReliable({ k: 'vote', v: vote })} />}
-      {result && current.tally && <RatingResultCard room={room} authorSeat={current.authorSeat} tally={current.tally} award={current.award ?? 0} labels={[t.telephoneGood, t.telephoneMeh, t.telephoneBad]} byText={t.telephoneBy} awardText={t.telephoneAward} />}
-      {view.phase === 'chainComplete' && <p className="sticker telephone__complete">{t.telephoneChainComplete}</p>}
+      {complete ? (
+        <>
+          <p className="sticker telephone__complete">{t.telephoneChainComplete}</p>
+          <div className="telephone__lineage">
+            {view.revealed.map((step, index) => <RevealItem key={`${view.revealChainIndex}-${index}`} step={step} room={room} compact index={index} />)}
+          </div>
+        </>
+      ) : current ? (
+        <div key={view.phaseSeq} className="telephone__focus">
+          <div className="telephone__focus-label">
+            <span>{revealLabel(current, t)}</span>
+            <b dir="ltr">{currentIndex + 1} / {view.contributionCount}</b>
+          </div>
+          <RevealItem step={current} room={room} index={currentIndex} />
+          <div className="telephone__focus-action">
+            {view.phase === 'voting' && current.kind === 'drawing' && <VotePanel stage={{ ballots: view.ballots, eligible: view.eligible }} mine={mine} labels={[t.telephoneGood, t.telephoneMeh, t.telephoneBad]} title={t.telephoneVoteTitle} yours={t.telephoneYours} ballotsText={t.telephoneBallots} onVote={(vote: TelephoneVote) => socket.sendInputReliable({ k: 'vote', v: vote })} />}
+            {result && current.tally && <RatingResultCard room={room} authorSeat={current.authorSeat} tally={current.tally} award={current.award ?? 0} labels={[t.telephoneGood, t.telephoneMeh, t.telephoneBad]} byText={t.telephoneBy} awardText={t.telephoneAward} />}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -137,10 +164,11 @@ export function TelephoneScreen({ room, mySeat }: { room: RoomView; mySeat: numb
   const t = useT();
   const seconds = Math.ceil((view?.phaseTicks ?? 0) / TICK_RATE);
   const contributing = view?.phase === 'contributing';
+  const phaseClass = contributing && mine?.task === 'drawing' ? 'draw' : contributing ? 'write' : 'reveal';
   return (
     <main className="telephone">
-      {room.phase !== 'matchOver' && <header className="telephone__top"><div><span className={`telephone__clock${seconds <= 10 ? ' telephone__clock--low' : ''}`} dir="ltr">{seconds}</span>{contributing && <strong>{t.telephoneStep((view?.contributionIndex ?? 0) + 1, view?.contributionCount ?? room.players.length)}</strong>}</div><VoiceBar compact /></header>}
-      <div key={view?.phaseSeq ?? 0} className="telephone__phase">
+      {room.phase !== 'matchOver' && <header className="telephone__top"><div><span className={`telephone__clock${seconds <= 10 && (contributing || view?.phase === 'voting') ? ' telephone__clock--low' : ''}`} dir="ltr">{seconds}</span>{contributing && <strong>{t.telephoneStep((view?.contributionIndex ?? 0) + 1, view?.contributionCount ?? room.players.length)}</strong>}</div><VoiceBar compact /></header>}
+      <div key={view?.phaseSeq ?? 0} className={`telephone__phase telephone__phase--${phaseClass}`}>
         {contributing && mySeat >= 0 && mine ? (mine.task === 'drawing' ? <DrawingComposer previous={mine.previous} submitted={mine.submitted} /> : <TextComposer task={mine.task} previous={mine.previous} initial={mine.draft} submitted={mine.submitted} />) : contributing ? <div className="telephone__waiting"><h2>{t.telephoneSpectating}</h2></div> : view?.phase === 'intro' ? <div className="telephone__intro"><span>☎</span><h1>{t.telephoneIntro}</h1></div> : <Reveal room={room} mySeat={mySeat} />}
       </div>
       {room.paused && room.phase === 'playing' && <Paused room={room} spectating={mySeat < 0} />}
