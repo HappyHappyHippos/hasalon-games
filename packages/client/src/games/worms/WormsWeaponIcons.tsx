@@ -7,12 +7,12 @@ interface IconProps {
 }
 
 /**
- * Custom SVG vector icons for Worms weapons, styled to fit the game's aesthetic.
+ * Rich, two-tone comic-styled vector SVG weapon icons for Worms.
  */
 export function WormsWeaponIcon({
   id,
   className = '',
-  size = 24,
+  size = 28,
 }: {
   id: WormsWeaponId | string;
   className?: string;
@@ -46,259 +46,295 @@ export function WormsWeaponIcon({
   }
 }
 
-function BazookaIcon({ className = '', size = 24 }: IconProps): JSX.Element {
+function BazookaIcon({ className = '', size = 28 }: IconProps): JSX.Element {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
+      viewBox="0 0 36 36"
       fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
       className={className}
     >
-      {/* Rocket Tube */}
-      <path d="M4 22L20 6" strokeWidth="3" />
-      <path d="M16 10L24 2" strokeWidth="2.5" />
-      {/* Warhead tip */}
-      <path d="M22 4L28 2L26 8" fill="currentColor" />
-      {/* Exhaust/handle */}
-      <path d="M7 25L10 28" strokeWidth="2.5" />
-      <path d="M12 20L15 23" strokeWidth="2.5" />
-      <path d="M3 21L2 27L8 26" strokeWidth="2" />
+      {/* Exhaust blast */}
+      <path d="M4 26L1 28L3 24Z" fill="#ff6b00" stroke="#1c1917" strokeWidth="1.5" />
+      {/* Rocket Launcher Tube */}
+      <rect
+        x="6"
+        y="12"
+        width="22"
+        height="10"
+        rx="2"
+        transform="rotate(-30 6 12)"
+        fill="#57534e"
+        stroke="#1c1917"
+        strokeWidth="2"
+      />
+      {/* Yellow Safety Stripe */}
+      <rect
+        x="16"
+        y="12"
+        width="4"
+        height="10"
+        transform="rotate(-30 16 12)"
+        fill="#ffd000"
+      />
+      {/* Handles */}
+      <path d="M12 24L10 29" stroke="#1c1917" strokeWidth="3" strokeLinecap="round" />
+      <path d="M18 20L16 25" stroke="#1c1917" strokeWidth="2.5" strokeLinecap="round" />
+      {/* Warhead Tip */}
+      <path d="M26 6L32 3L29 9Z" fill="#ef4444" stroke="#1c1917" strokeWidth="2" />
     </svg>
   );
 }
 
-function GrenadeIcon({ className = '', size = 24 }: IconProps): JSX.Element {
+function GrenadeIcon({ className = '', size = 28 }: IconProps): JSX.Element {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
+      viewBox="0 0 36 36"
       fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
       className={className}
     >
       {/* Body */}
-      <ellipse cx="16" cy="19" rx="8" ry="10" />
-      {/* Segments */}
-      <line x1="8" y1="19" x2="24" y2="19" />
-      <line x1="16" y1="9" x2="16" y2="29" />
-      {/* Cap & Pin */}
-      <rect x="14" y="6" width="4" height="3" fill="currentColor" />
-      <circle cx="10" cy="6" r="3" />
-      {/* Lever */}
-      <path d="M18 7C22 7 24 10 24 14" strokeWidth="1.5" />
+      <ellipse
+        cx="18"
+        cy="22"
+        rx="9"
+        ry="11"
+        fill="#65a30d"
+        stroke="#1c1917"
+        strokeWidth="2"
+      />
+      {/* Ribbing lines */}
+      <line x1="9" y1="22" x2="27" y2="22" stroke="#1c1917" strokeWidth="2" />
+      <line x1="9" y1="18" x2="27" y2="18" stroke="#1c1917" strokeWidth="1.5" />
+      <line x1="10" y1="26" x2="26" y2="26" stroke="#1c1917" strokeWidth="1.5" />
+      <line x1="18" y1="11" x2="18" y2="33" stroke="#1c1917" strokeWidth="2" />
+      {/* Top Cap */}
+      <rect x="15" y="7" width="6" height="4" rx="1" fill="#a3e635" stroke="#1c1917" strokeWidth="2" />
+      {/* Pin Ring */}
+      <circle cx="11" cy="7" r="3.5" fill="#ffd000" stroke="#1c1917" strokeWidth="2" />
+      {/* Spark Fuse */}
+      <path d="M21 8C25 7 27 4 25 2" stroke="#ff6b00" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="25" cy="2" r="1.5" fill="#ffd000" />
     </svg>
   );
 }
 
-function ShotgunIcon({ className = '', size = 24 }: IconProps): JSX.Element {
+function ShotgunIcon({ className = '', size = 28 }: IconProps): JSX.Element {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
+      viewBox="0 0 36 36"
       fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
       className={className}
     >
       {/* Double Barrels */}
-      <line x1="4" y1="12" x2="24" y2="12" strokeWidth="2.5" />
-      <line x1="4" y1="15" x2="24" y2="15" strokeWidth="2.5" />
+      <line x1="3" y1="14" x2="27" y2="14" stroke="#44403c" strokeWidth="3.5" strokeLinecap="round" />
+      <line x1="3" y1="18" x2="27" y2="18" stroke="#78716c" strokeWidth="3.5" strokeLinecap="round" />
+      <line x1="3" y1="14" x2="27" y2="14" stroke="#1c1917" strokeWidth="1.5" strokeLinecap="round" />
+      <line x1="3" y1="18" x2="27" y2="18" stroke="#1c1917" strokeWidth="1.5" strokeLinecap="round" />
+      {/* Muzzle Flash */}
+      <circle cx="3" cy="16" r="2.5" fill="#ff6b00" />
       {/* Wooden Stock */}
-      <path d="M22 13L28 22C29 23.5 27.5 26 25 25L20 16Z" fill="currentColor" fillOpacity="0.2" />
-      {/* Trigger */}
-      <path d="M19 16C18 19 16 19 16 16" />
+      <path
+        d="M24 14L32 24C33 26 31 29 28 28L22 18Z"
+        fill="#b45309"
+        stroke="#1c1917"
+        strokeWidth="2"
+      />
+      {/* Trigger guard */}
+      <path d="M22 18C20 22 18 21 18 18" stroke="#1c1917" strokeWidth="2" fill="none" />
     </svg>
   );
 }
 
-function BatIcon({ className = '', size = 24 }: IconProps): JSX.Element {
+function BatIcon({ className = '', size = 28 }: IconProps): JSX.Element {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
+      viewBox="0 0 36 36"
       fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
       className={className}
     >
+      {/* Motion trail arc */}
+      <path
+        d="M16 4C24 4 32 12 32 20"
+        stroke="#ffd000"
+        strokeWidth="3.5"
+        strokeDasharray="4 3"
+        strokeLinecap="round"
+      />
       {/* Baseball Bat */}
-      <path d="M5 27L24 6C26 4 28 6 26 8L7 29Z" fill="currentColor" fillOpacity="0.3" strokeWidth="2" />
-      {/* Handle wrap */}
-      <line x1="6" y1="24" x2="9" y2="27" />
+      <path
+        d="M6 30L27 7C29.5 4.5 32.5 7.5 30 10L9 33Z"
+        fill="#d97706"
+        stroke="#1c1917"
+        strokeWidth="2.5"
+      />
+      {/* Grip wrap */}
+      <line x1="7" y1="27" x2="11" y2="31" stroke="#fef3c7" strokeWidth="2" />
+      <line x1="9" y1="25" x2="13" y2="29" stroke="#fef3c7" strokeWidth="2" />
       {/* Knob */}
-      <circle cx="4.5" cy="27.5" r="2" fill="currentColor" />
-      {/* Motion swoosh lines */}
-      <path d="M14 4C21 4 28 11 28 18" strokeDasharray="3 3" />
+      <circle cx="5" cy="31" r="2.5" fill="#1c1917" />
     </svg>
   );
 }
 
-function ClusterIcon({ className = '', size = 24 }: IconProps): JSX.Element {
+function ClusterIcon({ className = '', size = 28 }: IconProps): JSX.Element {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
+      viewBox="0 0 36 36"
       fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
       className={className}
     >
       {/* Main Bomb */}
-      <circle cx="12" cy="12" r="7" />
-      <line x1="17" y1="7" x2="21" y2="3" />
+      <circle cx="14" cy="14" r="8" fill="#7e22ce" stroke="#1c1917" strokeWidth="2" />
+      <line x1="20" y1="8" x2="25" y2="3" stroke="#1c1917" strokeWidth="2" />
       {/* Sub Bomblets */}
-      <circle cx="24" cy="18" r="3" fill="currentColor" />
-      <circle cx="18" cy="25" r="3" fill="currentColor" />
-      <circle cx="27" cy="26" r="3" fill="currentColor" />
+      <circle cx="28" cy="20" r="3.5" fill="#ffd000" stroke="#1c1917" strokeWidth="1.5" />
+      <circle cx="20" cy="28" r="3.5" fill="#ffd000" stroke="#1c1917" strokeWidth="1.5" />
+      <circle cx="31" cy="29" r="3.5" fill="#ffd000" stroke="#1c1917" strokeWidth="1.5" />
       {/* Burst trails */}
-      <path d="M17 15L22 17" />
-      <path d="M15 17L17 23" />
-      <path d="M18 18L25 24" />
+      <path d="M20 18L25 20" stroke="#ff6b00" strokeWidth="2" strokeLinecap="round" />
+      <path d="M17 20L19 25" stroke="#ff6b00" strokeWidth="2" strokeLinecap="round" />
+      <path d="M21 21L28 27" stroke="#ff6b00" strokeWidth="2" strokeLinecap="round" />
     </svg>
   );
 }
 
-function DynamiteIcon({ className = '', size = 24 }: IconProps): JSX.Element {
+function DynamiteIcon({ className = '', size = 28 }: IconProps): JSX.Element {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
+      viewBox="0 0 36 36"
       fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
       className={className}
     >
-      {/* Bundle of 3 Sticks */}
-      <rect x="8" y="10" width="16" height="18" rx="2" strokeWidth="2" />
-      <line x1="13.5" y1="10" x2="13.5" y2="28" />
-      <line x1="18.5" y1="10" x2="18.5" y2="28" />
-      {/* Band */}
-      <rect x="8" y="17" width="16" height="4" fill="currentColor" />
+      {/* Sticks of Dynamite */}
+      <rect x="8" y="12" width="20" height="20" rx="3" fill="#dc2626" stroke="#1c1917" strokeWidth="2" />
+      <line x1="14.5" y1="12" x2="14.5" y2="32" stroke="#1c1917" strokeWidth="2" />
+      <line x1="21.5" y1="12" x2="21.5" y2="32" stroke="#1c1917" strokeWidth="2" />
+      {/* Black Tape Band */}
+      <rect x="8" y="20" width="20" height="5" fill="#1c1917" />
       {/* Fuse */}
-      <path d="M16 10C16 6 20 7 20 4" />
-      {/* Spark */}
-      <path d="M20 2L21 4L23 3L22 5L24 6L22 6L22 8L20 6.5L19 8L19.5 6L18 5L20 5Z" fill="currentColor" stroke="none" />
+      <path d="M18 12C18 7 24 8 24 4" stroke="#1c1917" strokeWidth="2" strokeLinecap="round" />
+      {/* Glowing Spark */}
+      <circle cx="24" cy="4" r="3" fill="#ffd000" stroke="#ff6b00" strokeWidth="1" />
     </svg>
   );
 }
 
-function HomingIcon({ className = '', size = 24 }: IconProps): JSX.Element {
+function HomingIcon({ className = '', size = 28 }: IconProps): JSX.Element {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
+      viewBox="0 0 36 36"
       fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
       className={className}
     >
-      {/* Missile */}
-      <path d="M6 26L18 14" strokeWidth="2.5" />
-      <path d="M18 14L22 10L20 18Z" fill="currentColor" />
+      {/* Crosshair Ring */}
+      <circle cx="24" cy="12" r="8" stroke="#0284c7" strokeWidth="2" strokeDasharray="3 2" />
+      <circle cx="24" cy="12" r="2" fill="#ef4444" />
+      {/* Missile Body */}
+      <path
+        d="M6 30L20 16L24 20L10 34Z"
+        fill="#dc2626"
+        stroke="#1c1917"
+        strokeWidth="2"
+      />
+      <path d="M20 16L27 11L25 18Z" fill="#ffd000" stroke="#1c1917" strokeWidth="1.5" />
       {/* Fins */}
-      <path d="M6 26L4 21L8 23Z" />
-      <path d="M6 26L11 28L9 24Z" />
-      {/* Crosshair Target */}
-      <circle cx="22" cy="10" r="7" strokeDasharray="3 2" />
-      <line x1="22" y1="1" x2="22" y2="5" />
-      <line x1="22" y1="15" x2="22" y2="19" />
-      <line x1="13" y1="10" x2="17" y2="10" />
-      <line x1="27" y1="10" x2="31" y2="10" />
+      <path d="M6 30L3 24L8 27Z" fill="#1c1917" />
+      <path d="M6 30L12 33L9 28Z" fill="#1c1917" />
     </svg>
   );
 }
 
-function MineIcon({ className = '', size = 24 }: IconProps): JSX.Element {
+function MineIcon({ className = '', size = 28 }: IconProps): JSX.Element {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
+      viewBox="0 0 36 36"
       fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
       className={className}
     >
       {/* Dome Body */}
-      <path d="M6 22C6 14 26 14 26 22Z" fill="currentColor" fillOpacity="0.2" strokeWidth="2" />
-      <line x1="4" y1="22" x2="28" y2="22" strokeWidth="2.5" />
+      <path
+        d="M6 25C6 15 30 15 30 25Z"
+        fill="#475569"
+        stroke="#1c1917"
+        strokeWidth="2.5"
+      />
+      <line x1="4" y1="25" x2="32" y2="25" stroke="#1c1917" strokeWidth="3" />
       {/* Spikes */}
-      <line x1="8" y1="16" x2="6" y2="12" />
-      <line x1="16" y1="14" x2="16" y2="9" />
-      <line x1="24" y1="16" x2="26" y2="12" />
-      {/* Flashing Light */}
-      <circle cx="16" cy="9" r="2" fill="currentColor" />
+      <line x1="9" y1="18" x2="6" y2="13" stroke="#1c1917" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="18" y1="15" x2="18" y2="9" stroke="#1c1917" strokeWidth="2.5" strokeLinecap="round" />
+      <line x1="27" y1="18" x2="30" y2="13" stroke="#1c1917" strokeWidth="2.5" strokeLinecap="round" />
+      {/* Flashing Red LED */}
+      <circle cx="18" cy="9" r="3" fill="#ef4444" stroke="#1c1917" strokeWidth="1.5" />
     </svg>
   );
 }
 
-function AirstrikeIcon({ className = '', size = 24 }: IconProps): JSX.Element {
+function AirstrikeIcon({ className = '', size = 28 }: IconProps): JSX.Element {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
+      viewBox="0 0 36 36"
       fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
       className={className}
     >
-      {/* Airplane */}
-      <path d="M3 14L14 11L28 4L22 15L29 20L25 22L19 18L10 21L7 19L11 16L3 14Z" fill="currentColor" fillOpacity="0.25" />
-      {/* Falling Bombs */}
-      <circle cx="10" cy="27" r="2" fill="currentColor" />
-      <circle cx="17" cy="26" r="2" fill="currentColor" />
-      <circle cx="24" cy="25" r="2" fill="currentColor" />
+      {/* Airplane Silhouette */}
+      <path
+        d="M2 16L14 12L31 4L24 17L32 23L27 25L20 20L10 24L7 22L12 18L2 16Z"
+        fill="#334155"
+        stroke="#1c1917"
+        strokeWidth="2"
+      />
+      {/* Falling Missiles */}
+      <path d="M10 29L12 33L14 29Z" fill="#ff6b00" stroke="#1c1917" strokeWidth="1" />
+      <path d="M18 28L20 32L22 28Z" fill="#ff6b00" stroke="#1c1917" strokeWidth="1" />
+      <path d="M26 27L28 31L30 27Z" fill="#ff6b00" stroke="#1c1917" strokeWidth="1" />
     </svg>
   );
 }
 
-function TeleportIcon({ className = '', size = 24 }: IconProps): JSX.Element {
+function TeleportIcon({ className = '', size = 28 }: IconProps): JSX.Element {
   return (
     <svg
       width={size}
       height={size}
-      viewBox="0 0 32 32"
+      viewBox="0 0 36 36"
       fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
       className={className}
     >
-      {/* Spiral Portal */}
-      <path d="M16 4C9.37 4 4 9.37 4 16C4 22.63 9.37 28 16 28C22.63 28 28 22.63 28 16C28 11 25 7 21 5.5" />
-      <path d="M16 8C11.58 8 8 11.58 8 16C8 20.42 11.58 24 16 24C20.42 24 24 20.42 24 16C24 13 22 10.5 19.5 9.5" />
-      <path d="M16 12C13.79 12 12 13.79 12 16C12 18.21 13.79 20 16 20C18.21 20 20 18.21 20 16" />
-      <circle cx="16" cy="16" r="1.5" fill="currentColor" />
+      {/* Outer Vortex Ring */}
+      <circle cx="18" cy="18" r="14" fill="#06b6d4" fillOpacity="0.25" stroke="#1c1917" strokeWidth="2.5" />
+      {/* Swirling Portal Spiral */}
+      <path
+        d="M18 4C10.27 4 4 10.27 4 18C4 25.73 10.27 32 18 32C25.73 32 32 25.73 32 18C32 12 28.5 7.5 24 5.5"
+        stroke="#0284c7"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+      />
+      <path
+        d="M18 9C13.03 9 9 13.03 9 18C9 22.97 13.03 27 18 27C22.97 27 27 22.97 27 18C27 14.5 24.5 11.5 21.5 10.5"
+        stroke="#38bdf8"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      {/* Center Spark */}
+      <circle cx="18" cy="18" r="3" fill="#ffd000" stroke="#1c1917" strokeWidth="1.5" />
     </svg>
   );
 }
