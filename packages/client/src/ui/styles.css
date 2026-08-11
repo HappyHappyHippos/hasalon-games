@@ -2892,6 +2892,9 @@ strong,
   .netbadge__jitter {
     display: none;
   }
+  .worms__banner {
+    inset-block-start: calc(48px + env(safe-area-inset-top));
+  }
 }
 
 /* Landscape phone: ~350-390px of height total, so every row the roster wraps
@@ -4880,6 +4883,7 @@ strong,
   justify-content: center;
   gap: 14px;
   pointer-events: none;
+  z-index: 3;
 }
 
 .worms__clock {
