@@ -14,7 +14,8 @@ import { attachDrawInput, type DrawInput } from '../skribbl/input';
 import { Toolbar } from '../skribbl/Toolbar';
 import { VotePanel } from '../memes/VotePanel';
 import { RatingResultCard } from '../memes/ResultCard';
-import { takeTelephoneDraftInk } from './draftBus';
+import { connectTelephoneDraftInk } from './draftBus';
+import './telephone.css';
 
 function DrawingPreview({ ink, className = '' }: { ink: readonly number[]; className?: string }): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -72,12 +73,11 @@ function DrawingComposer({ previous, submitted }: { previous: TelephonePrevious 
     if (!canvasRef.current || !hitRef.current) return;
     const ink = new InkSurface(canvasRef.current);
     ink.start();
-    const restored = takeTelephoneDraftInk();
-    if (restored) ink.apply([OP_CLEAR, ...restored]);
+    const disconnectDraft = connectTelephoneDraftInk((restored) => ink.apply([OP_CLEAR, ...restored]));
     const input = attachDrawInput(hitRef.current, ink);
     input.enabled = true;
     inputRef.current = input;
-    return () => { input.destroy(); ink.stop(); inputRef.current = null; };
+    return () => { disconnectDraft(); input.destroy(); ink.stop(); inputRef.current = null; };
   }, []);
   useEffect(() => {
     if (!inputRef.current) return;
