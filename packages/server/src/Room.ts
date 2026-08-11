@@ -138,6 +138,7 @@ export class Room {
       memes: GAMES.memes.defaultConfig(3),
       skribbl: GAMES.skribbl.defaultConfig(2),
       tanks: GAMES.tanks.defaultConfig(2),
+      telephone: GAMES.telephone.defaultConfig(2),
       worms: GAMES.worms.defaultConfig(2),
     };
   }
@@ -770,5 +771,9 @@ export class Room {
     // a drawer reconnecting must not spend the rest of the round without their
     // word.
     this.sendPrivate(player);
+    if (this.instance.privateCatchUpFor && player.client) {
+      const data = this.instance.privateCatchUpFor(player.id);
+      if (data !== null && data !== undefined) player.client.send({ t: 'privateCatchUp', data });
+    }
   }
 }

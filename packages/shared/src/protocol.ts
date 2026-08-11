@@ -2,7 +2,7 @@ import type { GameConfig, GameId, GameSnapshot } from './gameModule';
 import type { RoomView } from './roomTypes';
 
 /** Bump when the message shapes change so stale tabs fail loudly, not weirdly. */
-export const PROTOCOL_VERSION = 22;
+export const PROTOCOL_VERSION = 23;
 
 export const WS_PATH = '/ws';
 
@@ -136,6 +136,7 @@ export type ServerMessage =
    * secret in a frame that every other player receives and can read.
    */
   | { t: 'private'; data: unknown }
+  | { t: 'privateCatchUp'; data: unknown }
   | { t: 'error'; code: ErrorCode; message: string }
   /** A relayed `rtc` payload, stamped with who actually sent it. */
   | { t: 'rtc'; from: string; data: unknown }

@@ -17,19 +17,14 @@ import {
   MAX_CHAT_HISTORY,
   MAX_GUESSES_PER_SECOND,
   MAX_GUESS_LENGTH,
-  MAX_POINTS_PER_MESSAGE,
-  MAX_POINTS_PER_ROUND,
   MAX_REVEAL_FRACTION,
-  OP_BEGIN,
-  OP_CLEAR,
-  OP_FILL,
-  OP_TO,
   PICK_TICKS,
   PLACE_BONUS,
   REVEAL_START_FRACTION,
   REVEAL_TICKS,
   BRUSH_SIZES,
 } from './constants';
+import { applyInkInput, clearInk as clearInkDocument, type InkInput } from './ink';
 import type {
   SkribblChatLine,
   SkribblConfig,
@@ -265,31 +260,16 @@ function applyHints(state: SkribblState): void {
 // ---------------------------------------------------------------------------
 
 function clearInk(state: SkribblState): void {
-  state.strokes = [];
-  state.strokeStarts = [];
-  state.inkPending.push(OP_CLEAR);
-}
-
-/** Replay the whole drawing to every client. Used by undo, which cannot diff. */
-function replayInk(state: SkribblState): void {
-  state.inkPending.push(OP_CLEAR, ...state.strokes);
+  clearInkDocument(state);
 }
 
 // ---------------------------------------------------------------------------
 // Input
 // ---------------------------------------------------------------------------
 
-type DrawMessage =
-  | { k: 'begin'; c: number; s: number; x: number; y: number }
-  | { k: 'to'; p: number[] }
-  | { k: 'clear' }
-  | { k: 'undo' }
-  | { k: 'fill'; c: number; x?: number; y?: number }
+type DrawMessage = InkInput
   | { k: 'pick'; w: string }
   | { k: 'guess'; g: string };
-
-const clampX = (v: number): number => Math.max(0, Math.min(CANVAS_WIDTH, Math.round(v)));
-const clampY = (v: number): number => Math.max(0, Math.min(CANVAS_HEIGHT, Math.round(v)));
 
 export function applyInput(state: SkribblState, playerId: string, raw: unknown): void {
   const player = state.players.find((p) => p.id === playerId);
@@ -328,61 +308,8 @@ function pickWord(state: SkribblState, player: SkribblPlayer, word: unknown): vo
 
 function draw(state: SkribblState, player: SkribblPlayer, message: DrawMessage): void {
   if (state.phase !== 'drawing' || player.seat !== state.drawerSeat) return;
-
-  switch (message.k) {
-    case 'begin': {
-      if (state.strokes.length / 3 >= MAX_POINTS_PER_ROUND) return;
-      const color = Math.max(0, Math.min(INK_COLORS.length - 1, Math.round(message.c ?? 0)));
-      const size = Math.max(0, Math.min(BRUSH_SIZES.length - 1, Math.round(message.s ?? 0)));
-      const x = clampX(message.x);
-      const y = clampY(message.y);
-      state.strokeStarts.push(state.strokes.length);
-      state.strokes.push(OP_BEGIN, color, size, x, y);
-      state.inkPending.push(OP_BEGIN, color, size, x, y);
-      return;
-    }
-    case 'to': {
-      // Only valid inside a stroke; a `to` with no `begin` would draw from
-      // wherever the last stroke happened to end.
-      if (state.strokeStarts.length === 0) return;
-      const points = Array.isArray(message.p) ? message.p : [];
-      const count = Math.min(points.length >> 1, MAX_POINTS_PER_MESSAGE);
-      for (let i = 0; i < count; i++) {
-        if (state.strokes.length >= MAX_POINTS_PER_ROUND * 3) return;
-        const x = clampX(Number(points[i * 2]));
-        const y = clampY(Number(points[i * 2 + 1]));
-        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-        state.strokes.push(OP_TO, x, y);
-        state.inkPending.push(OP_TO, x, y);
-      }
-      return;
-    }
-    case 'clear':
-      clearInk(state);
-      return;
-    case 'fill': {
-      const requested = Number(message.c);
-      const color = Number.isFinite(requested)
-        ? Math.max(0, Math.min(INK_COLORS.length - 1, Math.round(requested)))
-        : 0;
-      const x = clampX(typeof message.x === 'number' && Number.isFinite(message.x) ? message.x : CANVAS_WIDTH / 2);
-      const y = clampY(typeof message.y === 'number' && Number.isFinite(message.y) ? message.y : CANVAS_HEIGHT / 2);
-      state.strokeStarts.push(state.strokes.length);
-      state.strokes.push(OP_FILL, color, x, y);
-      state.inkPending.push(OP_FILL, color, x, y);
-      return;
-    }
-    case 'undo': {
-      const start = state.strokeStarts.pop();
-      if (start === undefined) return;
-      state.strokes.length = start;
-      // No way to un-draw a stroke from a surface the clients have already
-      // accumulated, so undo is a wipe and a replay. At one press per second
-      // that is affordable, and it is exactly right rather than nearly right.
-      replayInk(state);
-      return;
-    }
-  }
+  if (message.k === 'pick' || message.k === 'guess') return;
+  applyInkInput(state, message);
 }
 
 function guess(state: SkribblState, player: SkribblPlayer, text: unknown): void {

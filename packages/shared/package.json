@@ -13,6 +13,7 @@
     "./memes": "./src/games/memes/index.ts",
     "./skribbl": "./src/games/skribbl/index.ts",
     "./tanks": "./src/games/tanks/index.ts",
+    "./telephone": "./src/games/telephone/index.ts",
     "./worms": "./src/games/worms/index.ts"
   },
   "scripts": {

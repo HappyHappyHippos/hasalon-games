@@ -5,6 +5,7 @@ import { gunMayhemModule } from './games/gunmayhem/module';
 import { memesModule } from './games/memes/module';
 import { skribblModule } from './games/skribbl/module';
 import { tanksModule } from './games/tanks/module';
+import { telephoneModule } from './games/telephone/module';
 import { wormsModule } from './games/worms/module';
 
 /**
@@ -30,6 +31,7 @@ export const GAMES: Record<GameId, GameModule> = {
   memes: memesModule,
   skribbl: skribblModule,
   tanks: tanksModule,
+  telephone: telephoneModule,
   worms: wormsModule,
 };
 
