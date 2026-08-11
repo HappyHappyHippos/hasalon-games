@@ -1,5 +1,5 @@
 import { useState, type JSX } from 'react';
-import { WEAPONS, type WeaponSpec, type WormsWeaponId } from '@mg/shared/worms';
+import { WEAPONS, type WormsWeaponId } from '@mg/shared/worms';
 import { useT } from '../../strings';
 import { WormsWeaponIcon } from './WormsWeaponIcons';
 
@@ -52,12 +52,10 @@ export function WeaponPickerModal({
         {/* Weapons Grid */}
         <div className="worms__picker-grid">
           {weapons.map((id) => {
-            const spec = WEAPONS[id];
             const left = ammo[id];
             const empty = left !== undefined && left <= 0;
             const isSelected = current === id;
             const name = t.wormsWeaponNames?.[id] ?? id;
-            const category = getCategoryTag(id, spec);
 
             return (
               <button
@@ -80,9 +78,6 @@ export function WeaponPickerModal({
                 </div>
                 <div className="worms__picker-card-body">
                   <span className="worms__picker-card-name">{name}</span>
-                  <span className={`worms__picker-card-tag worms__picker-card-tag--${category.key}`}>
-                    {category.label}
-                  </span>
                 </div>
                 <div className="worms__picker-card-ammo">
                   {left !== undefined ? left : '∞'}
@@ -92,7 +87,7 @@ export function WeaponPickerModal({
           })}
         </div>
 
-        {/* Blueprint / Field Note Instruction Card */}
+        {/* Tactical Instruction Blueprint Card */}
         {activeSpec && (
           <div className="worms__picker-info">
             <div className="worms__picker-info-head">
@@ -101,9 +96,6 @@ export function WeaponPickerModal({
               </div>
               <div className="worms__picker-info-titles">
                 <span className="worms__picker-info-name">{activeName}</span>
-                <span className="worms__picker-info-mode">
-                  {getCategoryTag(activeId, activeSpec).label}
-                </span>
               </div>
               {activeSpec.ammo >= 0 && (
                 <span className="worms__picker-info-badge">
@@ -120,20 +112,4 @@ export function WeaponPickerModal({
       </div>
     </div>
   );
-}
-
-function getCategoryTag(
-  id: WormsWeaponId,
-  spec: WeaponSpec,
-): { key: string; label: string } {
-  if (id === 'bazooka' || id === 'cluster') return { key: 'power', label: 'Power Shot' };
-  if (id === 'grenade') return { key: 'fuse', label: 'Fuse 1-5s' };
-  if (id === 'shotgun') return { key: 'direct', label: '2 Shots' };
-  if (id === 'bat') return { key: 'melee', label: 'Melee' };
-  if (id === 'dynamite') return { key: 'drop', label: 'Drop 4s' };
-  if (id === 'homing' || id === 'airstrike') return { key: 'target', label: 'Map Target' };
-  if (id === 'mine') return { key: 'proximity', label: 'Mine' };
-  if (id === 'teleport') return { key: 'utility', label: 'Utility' };
-  if (spec.needsTarget) return { key: 'target', label: 'Map Target' };
-  return { key: 'direct', label: 'Direct' };
 }

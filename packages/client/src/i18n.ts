@@ -281,18 +281,6 @@ const he = {
         'המצייר מקבל נקודות על כל מי שניחש.',
       ],
     },
-    telephone: {
-      name: 'טלפון שבור',
-      tagline: 'כותבים, מציירים ורואים איך הכול השתבש',
-      controls: 'כתבו רעיון או ניחוש · ציירו עם העכבר או האצבע · הצביעו 👍 😐 👎',
-      rules: [
-        'כל אחד כותב רעיון קצר, והוא עובר לשחקן הבא בלי לחשוף את השרשרת.',
-        'מציירים ומנחשים לסירוגין ורואים רק את השלב הקודם.',
-        'כולם משחקים באותו הזמן והעבודה נשלחת אוטומטית כשהזמן נגמר.',
-        'בסוף חושפים כל שרשרת שלב אחר שלב ומצביעים על כל ציור חוץ משלכם.',
-        'מי שצובר הכי הרבה נקודות מנצח.',
-      ],
-    },
     memes: {
       name: 'אלוף הממים',
       tagline: 'כותבים יחד, צוחקים אחד על השני',
@@ -814,18 +802,6 @@ const en: Dict = {
         'Type guesses in the chat — the faster you get it, the more it is worth.',
         'Letters appear as the clock runs down.',
         'The drawer scores for every person who gets it.',
-      ],
-    },
-    telephone: {
-      name: 'Broken Telephone',
-      tagline: 'Write it. Draw it. Watch it go wonderfully wrong.',
-      controls: 'Write a prompt or guess · draw with a mouse or finger · vote 👍 😐 👎',
-      rules: [
-        'Everyone writes a short prompt, which passes on without revealing the chain.',
-        'Alternate drawing and guessing while seeing only the previous step.',
-        'Everyone plays at once and work submits automatically when time expires.',
-        'Reveal every chain step by step, voting on every drawing except your own.',
-        'The player with the most points wins.',
       ],
     },
     memes: {
