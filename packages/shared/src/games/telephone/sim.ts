@@ -14,7 +14,14 @@ export function normalizeConfig(patch: unknown, current: TelephoneConfig): Telep
   if (typeof p.voteSeconds === 'number' && Number.isFinite(p.voteSeconds)) next.voteSeconds = Math.min(MAX_VOTE_SECONDS, Math.max(MIN_VOTE_SECONDS, Math.round(p.voteSeconds)));
   return next;
 }
-export function normalizeText(raw: unknown): string { return typeof raw === 'string' ? raw.replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, MAX_TEXT_LENGTH) : ''; }
+// User text is shown to every player; strip controls and bidi overrides before reveal.
+// eslint-disable-next-line no-control-regex
+const UNSAFE_TEXT = /[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2060-\u206f\ufeff]/g;
+export function normalizeText(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  const cleaned = raw.normalize('NFC').replace(UNSAFE_TEXT, '').replace(/\s+/gu, ' ').trim();
+  return Array.from(cleaned).slice(0, MAX_TEXT_LENGTH).join('');
+}
 export function taskFor(index: number): TelephoneTask { return index === 0 ? 'prompt' : index % 2 === 1 ? 'drawing' : 'guess'; }
 
 export function createState(seats: GameSeat[], config: TelephoneConfig, seed: number): TelephoneState {
