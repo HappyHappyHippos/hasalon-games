@@ -73,7 +73,7 @@ export type TelephoneInput =
   | { k: 'draft'; text: string }
   | { k: 'submitText'; text: string }
   | { k: 'submitDrawing' }
-  | { k: 'like'; on: boolean };
+  | { k: 'like'; step: number; on: boolean };
 
 export interface TelephoneSnapshotPlayer { s: number; p: number; sub: 0 | 1; v: 0 | 1 }
 export interface TelephoneRevealStep {
@@ -115,8 +115,6 @@ export interface TelephonePrivate {
   previous: TelephonePrevious | null;
   draft: string;
   submitted: boolean;
-  liked: boolean;
-  isAuthor: boolean;
 }
 
 export interface TelephonePrivateCatchUp { task: TelephoneTask; draftInk: number[] }

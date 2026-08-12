@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type JSX } from 'react';
 import { TICK_RATE, colorFor, type RoomView } from '@mg/shared';
 import { DEFAULT_COLOR, DEFAULT_SIZE, OP_CLEAR } from '@mg/shared/skribbl';
-import type { TelephonePrevious, TelephonePrivate, TelephoneRevealStep } from '@mg/shared/telephone';
+import type { TelephonePrevious, TelephoneRevealStep } from '@mg/shared/telephone';
 import { useStore } from '../../store';
 import { useT } from '../../strings';
 import { socket } from '../../net/socket';
@@ -112,95 +112,75 @@ function revealLabel(step: TelephoneRevealStep, t: ReturnType<typeof useT>): str
   return t.telephoneGuessReveal;
 }
 
-function HeartFaces({ seats, room, compact = false }: { seats: readonly number[]; room: RoomView; compact?: boolean }): JSX.Element | null {
+function HeartFaces({ seats, room }: { seats: readonly number[]; room: RoomView }): JSX.Element | null {
   const t = useT();
   if (seats.length === 0) return null;
   return (
-    <div className={`telephone__heart-faces${compact ? ' telephone__heart-faces--compact' : ''}`} aria-label={t.telephoneLikeCount(seats.length)}>
-      <span aria-hidden="true">♥</span>
+    <div className="telephone__heart-faces" aria-label={t.telephoneLikeCount(seats.length)}>
       {seats.map((seat) => {
         const player = room.players.find((candidate) => candidate.seat === seat);
-        return player ? <div key={seat} title={player.name}><Avatar colorIndex={player.colorIndex} hat={player.hat} face={player.face} name={player.name} size={compact ? 22 : 30} /></div> : null;
+        return player ? <div key={seat} title={player.name}><Avatar colorIndex={player.colorIndex} hat={player.hat} face={player.face} name={player.name} size={22} /></div> : null;
       })}
     </div>
   );
 }
 
-function HeartPanel({ mine }: { mine: TelephonePrivate | null }): JSX.Element {
+function HeartButton({ step, index, mySeat }: { step: TelephoneRevealStep; index: number; mySeat: number }): JSX.Element | null {
   const t = useT();
-  if (mine?.isAuthor) return <p className="telephone__heart-own">{t.telephoneYours}</p>;
-  const liked = mine?.liked ?? false;
+  if (step.authorSeat === mySeat || mySeat < 0) return null;
+  const liked = step.likedBy.includes(mySeat);
   return (
-    <button type="button" className={`telephone__heart-button${liked ? ' telephone__heart-button--on' : ''}`}
-      aria-pressed={liked} onClick={() => socket.sendInputReliable({ k: 'like', on: !liked })}>
-      <span aria-hidden="true">♥</span>
-      <b>{liked ? t.telephoneUnlike : t.telephoneLike}</b>
+    <button type="button" className={`telephone__message-heart${liked ? ' telephone__message-heart--on' : ''}`}
+      aria-label={liked ? t.telephoneUnlike : t.telephoneLike} aria-pressed={liked}
+      onClick={() => socket.sendInputReliable({ k: 'like', step: index, on: !liked })}>
+      <span aria-hidden="true">♥️</span>
     </button>
   );
 }
 
-function HeartResult({ step }: { step: TelephoneRevealStep }): JSX.Element {
-  const t = useT();
-  return (
-    <section className="telephone__heart-result">
-      <output><span aria-hidden="true">♥</span> {step.likedBy.length}</output>
-      <strong>{t.telephoneAward(step.award ?? 0)}</strong>
-    </section>
-  );
-}
-
-function RevealItem({ step, room, compact = false, index = 0 }: { step: TelephoneRevealStep; room: RoomView; compact?: boolean; index?: number }): JSX.Element {
+function ChainMessage({ step, room, index, mySeat }: { step: TelephoneRevealStep; room: RoomView; index: number; mySeat: number }): JSX.Element {
   const t = useT();
   const author = room.players.find((player) => player.seat === step.authorSeat);
+  const side = index % 2 === 0 ? 'right' : 'left';
   return (
-    <article className={`telephone__reveal-item${compact ? ' telephone__reveal-item--compact' : ' telephone__reveal-item--focus'}`}>
-      {compact && <span className="telephone__lineage-number" aria-hidden="true">{index + 1}</span>}
-      {compact && <p className="eyebrow telephone__lineage-kind">{revealLabel(step, t)}</p>}
-      <div className="telephone__reveal-author">
-        {author ? <><Avatar colorIndex={author.colorIndex} hat={author.hat} face={author.face} name={author.name} size={36} /><strong style={{ color: colorFor(author.colorIndex) }}>{author.name}</strong></> : <strong>{t.telephoneMysteryArtist}</strong>}
+    <article className={`telephone__message telephone__message--${side}`}>
+      <div className="telephone__message-sender">
+        {author && <Avatar colorIndex={author.colorIndex} hat={author.hat} face={author.face} name={author.name} size={30} />}
+        <strong style={author ? { color: colorFor(author.colorIndex) } : undefined}>{author?.name ?? t.telephoneMysteryArtist}</strong>
+        <span>{revealLabel(step, t)}</span>
       </div>
-      {step.kind === 'drawing' ? <DrawingPreview ink={step.ink ?? []} /> : <p className="telephone__reveal-text" dir="auto">{step.text || t.telephoneNoText}</p>}
-      {!compact && <HeartFaces seats={step.likedBy} room={room} />}
-      {compact && <HeartFaces seats={step.likedBy} room={room} compact />}
+      <div className="telephone__message-row">
+        <div className={`telephone__message-bubble${step.kind === 'drawing' ? ' telephone__message-bubble--drawing' : ''}`}>
+          {step.kind === 'drawing' ? <DrawingPreview ink={step.ink ?? []} /> : <p className="telephone__message-text" dir="auto">{step.text || t.telephoneNoText}</p>}
+        </div>
+        <HeartButton step={step} index={index} mySeat={mySeat} />
+      </div>
+      <HeartFaces seats={step.likedBy} room={room} />
     </article>
   );
 }
 
-function Reveal({ room, mySeat: _mySeat }: { room: RoomView; mySeat: number }): JSX.Element {
+function Reveal({ room, mySeat }: { room: RoomView; mySeat: number }): JSX.Element {
   const t = useT();
   const view = useStore((state) => state.hud.telephone);
-  const mine = useStore((state) => state.telephonePrivate);
+  const endRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const frame = window.requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }));
+    return () => window.cancelAnimationFrame(frame);
+  }, [view?.revealChainIndex, view?.revealed.length]);
   if (!view) return <div className="telephone__waiting"><h2>{t.telephoneRevealTitle}</h2></div>;
-  const current = view.revealed[view.revealed.length - 1];
-  const currentIndex = view.revealed.length - 1;
-  const result = view.phase === 'result' && current;
   const complete = view.phase === 'chainComplete';
   return (
-    <section className={`telephone__album${complete ? ' telephone__album--complete' : ' telephone__album--focus'}`} aria-live="polite">
+    <section className="telephone__album" aria-live="polite">
       <div className="telephone__album-head">
         <p className="eyebrow">{t.telephoneChain(view.revealChainIndex + 1, view.revealChainCount)}</p>
         <h1>{complete ? t.telephoneFullLineage : t.telephoneRevealTitle}</h1>
       </div>
-      {complete ? (
-        <>
-          <p className="sticker telephone__complete">{t.telephoneChainComplete}</p>
-          <div className="telephone__lineage">
-            {view.revealed.map((step, index) => <RevealItem key={`${view.revealChainIndex}-${index}`} step={step} room={room} compact index={index} />)}
-          </div>
-        </>
-      ) : current ? (
-        <div key={view.phaseSeq} className="telephone__focus">
-          <div className="telephone__focus-label">
-            <span>{revealLabel(current, t)}</span>
-            <b dir="ltr">{currentIndex + 1} / {view.contributionCount}</b>
-          </div>
-          <RevealItem step={current} room={room} index={currentIndex} />
-          <div className="telephone__focus-action">
-            {view.phase === 'voting' && <HeartPanel mine={mine} />}
-            {result && <HeartResult step={current} />}
-          </div>
-        </div>
-      ) : null}
+      <div className="telephone__chat">
+        {view.revealed.map((step, index) => <ChainMessage key={`${view.revealChainIndex}-${index}`} step={step} room={room} index={index} mySeat={mySeat} />)}
+        {complete && <p className="telephone__complete">{t.telephoneChainComplete}</p>}
+        <div ref={endRef} className="telephone__chat-end" />
+      </div>
     </section>
   );
 }
@@ -216,7 +196,7 @@ export function TelephoneScreen({ room, mySeat }: { room: RoomView; mySeat: numb
   const phaseClass = contributing && mine?.task === 'drawing' ? 'draw' : contributing ? 'write' : 'reveal';
   return (
     <main className="telephone">
-      {room.phase !== 'matchOver' && <header className="telephone__top"><div><span className={`telephone__clock${seconds <= 10 && (contributing || view?.phase === 'voting') ? ' telephone__clock--low' : ''}`} dir="ltr">{seconds}</span>{contributing && <strong>{t.telephoneStep((view?.contributionIndex ?? 0) + 1, view?.contributionCount ?? room.players.length)}</strong>}</div><VoiceBar compact /></header>}
+      {room.phase !== 'matchOver' && <header className="telephone__top"><div><span className={`telephone__clock${seconds <= 10 && contributing ? ' telephone__clock--low' : ''}`} dir="ltr">{seconds}</span>{contributing && <strong>{t.telephoneStep((view?.contributionIndex ?? 0) + 1, view?.contributionCount ?? room.players.length)}</strong>}</div><VoiceBar compact /></header>}
       <div key={view?.phaseSeq ?? 0} className={`telephone__phase telephone__phase--${phaseClass}`}>
         {contributing && mySeat >= 0 && mine ? (mine.task === 'drawing' ? <DrawingComposer previous={mine.previous} submitted={mine.submitted} /> : <TextComposer task={mine.task} previous={mine.previous} initial={mine.draft} submitted={mine.submitted} />) : contributing ? <div className="telephone__waiting"><h2>{t.telephoneSpectating}</h2></div> : view?.phase === 'intro' ? <div className="telephone__intro"><span>☎</span><h1>{t.telephoneIntro}</h1></div> : <Reveal room={room} mySeat={mySeat} />}
       </div>

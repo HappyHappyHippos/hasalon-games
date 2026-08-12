@@ -8,6 +8,6 @@ Drawing deliberately reuses Skribbl's ink document, canvas, toolbar, pointer bat
 
 Every revealed contribution — prompt, guess, or drawing — can receive a public heart from every player except its author. Each heart is one point for the author, and snapshots include the seats behind the hearts so the client can show their avatars immediately. There are no voter points, rating tiers, or top-entry bonuses.
 
-The reveal snapshot contains the revealed prefix, but the client shows only the current step during `revealText`, `revealDrawing`, `voting`, and `result`. `chainComplete` is the deliberate payoff where the complete lineage appears at once; keep that phase long enough to read the album.
+The reveal snapshot grows by one contribution every two seconds. The client renders that prefix as an alternating chat and keeps every revealed message heartable until `chainComplete`; likes update scores immediately. The chat scrolls to the newest message while the full conversation remains available to scroll back through.
 
 Telephone owns a fixed-height shell like Skribbl. Its drawing board must preserve the shared canvas's 4:3 ratio in portrait and short landscape, and its custom header must reserve `--chrome-gutter` so the microphone never sits under the fixed options/pause/fullscreen controls.

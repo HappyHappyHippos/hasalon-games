@@ -740,19 +740,22 @@ describe('match', () => {
       client!.send({ t: 'input', i: { k: 'to', p: [80, 80] } });
       client!.send({ t: 'input', i: { k: 'submitDrawing' } });
     }
-    await host!.waitFor(
+    const reveal = await host!.waitFor(
       (message): message is Extract<ServerMessage, { t: 'snapshot' }> =>
-        message.t === 'snapshot' && message.snap.game === 'telephone' && message.snap.phase === 'voting',
+        message.t === 'snapshot' && message.snap.game === 'telephone' && message.snap.phase === 'revealText',
     );
-    host!.send({ t: 'input', i: { k: 'like', on: true } });
-    guest!.send({ t: 'input', i: { k: 'like', on: true } });
+    if (reveal.snap.game !== 'telephone') throw new Error('wrong game');
+    const authorSeat = reveal.snap.revealed[0]!.authorSeat;
+    host!.send({ t: 'input', i: { k: 'like', step: 0, on: true } });
+    guest!.send({ t: 'input', i: { k: 'like', step: 0, on: true } });
     const result = await host!.waitFor(
       (message): message is Extract<ServerMessage, { t: 'snapshot' }> =>
-        message.t === 'snapshot' && message.snap.game === 'telephone' && message.snap.phase === 'result',
+        message.t === 'snapshot' && message.snap.game === 'telephone' && message.snap.revealed[0]?.likedBy.length === 1,
     );
     if (result.snap.game !== 'telephone') throw new Error('wrong game');
-    expect(result.snap.revealed.at(-1)?.likedBy).toHaveLength(1);
-    expect(result.snap.revealed.at(-1)?.award).toBe(1);
+    expect(result.snap.revealed[0]?.authorSeat).toBe(authorSeat);
+    expect(result.snap.revealed[0]?.likedBy).toHaveLength(1);
+    expect(result.snap.revealed[0]?.award).toBe(1);
   }, 15_000);
 
   it('starts Meme Machine with two players', async () => {

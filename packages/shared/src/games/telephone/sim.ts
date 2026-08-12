@@ -17,7 +17,6 @@ import {
   MIN_VOTE_SECONDS,
   MIN_WRITE_SECONDS,
   POINTS_PER_LIKE,
-  RESULT_TICKS,
   TEXT_REVEAL_TICKS,
 } from './constants';
 import { makeRng, shuffle } from './rng';
@@ -197,21 +196,6 @@ function eligibleIds(state: TelephoneState, step: TelephoneStep): string[] {
     .map((player) => player.id);
 }
 
-function everyoneLiked(state: TelephoneState, step: TelephoneStep): boolean {
-  const ids = eligibleIds(state, step);
-  return ids.length === 0 || ids.every((id) => step.likes.has(id));
-}
-
-function beginResult(state: TelephoneState): void {
-  const step = currentStep(state);
-  if (step) {
-    step.award = step.likes.size * POINTS_PER_LIKE;
-    const author = state.players.find((player) => player.id === step.authorId);
-    if (author) author.score += step.award;
-  }
-  enter(state, 'result', RESULT_TICKS);
-}
-
 function advanceReveal(state: TelephoneState): void {
   const chain = currentChain(state);
   if (chain && state.revealStepIndex + 1 < chain.steps.length) {
@@ -268,19 +252,25 @@ export function applyInput(state: TelephoneState, playerId: string, raw: unknown
     return;
   }
 
-  const step = currentStep(state);
   if (
-    state.phase !== 'voting'
-    || !step
+    !['revealText', 'revealDrawing', 'chainComplete'].includes(state.phase)
     || raw.k !== 'like'
-    || step.authorId === playerId
+    || !Number.isInteger(raw.step)
+    || raw.step < 0
+    || raw.step > state.revealStepIndex
     || !player.connected
     || typeof raw.on !== 'boolean'
   ) return;
 
+  const step = currentChain(state)?.steps[raw.step];
+  if (!step || step.authorId === playerId) return;
+  const hadLike = step.likes.has(playerId);
+  if (raw.on === hadLike) return;
   if (raw.on) step.likes.add(playerId);
   else step.likes.delete(playerId);
-  if (everyoneLiked(state, step)) beginResult(state);
+  step.award = step.likes.size * POINTS_PER_LIKE;
+  const author = state.players.find((candidate) => candidate.id === step.authorId);
+  if (author) author.score = Math.max(0, author.score + (raw.on ? POINTS_PER_LIKE : -POINTS_PER_LIKE));
 }
 
 export function resetInput(_state: TelephoneState, _playerId: string): void {}
@@ -300,36 +290,27 @@ export function stepTick(state: TelephoneState): void {
     finishContribution(state);
     return;
   }
-  const step = currentStep(state);
-  if (state.phase === 'voting' && step && everyoneLiked(state, step)) {
-    beginResult(state);
-    return;
-  }
   if (state.phaseTicks > 0) state.phaseTicks -= 1;
   if (state.phaseTicks > 0) return;
 
   if (state.phase === 'intro') beginContribution(state);
   else if (state.phase === 'contributing') finishContribution(state);
-  else if (state.phase === 'revealText' || state.phase === 'revealDrawing') enter(state, 'voting', seconds(state.config.voteSeconds));
-  else if (state.phase === 'voting') beginResult(state);
-  else if (state.phase === 'result') advanceReveal(state);
+  else if (state.phase === 'revealText' || state.phase === 'revealDrawing') advanceReveal(state);
   else if (state.phase === 'chainComplete') advanceChain(state);
 }
 
-function publicStep(state: TelephoneState, step: TelephoneStep, index: number): TelephoneRevealStep {
-  const current = index === state.revealStepIndex;
-  const result = !current || state.phase === 'result' || state.phase === 'chainComplete';
+function publicStep(state: TelephoneState, step: TelephoneStep): TelephoneRevealStep {
   const likedBy = [...step.likes]
     .map((id) => state.players.find((player) => player.id === id)?.seat)
     .filter((seat): seat is number => seat !== undefined)
     .sort((a, b) => a - b);
   return {
     kind: step.kind,
-    authorSeat: result ? step.authorSeat : -1,
+    authorSeat: step.authorSeat,
     ...(step.kind === 'drawing' ? { ink: [...step.ink] } : { text: step.text }),
     likedBy,
-    likes: result ? step.likes.size : undefined,
-    award: result ? step.award : undefined,
+    likes: step.likes.size,
+    award: step.award,
   };
 }
 
@@ -339,7 +320,7 @@ export function makeSnapshot(state: TelephoneState, tick = state.tickCount): Tel
     ? []
     : (currentChain(state)?.steps
         .slice(0, state.revealStepIndex + 1)
-        .map((item, index) => publicStep(state, item, index)) ?? []);
+        .map((item) => publicStep(state, item)) ?? []);
   return {
     game: 'telephone',
     tick,
@@ -369,14 +350,11 @@ export function makeSnapshot(state: TelephoneState, tick = state.tickCount): Tel
 export function privateFor(state: TelephoneState, playerId: string): TelephonePrivate | null {
   const player = state.players.find((candidate) => candidate.id === playerId);
   if (!player) return null;
-  const step = currentStep(state);
   return {
     task: taskFor(state.contributionIndex),
     previous: state.phase === 'contributing' ? previousFor(state, player) : null,
     draft: state.phase === 'contributing' ? player.textDraft : '',
     submitted: state.phase === 'contributing' && player.submitted,
-    liked: step?.likes.has(playerId) ?? false,
-    isAuthor: step?.authorId === playerId,
   };
 }
 
