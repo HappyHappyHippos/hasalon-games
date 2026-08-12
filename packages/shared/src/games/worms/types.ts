@@ -1,6 +1,6 @@
 import type { RngState } from './rng';
 
-export type WormsStageId = 'green' | 'arctic' | 'living_room';
+export type WormsStageId = 'small_green' | 'arctic' | 'volcano';
 
 // ---------------------------------------------------------------------------
 // Weapons
@@ -82,6 +82,7 @@ export interface WeaponSpec {
     persist?: boolean;
     homing?: { turnRate: number; armTicks: number };
     cluster?: { child: WormsWeaponId; count: number; speed: number; spread: number };
+    burst?: { count: number; spacing: number };
   };
 
   /** How far in front, and how far off level, a swing connects. */

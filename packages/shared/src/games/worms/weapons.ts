@@ -38,9 +38,9 @@ export const WEAPONS: Record<WormsWeaponId, WeaponSpec> = {
     ammo: -1,
     uses: 1,
     usesPower: true,
-    launchSpeed: 640,
+    launchSpeed: 1200,
     projectile: { gravityScale: 1, windScale: 1, bounce: 0, friction: 0, detonate: 'impact' },
-    blast: { radius: 52, damage: 45, knockback: 430 },
+    blast: { radius: 65, damage: 45, knockback: 430 },
   },
 
   grenade: {
@@ -53,7 +53,7 @@ export const WEAPONS: Record<WormsWeaponId, WeaponSpec> = {
     ammo: -1,
     uses: 1,
     usesPower: true,
-    launchSpeed: 560,
+    launchSpeed: 1100,
     fuse: { options: [1, 2, 3, 4, 5], default: 3 },
     projectile: {
       gravityScale: 1,
@@ -62,11 +62,11 @@ export const WEAPONS: Record<WormsWeaponId, WeaponSpec> = {
       friction: 0.72,
       detonate: 'fuse',
     },
-    blast: { radius: 48, damage: 42, knockback: 400 },
+    blast: { radius: 60, damage: 42, knockback: 400 },
   },
 
   /**
-   * Not hitscan — a projectile with no gravity and no wind at 2000 units a
+   * Not hitscan — a projectile with no gravity and no wind at 2500 units a
    * second, which crosses the map in under a tick's worth of sub-steps. Reusing
    * the marcher means it collides with terrain and worms by exactly the same
    * code as everything else, instead of by a second ray-cast that has to agree
@@ -80,11 +80,18 @@ export const WEAPONS: Record<WormsWeaponId, WeaponSpec> = {
     isAttack: true,
     endsTurn: true,
     ammo: -1,
-    uses: 2,
+    uses: 1,
     usesPower: false,
-    launchSpeed: 2000,
-    projectile: { gravityScale: 0, windScale: 0, bounce: 0, friction: 0, detonate: 'impact' },
-    blast: { radius: 18, damage: 24, knockback: 190 },
+    launchSpeed: 2500,
+    projectile: {
+      gravityScale: 0,
+      windScale: 0,
+      bounce: 0,
+      friction: 0,
+      detonate: 'impact',
+      burst: { count: 3, spacing: 18 },
+    },
+    blast: { radius: 23, damage: 24, knockback: 190 },
   },
 
   dynamite: {
@@ -106,7 +113,7 @@ export const WEAPONS: Record<WormsWeaponId, WeaponSpec> = {
       detonate: 'fuse',
       fuseTicks: seconds(4),
     },
-    blast: { radius: 72, damage: 62, knockback: 560 },
+    blast: { radius: 90, damage: 62, knockback: 560 },
   },
 
   airstrike: {
@@ -141,7 +148,7 @@ export const WEAPONS: Record<WormsWeaponId, WeaponSpec> = {
     ammo: 1,
     uses: 1,
     usesPower: true,
-    launchSpeed: 520,
+    launchSpeed: 650,
     needsTarget: true,
     projectile: {
       gravityScale: 0.35,
@@ -151,7 +158,7 @@ export const WEAPONS: Record<WormsWeaponId, WeaponSpec> = {
       detonate: 'impact',
       homing: { turnRate: 3.2, armTicks: seconds(0.6) },
     },
-    blast: { radius: 50, damage: 45, knockback: 420 },
+    blast: { radius: 63, damage: 45, knockback: 420 },
   },
 
   cluster: {
@@ -164,7 +171,7 @@ export const WEAPONS: Record<WormsWeaponId, WeaponSpec> = {
     ammo: 2,
     uses: 1,
     usesPower: true,
-    launchSpeed: 580,
+    launchSpeed: 725,
     projectile: {
       gravityScale: 1,
       windScale: 0.7,
@@ -173,7 +180,7 @@ export const WEAPONS: Record<WormsWeaponId, WeaponSpec> = {
       detonate: 'impact',
       cluster: { child: 'clusterlet', count: 5, speed: 215, spread: 1.5 },
     },
-    blast: { radius: 36, damage: 26, knockback: 260 },
+    blast: { radius: 45, damage: 26, knockback: 260 },
   },
 
   /**
@@ -203,10 +210,10 @@ export const WEAPONS: Record<WormsWeaponId, WeaponSpec> = {
       fuseTicks: seconds(0.7),
       persist: true,
     },
-    blast: { radius: 46, damage: 38, knockback: 420 },
+    blast: { radius: 58, damage: 38, knockback: 420 },
   },
 
-  /** No crater: a zero radius means `detonate` damages and launches but never carves. */
+  /** Small crater: melee swing carves terrain at the impact point. */
   bat: {
     id: 'bat',
     aim: 'melee',
@@ -219,17 +226,17 @@ export const WEAPONS: Record<WormsWeaponId, WeaponSpec> = {
     usesPower: false,
     launchSpeed: 0,
     melee: { reach: 36, arc: 26 },
-    blast: { radius: 0, damage: 28, knockback: 660 },
+    blast: { radius: 24, damage: 28, knockback: 660 },
   },
 
-  /** A utility, not your attack — using it does not spend the turn's one shot. */
+  /** A utility teleport tool that moves the worm and ends the turn. */
   teleport: {
     id: 'teleport',
     aim: 'target',
     kind: 'teleport',
     selectable: true,
-    isAttack: false,
-    endsTurn: false,
+    isAttack: true,
+    endsTurn: true,
     ammo: 2,
     uses: 1,
     usesPower: false,
@@ -263,7 +270,7 @@ export const WEAPONS: Record<WormsWeaponId, WeaponSpec> = {
       // own crater the instant it appears.
       armTicks: 4,
     },
-    blast: { radius: 30, damage: 22, knockback: 240 },
+    blast: { radius: 38, damage: 22, knockback: 240 },
   },
 
   strikeBomb: {
@@ -278,7 +285,7 @@ export const WEAPONS: Record<WormsWeaponId, WeaponSpec> = {
     usesPower: false,
     launchSpeed: 0,
     projectile: { gravityScale: 1, windScale: 0.3, bounce: 0, friction: 0, detonate: 'impact' },
-    blast: { radius: 44, damage: 32, knockback: 340 },
+    blast: { radius: 55, damage: 32, knockback: 340 },
   },
 };
 

@@ -401,6 +401,30 @@ describe('every weapon', () => {
     expect(worm.x).toBe(startX);
     expect(seat.ammo.teleport).toBe(before);
   });
+
+  it('hits adjacent target worm with baseball bat and applies knockback', () => {
+    const state = makeState(2);
+    runUntil(state, (s) => s.phase === 'turn');
+    const attacker = state.worms.find((w) => w.id === state.activeWorm)!;
+    const seat = state.seats[attacker.seat]!;
+
+    const defender = state.worms.find((w) => w.id !== attacker.id)!;
+    defender.x = attacker.x + attacker.facing * 20;
+    defender.y = attacker.y - 10;
+    defender.vx = 0;
+    defender.vy = 0;
+    defender.alive = true;
+    defender.hp = 100;
+
+    applyInput(state, seat.id, { k: 'weapon', w: 'bat' });
+    applyInput(state, seat.id, { seq: 1, bits: IN_FIRE });
+    const events = stepTick(state);
+
+    expect(defender.hp).toBe(100 - WEAPONS.bat.blast.damage);
+    expect(defender.onGround).toBe(false);
+    expect(events).toContainEqual(expect.objectContaining({ t: 'boom', w: 'bat' }));
+    expect(state.craters.length).toBeGreaterThan(0);
+  });
 });
 
 describe('privateFor', () => {

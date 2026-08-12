@@ -92,7 +92,7 @@ const DEATH_SPEC: WeaponSpec = {
   usesPower: false,
   launchSpeed: 0,
   projectile: { gravityScale: 1, windScale: 0, bounce: 0, friction: 0, detonate: 'impact' },
-  blast: { radius: 46, damage: 22, knockback: 300 },
+  blast: { radius: 58, damage: 22, knockback: 300 },
 };
 
 /** A tap of the fire button is still a shot, just a feeble one. */
@@ -495,22 +495,28 @@ function spawnProjectile(state: WormsState, worm: Worm, spec: WeaponSpec, power:
       ? Math.round(seatOf(state, worm).fuse * TICK_RATE)
       : (physics.fuseTicks ?? -1);
 
-  state.projectiles.push({
-    id: state.nextEntityId,
-    kind: spec.id,
-    owner: worm.seat,
-    // Clear of the worm's own box, or an impact weapon detonates in its face.
-    x: dropped ? worm.x : worm.x + aim.x * (WORM_HALF_W + 6),
-    y: dropped ? worm.y : worm.y + aim.y * (WORM_HALF_W + 6),
-    vx: dropped ? 0 : aim.x * speed,
-    vy: dropped ? 0 : aim.y * speed,
-    fuse: physics.detonate === 'fuse' ? fuseTicks : -1,
-    age: 0,
-    tx: state.targetX,
-    ty: state.targetY,
-    resting: false,
-  });
-  state.nextEntityId += 1;
+  const burstCount = physics.burst?.count ?? 1;
+  const spacing = physics.burst?.spacing ?? 0;
+
+  for (let b = 0; b < burstCount; b += 1) {
+    const offset = WORM_HALF_W + 6 + b * spacing;
+    state.projectiles.push({
+      id: state.nextEntityId,
+      kind: spec.id,
+      owner: worm.seat,
+      // Clear of the worm's own box, or an impact weapon detonates in its face.
+      x: dropped ? worm.x : worm.x + aim.x * offset,
+      y: dropped ? worm.y : worm.y + aim.y * offset,
+      vx: dropped ? 0 : aim.x * speed,
+      vy: dropped ? 0 : aim.y * speed,
+      fuse: physics.detonate === 'fuse' ? fuseTicks : -1,
+      age: 0,
+      tx: state.targetX,
+      ty: state.targetY,
+      resting: false,
+    });
+    state.nextEntityId += 1;
+  }
 }
 
 /**
@@ -521,20 +527,47 @@ function spawnProjectile(state: WormsState, worm: Worm, spec: WeaponSpec, power:
 function meleeSweep(state: WormsState, worm: Worm, spec: WeaponSpec): void {
   const melee = spec.melee!;
   const aim = aimVector(worm);
-  const hitX = worm.x + worm.facing * melee.reach;
-  const hitY = worm.y;
+  const hitX = worm.x + aim.x * melee.reach;
+  const hitY = worm.y + aim.y * melee.reach;
+
+  if (spec.blast.radius > 0) {
+    carveCrater(state.mask, hitX, hitY, spec.blast.radius);
+    state.craters.push({
+      x: Math.round(hitX),
+      y: Math.round(hitY),
+      r: spec.blast.radius,
+      tick: state.tick,
+    });
+  }
+
+  // Impact feedback effect at the swing location.
+  state.events.push({
+    t: 'boom',
+    x: Math.round(hitX),
+    y: Math.round(hitY),
+    r: spec.blast.radius > 0 ? spec.blast.radius : 16,
+    w: spec.id,
+  });
 
   for (const target of state.worms) {
     if (!target.alive || target.id === worm.id) continue;
-    if (Math.abs(target.x - hitX) > melee.reach) continue;
-    if (Math.abs(target.y - hitY) > melee.arc + WORM_HIT_R) continue;
-    if ((target.x - worm.x) * worm.facing < 0) continue;
+    const dx = target.x - worm.x;
+    const dy = target.y - worm.y;
+    const dist = Math.hypot(dx, dy);
+
+    // Target must be within swing reach (plus target worm hit radius).
+    if (dist > melee.reach + WORM_HIT_R) continue;
+
+    // Target must be in front of swing direction (dot product with aim vector).
+    const dot = dist < 1 ? 1 : (dx * aim.x + dy * aim.y) / dist;
+    if (dot < -0.25) continue;
 
     hurt(state, target, spec.blast.damage);
     // Launched along the aim, not radially — a bat is a direction, and being
     // able to choose it is the whole skill of the weapon.
     target.vx = aim.x * spec.blast.knockback;
     target.vy = aim.y * spec.blast.knockback - 120;
+    target.y -= 2;
     target.onGround = false;
   }
 }
@@ -576,6 +609,7 @@ function tryTeleport(state: WormsState, worm: Worm): void {
     const seat = seatOf(state, worm);
     seat.ammo.teleport = (seat.ammo.teleport ?? 0) + 1;
     state.usesLeft = 0;
+    state.attackUsed = false;
     return;
   }
   worm.x = x;

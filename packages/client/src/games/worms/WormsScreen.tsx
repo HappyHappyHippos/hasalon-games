@@ -141,7 +141,6 @@ export function WormsScreen({ room, mySeat }: Props): JSX.Element {
           />
           {mySeat >= 0 && showTouch && myTurn && (
             <Controls
-              targeting={targeting}
               currentWeapon={weapon}
               ammo={worms?.ammo ?? {}}
               onOpenPicker={() => setPickerOpen(true)}

@@ -102,11 +102,10 @@ const SPAWN_MARGIN = 6;
  * instead of daylight from the window.
  */
 const STAGES = {
-  green: {
-    mode: 'colour',
-    terrain: (r, g, b) => !(b - r > 40 || Math.min(r, g, b) > 225),
+  small_green: {
+    mode: 'mask',
+    maskFile: 'worms_stage_small_green_mask.png',
     exclude: [],
-    seeds: [],
     close: 2,
     open: 1,
     fillHoles: 400,
@@ -114,53 +113,24 @@ const STAGES = {
     fallback: [86, 160, 214],
   },
   arctic: {
-    mode: 'flood',
-    tolerance: 4,
-    // Under the rope bridge. The bridge is a hard dark edge spanning the gap
-    // between two towers, so the fill cannot get down there from the sky above
-    // and the entire pocket comes out as solid ice.
-    seeds: [{ x: 660, y: 500 }],
-    exclude: [
-      // The mountain ranges flanking the ice — same paint as a lit ice face, so
-      // the fill stops at their edges and calls them terrain.
-      { x: 0, y: 415, w: 145, h: 280 },
-      { x: 1530, y: 400, w: 142, h: 300 },
-      // Cloud banks. Crisp-edged for the same reason.
-      { x: 0, y: 110, w: 280, h: 150 },
-      { x: 1360, y: 160, w: 200, h: 140 },
-      { x: 1540, y: 270, w: 132, h: 130 },
-    ],
+    mode: 'mask',
+    maskFile: 'worms_stage_arctic_mask.png',
+    exclude: [],
     close: 2,
     open: 1,
     fillHoles: 400,
     minBlob: 200,
     fallback: [92, 156, 214],
   },
-  living_room: {
-    mode: 'colour',
-    terrain: (_r, _g, _b, L) => L < 130,
-    seeds: [],
-    exclude: [
-      // The window, its curtain and the view through it: dark frame, dark
-      // foliage, all well under the luma line and none of it standable.
-      { x: 0, y: 30, w: 250, h: 510 },
-      // Wall decorations. All hanging on the wallpaper, well clear of the
-      // brick, and all of them dark enough to pass the luma test — a framed
-      // picture you can stand on in mid-air is the one thing here that reads as
-      // a bug rather than as a joke.
-      { x: 270, y: 100, w: 120, h: 130 }, // small framed picture, upper left
-      { x: 660, y: 0, w: 160, h: 120 }, // pendant lamp and its flex
-      { x: 1230, y: 130, w: 110, h: 100 }, // wall clock
-      { x: 1390, y: 90, w: 282, h: 130 }, // shelf with the plant and books
-      { x: 1450, y: 250, w: 180, h: 170 }, // framed picture, right
-      { x: 1470, y: 490, w: 202, h: 230 }, // standing lamp and the tall plant
-    ],
+  volcano: {
+    mode: 'mask',
+    maskFile: 'worms_stage_volcano_mask.png',
+    exclude: [],
     close: 2,
     open: 1,
-    fillHoles: 500,
+    fillHoles: 400,
     minBlob: 200,
-    fallback: [214, 190, 150],
-    subsurface: { y: 720, color: [58, 36, 24] },
+    fallback: [180, 80, 50],
   },
 };
 
@@ -188,7 +158,7 @@ function main() {
       throw new Error(`${id}: expected >=${WORLD_W}x${WORLD_H}, got ${src.width}x${src.height}`);
     }
 
-    const raw = classify(src, stage);
+    const raw = classify(src, stage, id);
     let mask = rasterise(raw);
     clearRects(mask, stage.exclude);
     mask = close(mask, stage.close);
@@ -223,8 +193,33 @@ function main() {
 // ---------------------------------------------------------------------------
 
 /** Per-pixel terrain/background, at source resolution, cropped to the world. */
-function classify(src, stage) {
+function classify(src, stage, id) {
+  if (stage.mode === 'mask') return classifyByMask(src, stage, id);
   return stage.mode === 'flood' ? classifyByFlood(src, stage) : classifyByColour(src, stage);
+}
+
+function classifyByMask(src, stage, id) {
+  const maskFile = stage.maskFile || `worms_stage_${id}_mask.png`;
+  const maskPath = path.join(SRC_DIR, maskFile);
+  if (!fs.existsSync(maskPath)) {
+    throw new Error(`Mask image not found at ${maskPath}`);
+  }
+  const maskImg = decodePng(fs.readFileSync(maskPath));
+  const out = new Uint8Array(WORLD_W * WORLD_H);
+  const threshold = stage.maskThreshold ?? 30; // sum of r+g+b <= 30 considered black
+  const invert = stage.invertMask ?? false;
+  for (let y = 0; y < WORLD_H; y += 1) {
+    for (let x = 0; x < WORLD_W; x += 1) {
+      const i = (y * maskImg.width + x) * 3;
+      const r = maskImg.rgb[i];
+      const g = maskImg.rgb[i + 1];
+      const b = maskImg.rgb[i + 2];
+      const isBlack = r + g + b <= threshold;
+      const isSolid = invert ? !isBlack : isBlack;
+      out[y * WORLD_W + x] = isSolid ? 1 : 0;
+    }
+  }
+  return out;
 }
 
 function classifyByColour(src, stage) {

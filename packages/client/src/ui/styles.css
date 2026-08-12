@@ -4954,41 +4954,52 @@ strong,
   gap: 8px;
   height: 48px;
   padding: 0 12px;
-  border: 3px solid var(--ink);
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--ink);
-  box-shadow: 3px 3px 0 var(--ink);
+  border: 3px solid rgba(255, 255, 255, 0.75);
+  border-radius: 999px;
+  background: rgba(20, 17, 15, 0.65);
+  backdrop-filter: blur(4px);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   font-family: var(--font-display);
   font-weight: 800;
   font-size: 14px;
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
-  transition: transform 100ms ease, box-shadow 100ms ease, background 100ms ease;
+  transition: transform 100ms ease, box-shadow 100ms ease, background 100ms ease, color 100ms ease;
 }
 .worms__weapon-trigger:hover {
-  background: var(--yellow);
+  background: rgba(255, 210, 63, 0.85);
+  color: var(--ink);
+}
+.worms__weapon-trigger:hover .worms__weapon-trigger-arrow {
+  color: var(--ink);
 }
 .worms__weapon-trigger:active {
-  transform: translate(2px, 2px);
-  box-shadow: 1px 1px 0 var(--ink);
+  transform: scale(0.96);
+  background: rgba(255, 210, 63, 0.95);
+  color: var(--ink);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+.worms__weapon-trigger:active .worms__weapon-trigger-arrow {
+  color: var(--ink);
 }
 .worms__weapon-trigger-ammo {
   font-family: var(--font-ui);
   font-weight: 800;
   font-size: 11px;
-  background: var(--yellow);
+  background: #ffd000;
   color: var(--ink);
   padding: 2px 7px;
   border-radius: 999px;
   border: 1.5px solid var(--ink);
-  box-shadow: 1px 1px 0 var(--ink);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 .worms__weapon-trigger-arrow {
   font-size: 11px;
   font-weight: 800;
-  color: var(--ink);
+  color: #ffd000;
+  transition: color 100ms ease;
 }
 
 .worms__desktop-trigger-bar {
@@ -5004,8 +5015,8 @@ strong,
   position: fixed;
   inset: 0;
   z-index: 99;
-  background: rgba(28, 25, 23, 0.72);
-  backdrop-filter: blur(5px);
+  background: rgba(15, 13, 12, 0.75);
+  backdrop-filter: blur(6px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5014,250 +5025,168 @@ strong,
 
 .worms__picker-panel {
   width: 100%;
-  max-width: 520px;
+  max-width: 480px;
   max-height: 85vh;
   overflow-y: auto;
   background: var(--surface);
   border: 3px solid var(--ink);
   border-radius: var(--radius);
-  box-shadow: 6px 6px 0 var(--ink);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 14px;
 }
 
 .worms__picker-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  border-bottom: 2.5px solid var(--ink);
-  padding-bottom: 10px;
-}
-
-.worms__picker-head-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.worms__picker-badge {
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  background: var(--yellow);
-  color: var(--ink);
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 2px solid var(--ink);
-  box-shadow: 2px 2px 0 var(--ink);
+  padding-bottom: 4px;
 }
 
 .worms__picker-title {
   font-family: var(--font-display);
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 800;
   color: var(--ink);
   margin: 0;
+  letter-spacing: 0.02em;
 }
 
 .worms__picker-close {
-  width: 34px;
-  height: 34px;
-  border: 2.5px solid var(--ink);
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--ink);
   border-radius: 50%;
   background: var(--paper);
   color: var(--ink);
   font-weight: 800;
-  font-size: 16px;
+  font-size: 14px;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 2px 2px 0 var(--ink);
   transition: transform 100ms ease, background 100ms ease;
 }
 .worms__picker-close:hover {
   background: var(--red);
-  color: var(--surface);
+  color: #fff;
   transform: scale(1.08);
 }
 
 .worms__picker-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(145px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   gap: 10px;
 }
 
 .worms__picker-card {
+  position: relative;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 2.5px solid var(--ink);
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 8px 10px;
+  border: 2px solid var(--ink);
   border-radius: var(--radius-sm);
   background: var(--paper);
   color: var(--ink);
   cursor: pointer;
-  text-align: start;
-  box-shadow: 3px 3px 0 var(--ink);
-  transition: transform 120ms ease, background 120ms ease, box-shadow 120ms ease;
+  text-align: center;
+  transition: transform 120ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
 }
 
 .worms__picker-card:hover:not(:disabled) {
-  background: var(--yellow);
-  transform: translate(-1px, -2px);
-  box-shadow: 4px 5px 0 var(--ink);
+  background: #fef3c7;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
 }
 
 .worms__picker-card--selected {
   border-color: var(--ink);
   background: var(--yellow);
-  box-shadow: 4px 4px 0 var(--ink);
+  box-shadow: 0 0 0 2px var(--ink), 0 3px 8px rgba(0, 0, 0, 0.2);
 }
 
 .worms__picker-card--empty {
-  opacity: 0.4;
+  opacity: 0.35;
   box-shadow: none;
   cursor: not-allowed;
   background: var(--paper-2);
 }
 
 .worms__picker-card-icon {
-  flex: none;
-  width: 40px;
-  height: 40px;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  border: 1.5px solid var(--ink);
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.worms__picker-card-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  width: 44px;
+  height: 44px;
 }
 
 .worms__picker-card-name {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 13px;
-  line-height: 1.25;
-  white-space: normal;
-  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.2;
+  color: var(--ink);
 }
-
-.worms__picker-card-tag {
-  font-size: 9px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 1px 5px;
-  border-radius: 4px;
-  border: 1px solid var(--ink);
-  width: fit-content;
-}
-
-/* Category Tag Colors */
-.worms__picker-card-tag--power { background: #ffedd5; color: #c2410c; }
-.worms__picker-card-tag--fuse { background: #fef9c3; color: #a16207; }
-.worms__picker-card-tag--direct { background: #dbeafe; color: #1d4ed8; }
-.worms__picker-card-tag--melee { background: #dcfce7; color: #15803d; }
-.worms__picker-card-tag--drop { background: #fee2e2; color: #b91c1c; }
-.worms__picker-card-tag--target { background: #fce7f3; color: #be185d; }
-.worms__picker-card-tag--proximity { background: #f1f5f9; color: #475569; }
-.worms__picker-card-tag--utility { background: #ccfbf1; color: #0f766e; }
 
 .worms__picker-card-ammo {
-  flex: none;
+  position: absolute;
+  top: 6px;
+  right: 6px;
   font-family: var(--font-ui);
   font-weight: 800;
-  font-size: 12px;
-  padding: 2px 6px;
+  font-size: 10px;
+  padding: 1px 6px;
   background: var(--surface);
   border: 1.5px solid var(--ink);
   border-radius: 999px;
-  box-shadow: 1px 1px 0 var(--ink);
+  color: var(--ink);
 }
 
-/* Tactical Instruction Blueprint Card */
+/* Sleek Footer Info Bar */
 .worms__picker-info {
-  background: #fef8ea;
-  border: 3px solid var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
   border-radius: var(--radius-sm);
-  box-shadow: 4px 4px 0 var(--ink);
-  padding: 12px 14px;
+  padding: 10px 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
 .worms__picker-info-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.worms__picker-info-icon {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  border: 2px solid var(--ink);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 2px 2px 0 var(--ink);
-}
-
-.worms__picker-info-titles {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  justify-content: space-between;
 }
 
 .worms__picker-info-name {
   font-family: var(--font-display);
   font-weight: 800;
-  font-size: 16px;
+  font-size: 14px;
   color: var(--ink);
-  line-height: 1.1;
-}
-
-.worms__picker-info-mode {
-  font-size: 11px;
-  font-weight: 700;
-  color: var(--ink-soft);
 }
 
 .worms__picker-info-badge {
-  margin-inline-start: auto;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   background: var(--yellow);
   color: var(--ink);
-  padding: 3px 10px;
+  padding: 2px 8px;
   border-radius: 999px;
-  border: 2px solid var(--ink);
-  box-shadow: 2px 2px 0 var(--ink);
+  border: 1.5px solid var(--ink);
 }
 
 .worms__picker-info-desc {
   margin: 0;
-  font-size: 13px;
-  line-height: 1.45;
-  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.35;
+  color: var(--ink-soft);
   font-weight: 500;
-}
-.worms__picker-info-tip {
-  font-size: 14px;
 }
 
 /* Touch controls: walking under the left thumb, aiming and firing under the
@@ -5295,19 +5224,27 @@ strong,
   pointer-events: auto;
   width: 46px;
   height: 46px;
-  border: 3px solid rgba(255, 255, 255, 0.72);
+  border: 3px solid rgba(255, 255, 255, 0.75);
   border-radius: 999px;
-  background: rgba(20, 17, 15, 0.55);
+  background: rgba(20, 17, 15, 0.65);
+  backdrop-filter: blur(4px);
   color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   font-family: var(--font-display);
   font-weight: 800;
   font-size: 15px;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 100ms ease, background 100ms ease, box-shadow 100ms ease;
 }
 .worms__btn:active {
-  background: rgba(255, 210, 63, 0.7);
+  transform: scale(0.95);
+  background: rgba(255, 210, 63, 0.95);
   color: var(--ink);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 /* Fire is the biggest target on the screen on purpose: it is hold-to-charge,
    and a thumb sliding off it mid-charge fires the shot early. */
@@ -5315,43 +5252,27 @@ strong,
   width: 66px;
   height: 66px;
   font-size: 22px;
+  background: rgba(20, 17, 15, 0.65);
+  border-color: rgba(255, 255, 255, 0.75);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }
-
-/* The stage picker in the lobby. Chips rather than a carousel, because three
-   options fit on one line and a carousel for three is a worse control. */
-.worms__stagepick {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.worms__btn--big:active {
+  background: rgba(255, 210, 63, 0.95);
+  box-shadow: 0 0 16px rgba(255, 210, 63, 0.8);
 }
-.worms__stagepick-label {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ink-soft);
+.worms__shoot-icon {
+  display: block;
+  object-fit: contain;
+  filter: brightness(0) invert(1);
+  pointer-events: none;
 }
-.worms__stagepick-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+.worms__btn:active .worms__shoot-icon {
+  filter: brightness(0);
 }
-.worms__stagechip {
-  padding: 6px 12px;
-  border: 2px solid var(--ink);
-  border-radius: 999px;
-  background: var(--surface);
-  font-family: var(--font-ui);
-  font-weight: 600;
-  font-size: 13px;
-  cursor: pointer;
-}
-.worms__stagechip--on {
-  background: var(--orange);
-  box-shadow: var(--shadow-sm);
-}
-.worms__stagechip:disabled {
-  opacity: 0.55;
-  cursor: default;
+.worms__weapon-icon-img {
+  display: block;
+  object-fit: contain;
+  pointer-events: none;
 }
 
 /* Whose turn it is, in the score rail. */

@@ -16,8 +16,8 @@
 
 import { MASK_COLS, MASK_ROWS } from './constants';
 import { MASK_ARCTIC } from './masks/arctic';
-import { MASK_GREEN } from './masks/green';
-import { MASK_LIVING_ROOM } from './masks/living_room';
+import { MASK_SMALL_GREEN } from './masks/small_green';
+import { MASK_VOLCANO } from './masks/volcano';
 import { decodeMask } from './terrain';
 import type { RngState } from './rng';
 import { pick } from './rng';
@@ -37,24 +37,24 @@ export interface WormsStage {
   letterbox: string;
 }
 
-export const WORMS_STAGE_IDS: WormsStageId[] = ['green', 'arctic', 'living_room'];
+export const WORMS_STAGE_IDS: WormsStageId[] = ['small_green', 'arctic', 'volcano'];
 
 export const WORMS_STAGES: Record<WormsStageId, WormsStage> = {
-  green: {
-    id: 'green',
-    name: 'Castaway',
-    backgroundUrl: '/stages/worms/worms_stage_green_bg.png',
-    terrainUrl: '/stages/worms/worms_stage_green_terrain.png',
-    mask: MASK_GREEN,
+  small_green: {
+    id: 'small_green',
+    name: 'Small Green',
+    backgroundUrl: '/stages/worms/worms_stage_small_green_bg.png',
+    terrainUrl: '/stages/worms/worms_stage_small_green_terrain.png',
+    mask: MASK_SMALL_GREEN,
     spawns: [
-      { x: 1256, y: 806 },
-      { x: 266, y: 482 },
-      { x: 1142, y: 116 },
-      { x: 830, y: 548 },
-      { x: 620, y: 176 },
-      { x: 1364, y: 500 },
-      { x: 1532, y: 746 },
-      { x: 1100, y: 482 },
+      { x: 596, y: 752 },
+      { x: 1334, y: 524 },
+      { x: 896, y: 410 },
+      { x: 278, y: 728 },
+      { x: 506, y: 452 },
+      { x: 1076, y: 692 },
+      { x: 812, y: 638 },
+      { x: 1142, y: 386 },
     ],
     letterbox: '#1d5c95',
   },
@@ -65,34 +65,34 @@ export const WORMS_STAGES: Record<WormsStageId, WormsStage> = {
     terrainUrl: '/stages/worms/worms_stage_arctic_terrain.png',
     mask: MASK_ARCTIC,
     spawns: [
-      { x: 1556, y: 770 },
-      { x: 62, y: 686 },
-      { x: 836, y: 236 },
-      { x: 1364, y: 278 },
-      { x: 398, y: 374 },
-      { x: 734, y: 656 },
-      { x: 1064, y: 506 },
-      { x: 1136, y: 140 },
+      { x: 1394, y: 746 },
+      { x: 284, y: 668 },
+      { x: 884, y: 362 },
+      { x: 602, y: 548 },
+      { x: 1148, y: 494 },
+      { x: 854, y: 644 },
+      { x: 380, y: 440 },
+      { x: 1352, y: 500 },
     ],
     letterbox: '#1c4f86',
   },
-  living_room: {
-    id: 'living_room',
-    name: 'The Living Room',
-    backgroundUrl: '/stages/worms/worms_stage_living_room_bg.png',
-    terrainUrl: '/stages/worms/worms_stage_living_room_terrain.png',
-    mask: MASK_LIVING_ROOM,
+  volcano: {
+    id: 'volcano',
+    name: 'Volcano',
+    backgroundUrl: '/stages/worms/worms_stage_volcano_bg.png',
+    terrainUrl: '/stages/worms/worms_stage_volcano_terrain.png',
+    mask: MASK_VOLCANO,
     spawns: [
-      { x: 1604, y: 722 },
-      { x: 80, y: 512 },
-      { x: 896, y: 218 },
-      { x: 554, y: 680 },
-      { x: 1394, y: 266 },
-      { x: 416, y: 158 },
-      { x: 962, y: 632 },
-      { x: 1340, y: 566 },
+      { x: 146, y: 704 },
+      { x: 1526, y: 680 },
+      { x: 836, y: 590 },
+      { x: 1196, y: 296 },
+      { x: 506, y: 296 },
+      { x: 1412, y: 476 },
+      { x: 668, y: 446 },
+      { x: 1046, y: 554 },
     ],
-    letterbox: '#4a3526',
+    letterbox: '#3d1c16',
   },
 };
 

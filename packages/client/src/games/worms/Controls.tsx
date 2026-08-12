@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, type JSX } from 'react';
+import { useCallback, useEffect, useRef, type JSX, type ReactNode } from 'react';
 import {
   IN_AIM_DOWN,
   IN_AIM_UP,
@@ -10,12 +10,10 @@ import {
 } from '@mg/shared/worms';
 import { Thumbstick, type StickVector } from '../../ui/Thumbstick';
 import { newStickState, stickToBits } from './stickBits';
-import { WormsWeaponIcon } from './WormsWeaponIcons';
+import { AimDownIcon, AimUpIcon, ShootIcon, WormsWeaponIcon } from './WormsWeaponIcons';
 
 interface Props {
   onButton: (bit: number, down: boolean) => void;
-  /** Hidden while a map-targeting weapon wants the whole screen for aiming. */
-  targeting: boolean;
   currentWeapon: WormsWeaponId;
   ammo: Record<string, number>;
   onOpenPicker: () => void;
@@ -29,11 +27,10 @@ const STICK_BITS = [IN_LEFT, IN_RIGHT, IN_JUMP];
  */
 export function Controls({
   onButton,
-  targeting,
   currentWeapon,
   ammo,
   onOpenPicker,
-}: Props): JSX.Element | null {
+}: Props): JSX.Element {
   const stick = useRef(newStickState());
   const stickBits = useRef(0);
   const lastVector = useRef<StickVector | null>(null);
@@ -80,8 +77,6 @@ export function Controls({
     [applyVector],
   );
 
-  if (targeting) return null;
-
   return (
     <div className="worms__pad">
       <div className="worms__pad-side worms__pad-side--walk">
@@ -102,10 +97,10 @@ export function Controls({
         </button>
 
         <div className="worms__pad-aim">
-          <HoldButton bit={IN_AIM_UP} label="▲" onButton={onButton} />
-          <HoldButton bit={IN_AIM_DOWN} label="▼" onButton={onButton} />
+          <HoldButton bit={IN_AIM_UP} label={<AimUpIcon size={18} />} ariaLabel="Aim Up" onButton={onButton} />
+          <HoldButton bit={IN_AIM_DOWN} label={<AimDownIcon size={18} />} ariaLabel="Aim Down" onButton={onButton} />
         </div>
-        <HoldButton bit={IN_FIRE} label="🔥" onButton={onButton} big />
+        <HoldButton bit={IN_FIRE} label={<ShootIcon size={38} />} ariaLabel="Fire Weapon" onButton={onButton} big />
       </div>
     </div>
   );
@@ -117,11 +112,13 @@ export function Controls({
 function HoldButton({
   bit,
   label,
+  ariaLabel,
   onButton,
   big = false,
 }: {
   bit: number;
-  label: string;
+  label: ReactNode;
+  ariaLabel?: string;
   onButton: (bit: number, down: boolean) => void;
   big?: boolean;
 }): JSX.Element {
@@ -133,11 +130,13 @@ function HoldButton({
     onButton(bit, false);
   };
 
+  const computeAriaLabel = ariaLabel || (typeof label === 'string' ? label : undefined);
+
   return (
     <button
       type="button"
       className={`worms__btn${big ? ' worms__btn--big' : ''}`}
-      aria-label={label}
+      aria-label={computeAriaLabel}
       onPointerDown={(event) => {
         event.preventDefault();
         event.currentTarget.setPointerCapture?.(event.pointerId);
@@ -148,7 +147,9 @@ function HoldButton({
       onPointerCancel={release}
       onLostPointerCapture={release}
     >
-      <span aria-hidden="true">{label}</span>
+      <span aria-hidden="true" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {label}
+      </span>
     </button>
   );
 }

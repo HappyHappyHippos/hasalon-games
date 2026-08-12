@@ -564,8 +564,8 @@ await Promise.all([
 wormHost.send(JSON.stringify({ t: 'game', gameId: 'worms' }));
 await next(wormHost, (m) => m.t === 'room' && m.room.gameId === 'worms', 'Worms selected');
 // A fixed stage and no wind, so this is the same shot every run.
-wormHost.send(JSON.stringify({ t: 'settings', settings: { stageId: 'green', windEnabled: false, turnSeconds: 20 } }));
-await next(wormHost, (m) => m.t === 'room' && m.room.settings.stageId === 'green', 'Worms stage pinned');
+wormHost.send(JSON.stringify({ t: 'settings', settings: { stageId: 'small_green', windEnabled: false, turnSeconds: 20 } }));
+await next(wormHost, (m) => m.t === 'room' && m.room.settings.stageId === 'small_green', 'Worms stage pinned');
 wormHost.send(JSON.stringify({ t: 'ready', ready: true }));
 wormGuest.send(JSON.stringify({ t: 'ready', ready: true }));
 await next(wormHost, (m) => m.t === 'room' && m.room.players.every((player) => player.ready), 'worm players ready');

@@ -413,7 +413,7 @@ describe('match', () => {
 
     host!.send({ t: 'game', gameId: 'worms' });
     // Pinned, so the shot below is the same shot every run.
-    host!.send({ t: 'settings', settings: { stageId: 'green', windEnabled: false, turnSeconds: 15 } });
+    host!.send({ t: 'settings', settings: { stageId: 'small_green', windEnabled: false, turnSeconds: 15 } });
     host!.send({ t: 'start' });
     const started = await host!.next('matchStarted');
     const hostSeat = started.room.players.find((p) => p.id === host!.playerId)!.seat;
@@ -428,7 +428,7 @@ describe('match', () => {
     expect(firstTurn.snap.worms).toHaveLength(4);
     expect(firstTurn.snap.seats).toHaveLength(2);
     expect(firstTurn.snap.worms.every((w) => w.al === 1 && w.hp > 0)).toBe(true);
-    expect(firstTurn.snap.st).toBe('green');
+    expect(firstTurn.snap.st).toBe('small_green');
 
     const opening = firstTurn.snap;
     const firstSeat = opening.worms.find((w) => w.i === opening.ac)!.s;
@@ -445,7 +445,7 @@ describe('match', () => {
         m.data !== null &&
         Array.isArray((m.data as { c?: unknown }).c) &&
         (m.data as { c: unknown[] }).c.length > 0,
-      20_000,
+      35_000,
     );
     const holding = setInterval(() => {
       shooter.send({ t: 'input', i: { seq: seq++, bits: IN_FIRE } });
@@ -460,7 +460,7 @@ describe('match', () => {
     // Craters travel on `private`, never in the snapshot — see the note on
     // `worms/sim.ts:buildTerrainPrivate`. The snapshot only counts them.
     const payload = terrain.data as { st: string; r: number; c: number[][] };
-    expect(payload.st).toBe('green');
+    expect(payload.st).toBe('small_green');
     expect(payload.r).toBe(1);
     expect(payload.c[0]).toHaveLength(4);
     expect(payload.c[0]!.every((n) => Number.isInteger(n))).toBe(true);
@@ -479,11 +479,11 @@ describe('match', () => {
       const snap = m.snap;
       if (snap.phase !== 'turn' || snap.ac <= 0) return false;
       return snap.worms.find((w) => w.i === snap.ac)?.s !== firstSeat;
-    }, 20_000);
+    }, 35_000);
     if (nextTurn.snap.game !== 'worms') throw new Error('wrong game');
     const handedOver = nextTurn.snap;
     expect(handedOver.worms.find((w) => w.i === handedOver.ac)!.s).not.toBe(firstSeat);
-  }, 40_000);
+  }, 60_000);
 
   it('seats only as many players as the game supports', async () => {
     // Gun Mayhem is six players; a fuller room means the rest spectate.

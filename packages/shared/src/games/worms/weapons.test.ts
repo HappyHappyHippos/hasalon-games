@@ -103,17 +103,10 @@ describe('the weapon table', () => {
     }
   });
 
-  it('makes only the teleport a non-attack', () => {
-    const utilities = SELECTABLE_WEAPONS.filter((id) => !WEAPONS[id].isAttack);
-    expect(utilities).toEqual(['teleport']);
-    // ...and it must therefore not end the turn, or it is an attack that does
-    // no damage.
-    expect(WEAPONS.teleport.endsTurn).toBe(false);
-  });
-
-  it('ends the turn on every attack', () => {
+  it('makes every selectable weapon an attack that ends the turn', () => {
     for (const id of SELECTABLE_WEAPONS) {
-      if (WEAPONS[id].isAttack) expect(WEAPONS[id].endsTurn).toBe(true);
+      expect(WEAPONS[id].isAttack).toBe(true);
+      expect(WEAPONS[id].endsTurn).toBe(true);
     }
   });
 });

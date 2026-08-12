@@ -33,12 +33,9 @@ export function WeaponPickerModal({
   return (
     <div className="worms__picker-overlay" onClick={onClose}>
       <div className="worms__picker-panel" onClick={(e) => e.stopPropagation()}>
-        {/* Comic Header Banner */}
+        {/* Header */}
         <div className="worms__picker-head">
-          <div className="worms__picker-head-title">
-            <span className="worms__picker-badge">ARSENAL</span>
-            <h2 className="worms__picker-title">{t.wormsSelectWeapon}</h2>
-          </div>
+          <h2 className="worms__picker-title">{t.wormsSelectWeapon}</h2>
           <button
             type="button"
             className="worms__picker-close"
@@ -49,7 +46,7 @@ export function WeaponPickerModal({
           </button>
         </div>
 
-        {/* Weapons Grid */}
+        {/* Weapons Tile Grid */}
         <div className="worms__picker-grid">
           {weapons.map((id) => {
             const left = ammo[id];
@@ -73,40 +70,32 @@ export function WeaponPickerModal({
                 onMouseLeave={() => setHovered(null)}
                 aria-label={name}
               >
-                <div className="worms__picker-card-icon">
-                  <WormsWeaponIcon id={id} size={32} />
-                </div>
-                <div className="worms__picker-card-body">
-                  <span className="worms__picker-card-name">{name}</span>
-                </div>
                 <div className="worms__picker-card-ammo">
                   {left !== undefined ? left : '∞'}
                 </div>
+                <div className="worms__picker-card-icon">
+                  <WormsWeaponIcon id={id} size={36} />
+                </div>
+                <span className="worms__picker-card-name">{name}</span>
               </button>
             );
           })}
         </div>
 
-        {/* Tactical Instruction Blueprint Card */}
+        {/* Streamlined Footer Info Bar */}
         {activeSpec && (
           <div className="worms__picker-info">
             <div className="worms__picker-info-head">
-              <div className="worms__picker-info-icon">
-                <WormsWeaponIcon id={activeId} size={28} />
-              </div>
-              <div className="worms__picker-info-titles">
-                <span className="worms__picker-info-name">{activeName}</span>
-              </div>
+              <span className="worms__picker-info-name">{activeName}</span>
               {activeSpec.ammo >= 0 && (
                 <span className="worms__picker-info-badge">
                   {ammo[activeId] ?? activeSpec.ammo} left
                 </span>
               )}
             </div>
-            <p className="worms__picker-info-desc">
-              <span className="worms__picker-info-tip">💡 </span>
-              {activeInfo}
-            </p>
+            {activeInfo && (
+              <p className="worms__picker-info-desc">{activeInfo}</p>
+            )}
           </div>
         )}
       </div>

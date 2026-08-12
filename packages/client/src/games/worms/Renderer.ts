@@ -176,7 +176,7 @@ export class WormsRenderer {
     const entry = feed.latest;
     const snap = entry?.snap.game === 'worms' ? entry.snap : null;
 
-    const stageId = snap?.st ?? 'green';
+    const stageId = snap?.st ?? 'small_green';
     this.stage.begin(WORMS_STAGES[stageId].letterbox);
 
     if (!snap || !entry) {
