@@ -2,7 +2,6 @@ import { seconds } from '../../engine';
 import type { GameSeat } from '../../gameModule';
 import { isUsableCaption, normalizeCaption } from './caption';
 import {
-  BALLOT_POINTS,
   DEFAULT_ROUNDS,
   DEFAULT_VOTE_SECONDS,
   DEFAULT_WRITE_SECONDS,
@@ -21,10 +20,9 @@ import {
   RESULT_TICKS,
   REVEAL_TICKS,
   STANDINGS_TICKS,
-  SWEEP_BONUS,
   TOP_MEME_BONUS,
-  VOTE_POINTS,
 } from './constants';
+import { BALLOT_POINTS, scoreVotes, tallyVotes } from './rating';
 import { makeRng, shuffle } from './rng';
 import { boxesForCaptionCount, pickTemplates, templateById } from './templates';
 import type {
@@ -259,28 +257,10 @@ function countedBallots(state: MemesState, entry: MemesEntry): MemesVote[] {
     .filter((vote): vote is MemesVote => vote !== undefined);
 }
 
-function tallyOf(votes: readonly MemesVote[]): [number, number, number] {
-  let like = 0;
-  let neutral = 0;
-  let dislike = 0;
-  for (const vote of votes) {
-    if (vote === 1) like += 1;
-    else if (vote === 0) neutral += 1;
-    else dislike += 1;
-  }
-  return [like, neutral, dislike];
-}
-
 function scoreEntry(state: MemesState, entry: MemesEntry): void {
   const voterIds = eligibleVoterIds(state, entry).filter((id) => entry.ballots.has(id));
   const votes = voterIds.map((id) => entry.ballots.get(id)!);
-  const raw = votes.reduce<number>((sum, vote) => {
-    if (vote === 1) return sum + VOTE_POINTS.like;
-    if (vote === 0) return sum + VOTE_POINTS.neutral;
-    return sum + VOTE_POINTS.dislike;
-  }, 0);
-  entry.award = votes.length > 0 ? Math.round(raw / votes.length) : 0;
-  if (votes.length > 0 && votes.every((vote) => vote === 1)) entry.award += SWEEP_BONUS;
+  entry.award = scoreVotes(votes);
 
   const author = state.players.find((player) => player.id === entry.authorId);
   if (author) {
@@ -460,7 +440,7 @@ function stageEntry(state: MemesState): MemesStageEntry | null {
     authorSeat: result ? entry.authorSeat : -1,
     ballots: votes.length,
     eligible: eligibleVoterIds(state, entry).length,
-    tally: result ? tallyOf(votes) : null,
+    tally: result ? tallyVotes(votes) : null,
     award: result ? entry.award : 0,
     top: entry.top ? 1 : 0,
     reactions: [...entry.reactions],

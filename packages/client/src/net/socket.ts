@@ -41,6 +41,8 @@ import { receiveSkribbl, resetInk } from '../games/skribbl/inkBus';
 import { terrainBus } from '../games/worms/terrainBus';
 import type { WormsTerrainPrivate } from '@mg/shared/worms';
 import type { MemesPrivate } from '@mg/shared/memes';
+import type { TelephonePrivate, TelephonePrivateCatchUp } from '@mg/shared/telephone';
+import { receiveTelephoneCatchUp, resetTelephoneDraftInk } from '../games/telephone/draftBus';
 import { clock } from './clock';
 import { voice } from './voice';
 import { delayed, readNetSim } from './netsim';
@@ -52,6 +54,7 @@ import {
   type Hud,
   type HudPlayer,
   type MemesHud,
+  type TelephoneHud,
   type Secret,
   type SkribblHud,
   type WormsHud,
@@ -362,6 +365,7 @@ class GameSocket {
       case 'matchStarted':
         feed.reset();
         resetInk();
+        resetTelephoneDraftInk();
         this.lastCountdown = 0;
         // `resumed` is the catch-up copy sent to a socket that reconnected into
         // a running match, and reconnects happen on a half-second backoff. Only
@@ -396,6 +400,10 @@ class GameSocket {
 
       case 'private':
         this.receivePrivate(message.data);
+        return;
+
+      case 'privateCatchUp':
+        if (store.room?.gameId === 'telephone') receiveTelephoneCatchUp((message.data as TelephonePrivateCatchUp | null) ?? null);
         return;
 
       case 'error': {
@@ -437,10 +445,18 @@ class GameSocket {
       case 'memes':
         store.setMemesPrivate((data as MemesPrivate | null) ?? null);
         store.setSecret(null);
+        store.setTelephonePrivate(null);
         terrainBus.reset();
         return;
       case 'skribbl':
         store.setSecret((data as Secret | null) ?? null);
+        store.setMemesPrivate(null);
+        store.setTelephonePrivate(null);
+        terrainBus.reset();
+        return;
+      case 'telephone':
+        store.setTelephonePrivate((data as TelephonePrivate | null) ?? null);
+        store.setSecret(null);
         store.setMemesPrivate(null);
         terrainBus.reset();
         return;
@@ -451,6 +467,7 @@ class GameSocket {
         terrainBus.receive((data as WormsTerrainPrivate | null) ?? null);
         store.setSecret(null);
         store.setMemesPrivate(null);
+        store.setTelephonePrivate(null);
         return;
       // No hidden state; their `privateFor` returns null and the server never
       // sends this. `undefined` is "no room yet", which clears the same way.
@@ -461,6 +478,8 @@ class GameSocket {
       case undefined:
         store.setSecret(null);
         store.setMemesPrivate(null);
+        store.setTelephonePrivate(null);
+        resetTelephoneDraftInk();
         terrainBus.reset();
         return;
       default: {
@@ -506,6 +525,7 @@ class GameSocket {
     let skribbl: SkribblHud | undefined;
     let memes: MemesHud | undefined;
     let worms: WormsHud | undefined;
+    let telephone: TelephoneHud | undefined;
     switch (snap.game) {
       case 'achtung':
         players = snap.players.map((p) => ({
@@ -551,6 +571,8 @@ class GameSocket {
           fuse: snap.seats.find((s) => s.s === active?.s)?.fz ?? 3,
           ammo: (snap.seats.find((s) => s.s === active?.s)?.am ?? {}) as Record<string, number>,
           power: active?.pw ?? 0,
+          targetX: snap.tx,
+          targetY: snap.ty,
         };
         break;
       }
@@ -601,9 +623,13 @@ class GameSocket {
           stage: snap.stage,
         };
         break;
+      case 'telephone':
+        players = snap.players.map((p) => ({ seat: p.s, score: p.p, alive: true, submitted: p.sub === 1, voted: p.v === 1 }));
+        telephone = snap;
+        break;
     }
 
-    const hud: Hud = { phase: snap.phase, round: snap.round, countdown, players, skribbl, memes, worms };
+    const hud: Hud = { phase: snap.phase, round: snap.round, countdown, players, skribbl, memes, worms, telephone };
     useStore.getState().setHud(hud);
   }
 }

@@ -83,8 +83,8 @@ export interface SeriesView {
 
 /** Two is the smallest thing that is a series rather than a match. */
 export const MIN_SERIES_ROUNDS = 2;
-/** Legs are distinct, and there are seven games. */
-export const MAX_SERIES_ROUNDS = 7;
+/** Legs are distinct, and there are eight games. */
+export const MAX_SERIES_ROUNDS = 8;
 export const DEFAULT_SERIES_ROUNDS = 3;
 
 /** The breather between legs. Long enough to read the standings, short enough not to drift off. */

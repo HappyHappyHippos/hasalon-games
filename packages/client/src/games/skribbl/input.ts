@@ -41,7 +41,11 @@ export interface DrawInput {
   enabled: boolean;
 }
 
-export function attachDrawInput(surface: HTMLElement, ink: InkSurface): DrawInput {
+export function attachDrawInput(
+  surface: HTMLElement,
+  ink: InkSurface,
+  onLocalOps?: (ops: readonly number[]) => void,
+): DrawInput {
   const state: DrawInput = {
     tool: { color: 0, size: 1, mode: 'pen' },
     enabled: false,
@@ -76,7 +80,9 @@ export function attachDrawInput(surface: HTMLElement, ink: InkSurface): DrawInpu
     lastY = Math.round(y);
 
     if (state.tool.mode === 'fill') {
-      ink.apply([OP_FILL, state.tool.color, lastX, lastY]);
+      const ops = [OP_FILL, state.tool.color, lastX, lastY];
+      ink.apply(ops);
+      onLocalOps?.(ops);
       socket.sendInputReliable({ k: 'fill', c: state.tool.color, x: lastX, y: lastY });
       return;
     }
@@ -85,7 +91,9 @@ export function attachDrawInput(surface: HTMLElement, ink: InkSurface): DrawInpu
     pointerId = event.pointerId;
     surface.setPointerCapture?.(event.pointerId);
 
-    ink.apply([OP_BEGIN, state.tool.color, state.tool.size, lastX, lastY]);
+    const ops = [OP_BEGIN, state.tool.color, state.tool.size, lastX, lastY];
+    ink.apply(ops);
+    onLocalOps?.(ops);
     socket.sendInput({ k: 'begin', c: state.tool.color, s: state.tool.size, x: lastX, y: lastY });
   };
 
@@ -105,7 +113,9 @@ export function attachDrawInput(surface: HTMLElement, ink: InkSurface): DrawInpu
       if (px === lastX && py === lastY) continue;
       lastX = px;
       lastY = py;
-      ink.apply([OP_TO, px, py]);
+      const ops = [OP_TO, px, py];
+      ink.apply(ops);
+      onLocalOps?.(ops);
       if (queued.length < MAX_POINTS_PER_MESSAGE * 2) queued.push(px, py);
     }
 

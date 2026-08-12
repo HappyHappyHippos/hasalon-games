@@ -33,6 +33,9 @@ import { WormsSettings } from './worms/Settings';
 import { GravityBoxArt } from './gravity/BoxArt';
 import { GravityScreen } from './gravity/GravityScreen';
 import { GravitySettings } from './gravity/Settings';
+import { TelephoneBoxArt } from './telephone/BoxArt';
+import { TelephoneScreen } from './telephone/TelephoneScreen';
+import { TelephoneSettings } from './telephone/Settings';
 
 export interface SettingsProps {
   settings: GameConfig;
@@ -101,6 +104,13 @@ export const CLIENT_GAMES: Record<GameId, ClientGame> = {
     Settings: GravitySettings,
     accent: 'var(--yellow)',
   },
+  telephone: {
+    meta: GAMES.telephone.meta,
+    BoxArt: TelephoneBoxArt,
+    Screen: TelephoneScreen,
+    Settings: TelephoneSettings,
+    accent: 'var(--violet)',
+  },
   worms: {
     meta: GAMES.worms.meta,
     BoxArt: WormsBoxArt,
@@ -121,6 +131,7 @@ export const CLIENT_GAME_IDS: GameId[] = [
   'achtung',
   'gravity',
   'skribbl',
+  'telephone',
   'memes',
 ];
 

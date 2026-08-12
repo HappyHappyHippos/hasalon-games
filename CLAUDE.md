@@ -13,7 +13,7 @@ this is the flagship game and should get the most care), **Worms** (up to
 8-player top-down maze duel with ricocheting shells), **Achtung die Kurve** (up
 to 8-player curve/Snake game), **Gravity Guy** (up to 8-player one-button
 auto-run elimination race), **Skribbl** (up to 8-player draw and guess, Hebrew
-or English) and **Meme Machine**.
+or English), **Broken Telephone** (2–8 player draw/guess chains) and **Meme Machine**.
 
 npm workspaces monorepo. Git repo with `origin` at
 `github.com/HappyHappyHippos/hasalon-games` (public), deployed on Railway at
@@ -336,7 +336,7 @@ obvious once you know they exist:
 ### Per-game notes
 
 The details that only matter when you are inside one game live next to a
-pointer instead of in this file, so every session does not pay for all seven.
+pointer instead of in this file, so every session does not pay for all eight.
 **Read the one you are touching before you touch it** — each is a list of
 things that cost real debugging time to learn.
 
@@ -346,6 +346,7 @@ things that cost real debugging time to learn.
 - **Tank Trouble** — [`docs/games/tanks.md`](docs/games/tanks.md)
 - **Gravity Guy** — [`docs/games/gravity.md`](docs/games/gravity.md)
 - **Skribbl** — [`docs/games/skribbl.md`](docs/games/skribbl.md)
+- **Broken Telephone** — [`docs/games/telephone.md`](docs/games/telephone.md)
 - **Meme Machine** — no notes yet; `packages/shared/src/games/memes/` is
   conventional, and its one subtlety (captions are private until the reveal)
   is covered by *Private per-player state* above.

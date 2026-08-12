@@ -4,6 +4,7 @@ import type { GunMayhemConfig, GunMayhemSnapshot } from './games/gunmayhem/types
 import type { MemesConfig, MemesSnapshot } from './games/memes/types';
 import type { SkribblConfig, SkribblSnapshot } from './games/skribbl/types';
 import type { TanksConfig, TanksSnapshot } from './games/tanks/types';
+import type { TelephoneConfig, TelephoneSnapshot } from './games/telephone/types';
 import type { WormsConfig, WormsSnapshot } from './games/worms/types';
 
 /** Every game the site knows about. */
@@ -14,6 +15,7 @@ export type GameId =
   | 'memes'
   | 'skribbl'
   | 'tanks'
+  | 'telephone'
   | 'worms';
 
 /**
@@ -28,6 +30,7 @@ export type GameConfig =
   | MemesConfig
   | SkribblConfig
   | TanksConfig
+  | TelephoneConfig
   | WormsConfig;
 export type GameSnapshot =
   | AchtungSnapshot
@@ -36,6 +39,7 @@ export type GameSnapshot =
   | MemesSnapshot
   | SkribblSnapshot
   | TanksSnapshot
+  | TelephoneSnapshot
   | WormsSnapshot;
 
 export interface GameSeat {
@@ -116,6 +120,7 @@ export interface GameInstance {
    * call repeatedly and cheap to answer with null.
    */
   privateFor?(playerId: string): unknown | null;
+  privateCatchUpFor?(playerId: string): unknown | null;
   status(): GameStatus;
   /** Scores by player id, for the lobby view once the match ends. */
   scores(): Record<string, number>;

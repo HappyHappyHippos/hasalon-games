@@ -27,7 +27,7 @@ function seatsFor(module: GameModule): GameSeat[] {
 }
 
 describe('registry', () => {
-  it('registers all seven games', () => {
+  it('registers all eight games', () => {
     expect(ids.sort()).toEqual([
       'achtung',
       'gravity',
@@ -35,6 +35,7 @@ describe('registry', () => {
       'memes',
       'skribbl',
       'tanks',
+      'telephone',
       'worms',
     ]);
   });

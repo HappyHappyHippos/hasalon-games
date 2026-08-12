@@ -705,6 +705,56 @@ describe('match', () => {
     });
   }, 15_000);
 
+  it('runs Broken Telephone with two players, keeps prompts private, and publishes real hearts', async () => {
+    const [host, guest] = await makeLobby(2);
+    host!.send({ t: 'game', gameId: 'telephone' });
+    host!.send({ t: 'settings', settings: { writeSeconds: 15, drawSeconds: 20, voteSeconds: 5 } });
+    host!.send({ t: 'start' });
+    await Promise.all([host!.next('matchStarted'), guest!.next('matchStarted')]);
+    await host!.waitFor(
+      (message): message is Extract<ServerMessage, { t: 'snapshot' }> =>
+        message.t === 'snapshot' && message.snap.game === 'telephone' && message.snap.phase === 'contributing' && message.snap.task === 'prompt',
+    );
+
+    host!.send({ t: 'input', i: { k: 'submitText', text: 'host-private-prompt' } });
+    guest!.send({ t: 'input', i: { k: 'submitText', text: 'guest-private-prompt' } });
+
+    const [hostPrivate, guestPrivate] = await Promise.all([host, guest].map((client) => client!.waitFor(
+      (message): message is Extract<ServerMessage, { t: 'private' }> => {
+        if (message.t !== 'private') return false;
+        const value = message.data as { task?: unknown; previous?: { text?: unknown } } | null;
+        return value?.task === 'drawing' && typeof value.previous?.text === 'string';
+      },
+    )));
+    const hostText = (hostPrivate.data as { previous: { text: string } }).previous.text;
+    const guestText = (guestPrivate.data as { previous: { text: string } }).previous.text;
+    expect(hostText).toBe('guest-private-prompt');
+    expect(guestText).toBe('host-private-prompt');
+
+    const latestSnapshot = [...host!.received].reverse().find((message) => message.t === 'snapshot');
+    expect(JSON.stringify(latestSnapshot)).not.toContain('host-private-prompt');
+    expect(JSON.stringify(latestSnapshot)).not.toContain('guest-private-prompt');
+
+    for (const client of [host, guest]) {
+      client!.send({ t: 'input', i: { k: 'begin', c: 2, s: 1, x: 20, y: 20 } });
+      client!.send({ t: 'input', i: { k: 'to', p: [80, 80] } });
+      client!.send({ t: 'input', i: { k: 'submitDrawing' } });
+    }
+    await host!.waitFor(
+      (message): message is Extract<ServerMessage, { t: 'snapshot' }> =>
+        message.t === 'snapshot' && message.snap.game === 'telephone' && message.snap.phase === 'voting',
+    );
+    host!.send({ t: 'input', i: { k: 'like', on: true } });
+    guest!.send({ t: 'input', i: { k: 'like', on: true } });
+    const result = await host!.waitFor(
+      (message): message is Extract<ServerMessage, { t: 'snapshot' }> =>
+        message.t === 'snapshot' && message.snap.game === 'telephone' && message.snap.phase === 'result',
+    );
+    if (result.snap.game !== 'telephone') throw new Error('wrong game');
+    expect(result.snap.revealed.at(-1)?.likedBy).toHaveLength(1);
+    expect(result.snap.revealed.at(-1)?.award).toBe(1);
+  }, 15_000);
+
   it('starts Meme Machine with two players', async () => {
     const [host, guest] = await makeLobby(2);
     host!.send({ t: 'game', gameId: 'memes' });
