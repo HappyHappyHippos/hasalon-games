@@ -67,8 +67,8 @@ export function Paused({ room, spectating }: { room: RoomView; spectating: boole
  *
  * Muting the music is a settings-shaped decision, made once, so it lives in the
  * options menu's Sound section (`OptionsMenu.tsx`). Muting your microphone is a
- * mid-conversation decision, so `VoiceBar` stays on screen in every game
- * now, which is what this change was for.
+ * mid-conversation decision, so the global `MicButton` stays beside settings
+ * and fullscreen in every game now, which is what this change was for.
  */
 
 export function MatchOver({

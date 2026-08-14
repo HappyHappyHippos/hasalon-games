@@ -183,6 +183,14 @@ that as the weapon being unreliable rather than as physics.
 
 ## Client
 
+- Shot power is an explicit 15–100 slider and `fire` is a reliable one-off
+  command. The old held `IN_FIRE` path remains accepted by the simulation for
+  replay/backward compatibility, but no current client emits it. The trajectory
+  preview advances a temporary projectile through `stepProjectile`, the same
+  marcher the server uses, against the live client terrain mask.
+- The sprite is drawn taller than its movement box, and projectile/blast hit
+  tests use `WORM_HIT_R`. Do not enlarge `WORM_HALF_W/H` just to make the art or
+  target easier to see: those constants define whether ramps are walkable.
 - **The camera is a local, per-client spring**, and that is a deliberate
   divergence from `gravity/camera.ts`, whose whole point is being identical
   everywhere. Free pan and zoom is a feature here and two players looking at

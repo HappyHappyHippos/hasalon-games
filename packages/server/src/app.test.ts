@@ -939,25 +939,11 @@ describe('roulette series', () => {
     const stop = spiral(clients);
 
     try {
-      // Both games are in the hat, but only Achtung reliably finishes under
-      // this input, so re-draw until it comes out first. The reveal is skipped
-      // rather than waited out, so a re-draw costs nothing.
-      let lineup: string[] = [];
-      for (let attempt = 0; attempt < 20; attempt++) {
-        const drawn = await reveal(host!, { rounds: 2, pool: ['achtung', 'gravity'] });
-        lineup = drawn.room.series!.lineup;
-        expect(lineup).toHaveLength(2);
-        expect(new Set(lineup).size).toBe(2);
-        expect(drawn.room.series!.until).toBeGreaterThan(Date.now());
-        if (lineup[0] === 'achtung') break;
-        host!.send({ t: 'rematch' });
-        for (const client of clients) client.send({ t: 'ready', ready: true });
-        await host!.waitFor(
-          (m): m is Extract<ServerMessage, { t: 'room' }> =>
-            m.t === 'room' && m.room.series === null && m.room.players.every((p) => p.ready),
-        );
-      }
-      expect(lineup[0]).toBe('achtung');
+      const drawn = await reveal(host!, { rounds: 2, pool: ['achtung', 'gravity'] });
+      const lineup = drawn.room.series!.lineup;
+      expect(lineup).toHaveLength(2);
+      expect(new Set(lineup).size).toBe(2);
+      expect(drawn.room.series!.until).toBeGreaterThan(Date.now());
 
       // The draw is broadcast, not answered to whoever asked for it.
       await guest!.waitFor(
@@ -965,21 +951,23 @@ describe('roulette series', () => {
           m.t === 'room' && m.room.series?.phase === 'reveal',
       );
 
-      // Skipping the waits is what keeps this off two 8-second sleeps.
-      host!.send({ t: 'seriesSkip' });
-      const firstLeg = await guest!.next('matchStarted');
-      expect(firstLeg.room.gameId).toBe('achtung');
+      // The opening reveal deliberately has no skip control. It starts on its
+      // authored deadline for every client.
+      const firstLeg = await guest!.next('matchStarted', 15_000);
+      expect(firstLeg.room.gameId).toBe(lineup[0]);
       expect(firstLeg.room.series!.phase).toBe('leg');
       expect(firstLeg.room.series!.index).toBe(0);
-      // The leg runs on the series preset, not on anything the host configured.
-      expect(firstLeg.room.settings).toMatchObject({ game: 'achtung', winByTwo: false });
+      expect(firstLeg.room.settings.game).toBe(lineup[0]);
 
-      // A finished leg has to announce the break in the very message that ends
-      // it, or every client learns what happens next a round trip late.
-      const firstEnd = await guest!.next('matchEnded', 40_000);
+      // A host can abandon a game the room is not enjoying. It awards nothing
+      // and announces the break in the same frame as the end.
+      host!.send({ t: 'seriesNext' });
+      const firstEnd = await guest!.next('matchEnded');
+      expect(firstEnd.skipped).toBe(true);
       expect(firstEnd.room.series!.phase).toBe('break');
       expect(firstEnd.room.series!.index).toBe(0);
       expect(firstEnd.room.series!.legWinners).toHaveLength(1);
+      expect(firstEnd.room.series!.skippedLegs).toEqual([0]);
       expect(firstEnd.room.series!.until).toBeGreaterThan(Date.now());
 
       // Someone arriving during the break has no live match to catch up on, so
@@ -1027,8 +1015,7 @@ describe('roulette series', () => {
       const drawn = await reveal(host!, { rounds: 2, pool: ['achtung'] });
       expect(drawn.room.series!.lineup).toEqual(['achtung']);
 
-      host!.send({ t: 'seriesSkip' });
-      await host!.next('matchStarted');
+      await host!.next('matchStarted', 15_000);
 
       const ended = await host!.next('matchEnded', 40_000);
       expect(ended.room.series!.phase).toBe('over');
@@ -1107,6 +1094,9 @@ describe('roulette series', () => {
     expect((await guest.next('error')).code).toBe('NOT_HOST');
 
     guest.send({ t: 'seriesSkip' });
+    expect((await guest.next('error')).code).toBe('NOT_HOST');
+
+    guest.send({ t: 'seriesNext' });
     expect((await guest.next('error')).code).toBe('NOT_HOST');
   });
 });

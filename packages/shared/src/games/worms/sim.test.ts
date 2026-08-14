@@ -94,6 +94,27 @@ describe('setup', () => {
 });
 
 describe('the turn machine', () => {
+  it('fires at the exact slider power sent by the active player', () => {
+    const state = makeState(2);
+    runUntil(state, (candidate) => candidate.phase === 'turn');
+    const worm = state.worms.find((candidate) => candidate.id === state.activeWorm)!;
+    const seat = state.seats[worm.seat]!;
+
+    applyInput(state, seat.id, { k: 'fire', p: 63 });
+    expect(state.events.some((event) => event.t === 'fire')).toBe(false);
+    stepTick(state);
+
+    expect(state.events).toContainEqual({
+      t: 'fire',
+      seat: worm.seat,
+      w: 'bazooka',
+      x: worm.x,
+      y: worm.y,
+      power: 0.63,
+    });
+    expect(state.phase).toBe('retreat');
+  });
+
   it('runs a countdown, then hands the first worm a full clock', () => {
     const state = makeState(2, { turnSeconds: 20 });
     expect(state.phase).toBe('countdown');

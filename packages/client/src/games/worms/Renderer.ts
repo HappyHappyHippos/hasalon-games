@@ -22,9 +22,10 @@
  *   identical everywhere for free.
  */
 
-import { colorFor } from '@mg/shared';
+import { colorFor, TICK_RATE } from '@mg/shared';
 import {
   AIM_RADIANS_PER_INDEX,
+  stepProjectile,
   WEAPONS,
   WORLD_H,
   WORLD_W,
@@ -34,6 +35,7 @@ import {
   WORM_HALF_W,
   WORMS_STAGES,
   type WormSnapWorm,
+  type Projectile,
   type WormsEvent,
   type WormsSnapshot,
 } from '@mg/shared/worms';
@@ -62,7 +64,7 @@ const WORM_SPRITE = '/avatars/worms_game_worm_asset.png';
  * so blitting the whole thing would draw the worm at half the size asked for.
  */
 const SPRITE_BOX = { x: 359, y: 184, w: 820, h: 677 };
-const WORM_DRAW_H = 34;
+const WORM_DRAW_H = 40;
 const WORM_DRAW_W = (WORM_DRAW_H * SPRITE_BOX.w) / SPRITE_BOX.h;
 
 /** World units of travel per full walk cycle. */
@@ -83,6 +85,8 @@ export interface WormsContext {
   colorBySeat: Record<number, number>;
   nameBySeat: Record<number, string>;
   paused: boolean;
+  /** Explicit shot power selected in the controls, 15..100. */
+  power: number;
 }
 
 export class WormsRenderer {
@@ -464,7 +468,7 @@ export class WormsRenderer {
       }
 
       if (worm.i === snap.ac && controllable) {
-        this.drawAim(ctx, x, y, worm, facing, color);
+        this.drawAim(ctx, x, y, worm, facing, color, snap);
       }
     }
   }
@@ -582,11 +586,9 @@ export class WormsRenderer {
   }
 
   /**
-   * The crosshair and the power meter.
-   *
-   * Dots along the aim line rather than a solid one, because a solid line reads
-   * as the path the shot will take, and with wind and gravity it very much is
-   * not. Dots read as a direction, which is what it is.
+   * The crosshair and the simulated flight path. This runs the same projectile
+   * stepper as the server against the client's current terrain mask, so the
+   * preview includes gravity, wind, bounces, fuses and worm collisions.
    */
   private drawAim(
     ctx: CanvasRenderingContext2D,
@@ -595,36 +597,71 @@ export class WormsRenderer {
     worm: WormSnapWorm,
     facing: 1 | -1,
     color: string,
+    snap: WormsSnapshot,
   ): void {
     const angle = worm.ai * AIM_RADIANS_PER_INDEX;
     const dx = Math.cos(angle) * facing;
     const dy = -Math.sin(angle);
 
+    const seat = snap.seats.find((candidate) => candidate.s === worm.s);
+    const spec = seat ? WEAPONS[seat.w] : null;
+    const mask = terrainBus.mask;
+    const physics = spec?.projectile;
+
+    if (worm.s === this.context.mySeat && seat && spec && physics && mask) {
+      const dropped = spec.aim === 'drop';
+      const launchPower = spec.usesPower ? this.context.power / 100 : 1;
+      const speed = spec.launchSpeed * launchPower;
+      const offset = WORM_HALF_W + 6;
+      const shot: Projectile = {
+        id: -1,
+        kind: spec.id,
+        owner: worm.s,
+        x: dropped ? x : x + dx * offset,
+        y: dropped ? y : y + dy * offset,
+        vx: dropped ? 0 : dx * speed,
+        vy: dropped ? 0 : dy * speed,
+        fuse: physics.detonate === 'fuse'
+          ? Math.round(seat.fz * TICK_RATE)
+          : -1,
+        age: 0,
+        tx: snap.tx,
+        ty: snap.ty,
+        resting: false,
+      };
+      const targets = snap.worms.map((target) => ({
+        id: target.i,
+        seat: target.s,
+        x: target.x,
+        y: target.y,
+        alive: target.al === 1,
+      }));
+
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([7, 7]);
+      ctx.globalAlpha = 0.78;
+      ctx.beginPath();
+      ctx.moveTo(shot.x, shot.y);
+      for (let tick = 0; tick < 240; tick += 1) {
+        const outcome = stepProjectile(shot, spec, mask, targets, snap.wd / 1000);
+        if (tick % 2 === 0 || outcome.kind !== 'fly') ctx.lineTo(shot.x, shot.y);
+        if (outcome.kind !== 'fly') break;
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+      return;
+    }
+
     ctx.fillStyle = color;
-    for (let d = 26; d <= 74; d += 12) {
-      ctx.globalAlpha = 1 - (d - 26) / 90;
+    for (let d = 26; d <= 134; d += 12) {
+      ctx.globalAlpha = 1 - (d - 26) / 160;
       ctx.beginPath();
       ctx.arc(x + dx * d, y + dy * d, 2.4, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.globalAlpha = 1;
-
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.arc(x + dx * 86, y + dy * 86, 5, 0, Math.PI * 2);
-    ctx.stroke();
-
-    if (worm.pw > 0) {
-      const power = worm.pw / 1000;
-      const top = y - WORM_HALF_H - 44;
-      ctx.fillStyle = 'rgba(20,17,15,0.75)';
-      roundRect(ctx, x - 24, top, 48, 7, 3);
-      ctx.fill();
-      ctx.fillStyle = power > 0.85 ? '#ff5a4d' : '#ffc23a';
-      roundRect(ctx, x - 23, top + 1, 46 * power, 5, 2);
-      ctx.fill();
-    }
   }
 
   /** Where a map-targeting weapon is pointed. */

@@ -141,7 +141,8 @@ export function createState(seats: GameSeat[], config: WormsConfig, seed: number
       roundWins: 0,
       connected: true,
       ammo: startingAmmo(config.extrasEnabled),
-      weapon: 'bazooka',
+        weapon: 'bazooka',
+        pendingFirePower: null,
       fuse: WEAPONS.grenade.fuse?.default ?? 3,
       ackSeq: 0,
       heldBits: 0,
@@ -256,7 +257,7 @@ export function applyInput(state: WormsState, playerId: string, raw: unknown): v
 }
 
 /**
- * The rare commands. All three are rejected unless they come from the seat
+ * The rare commands. All are rejected unless they come from the seat
  * whose turn it is, during its own turn — otherwise anyone in the room could
  * re-aim the active worm or spend its ammo.
  */
@@ -298,6 +299,18 @@ function applyCommand(
       state.targetY = Math.max(0, Math.min(WORLD_H, y));
       return;
     }
+    case 'fire': {
+      const percent = Number(message.p);
+      if (!Number.isInteger(percent) || percent < 15 || percent > 100) return;
+      const spec = WEAPONS[seat.weapon];
+      const canFire = !state.attackUsed || state.usesLeft > 0;
+      if (!canFire) return;
+      if (spec.needsTarget && state.targetX < 0) return;
+      if (spec.ammo >= 0 && (seat.ammo[spec.id] ?? 0) <= 0) return;
+      active.charge = -1;
+      seat.pendingFirePower = percent;
+      return;
+    }
     default:
       return;
   }
@@ -308,6 +321,7 @@ export function resetInput(state: WormsState, playerId: string): void {
   if (!seat) return;
   seat.heldBits = 0;
   seat.pressedBits = 0;
+  seat.pendingFirePower = null;
   // A reconnecting client is a new controller whose sequence restarts at zero;
   // keeping the old high-water mark would discard every input it ever sends.
   seat.ackSeq = 0;
@@ -342,7 +356,15 @@ export function stepTick(state: WormsState): WormsEvent[] {
   const active = activeWorm(state);
   if (state.phase === 'turn' && active) {
     steerAim(state, active);
-    handleFire(state, active);
+    const seat = seatOf(state, active);
+    if (seat.pendingFirePower !== null) {
+      const percent = seat.pendingFirePower;
+      seat.pendingFirePower = null;
+      const spec = WEAPONS[seat.weapon];
+      fire(state, active, spec, spec.usesPower ? percent / 100 : 1);
+    } else {
+      handleFire(state, active);
+    }
   }
 
   moveWorms(state);
@@ -374,12 +396,11 @@ function steerAim(state: WormsState, worm: Worm): void {
 }
 
 /**
- * Charge on hold, fire on release.
+ * Legacy charge-on-hold path, kept for deterministic replay compatibility.
  *
- * Power lives on the held button rather than in a message so that it is a
- * function of the input log — the server and the client count the same ticks,
- * and the meter the player watches is the one that fires. A "power: 0.62"
- * message would be neither predictable nor checkable.
+ * Old input logs encode power as held ticks. Current clients queue an explicit
+ * power command and consume it at the top of `stepTick`, so both paths still
+ * change simulation state only on a deterministic tick boundary.
  */
 function handleFire(state: WormsState, worm: Worm): void {
   const seat = seatOf(state, worm);

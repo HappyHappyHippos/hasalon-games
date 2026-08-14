@@ -2,7 +2,7 @@ import type { GameConfig, GameId, GameSnapshot } from './gameModule';
 import type { RoomView } from './roomTypes';
 
 /** Bump when the message shapes change so stale tabs fail loudly, not weirdly. */
-export const PROTOCOL_VERSION = 25;
+export const PROTOCOL_VERSION = 26;
 
 export const WS_PATH = '/ws';
 
@@ -25,6 +25,8 @@ export type ClientMessage =
   | { t: 'resume'; v: number; code: string; playerId: string; token: string }
   | { t: 'identity'; identity: Partial<Identity> }
   | { t: 'ready'; ready: boolean }
+  /** Anyone in the lobby — remind the other connected, unready players. */
+  | { t: 'readyNudge' }
   /** Host only — choose which game the room is about to play. */
   | { t: 'game'; gameId: GameId }
   /** Host only. Shape depends on the selected game. */
@@ -55,8 +57,10 @@ export type ClientMessage =
    * neither side of it.
    */
   | { t: 'seriesStart' }
-  /** Host only — end the lineup reveal or the between-legs break now. */
+  /** Host only — end the between-legs break now. The reveal is never skipped. */
   | { t: 'seriesSkip' }
+  /** Host only — abandon the running roulette leg without scoring it. */
+  | { t: 'seriesNext' }
   | { t: 'leave' }
   /** Game-specific payload; the game module validates it. */
   | { t: 'input'; i: unknown }
@@ -105,6 +109,8 @@ export type ServerMessage =
   /** Sent once on a successful create/join/resume. */
   | { t: 'welcome'; room: RoomView; playerId: string; token: string; seat: number }
   | { t: 'room'; room: RoomView }
+  /** Room-wide so every ready button observes the same server cooldown. */
+  | { t: 'readyNudge'; from: string; until: number }
   /**
    * `st` is when the server *authored* this snapshot, on the same clock as
    * `pong.serverTime`. The client places snapshots on a timeline built from
@@ -126,7 +132,7 @@ export type ServerMessage =
    * last.
    */
   | { t: 'matchStarted'; room: RoomView; resumed?: true }
-  | { t: 'matchEnded'; room: RoomView; winnerSeat: number | null }
+  | { t: 'matchEnded'; room: RoomView; winnerSeat: number | null; skipped?: true }
   /**
    * Game state for this socket alone — the half of the world a snapshot cannot
    * carry, because a snapshot is encoded once and sent to everybody.

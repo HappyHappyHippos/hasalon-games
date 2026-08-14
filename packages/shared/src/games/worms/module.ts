@@ -25,7 +25,7 @@ export const wormsModule: GameModule = {
     tagline: 'Take turns. Take the ground out from under them.',
     minPlayers: MIN_PLAYERS,
     maxPlayers: MAX_PLAYERS,
-    controls: 'Arrows to walk and aim · Space to jump · hold Fire to charge · 1–9 to pick a weapon',
+    controls: 'Arrows to walk and aim · Enter to jump · power slider and Space to fire · 1–9 to pick a weapon',
     rules: [
       'One worm moves at a time. Walk, aim, pick a weapon and take one shot.',
       'Two worms each when there are four of you or fewer, one each above that.',
@@ -33,7 +33,7 @@ export const wormsModule: GameModule = {
       'A blast throws you as well as hurting you, and the ground under you can simply stop being there.',
       'Falling out of the world kills you outright, however much health you had left.',
       'Wind pushes a rocket and barely touches a grenade. It changes every turn.',
-      'Hold the fire button to charge the shot; let go to launch. A tap is a weak shot, not no shot.',
+      'Set shot strength with the power slider. The preview follows gravity, wind and collisions.',
       'The last player with a worm still alive wins.',
     ],
     touchSupported: true,

@@ -4,10 +4,8 @@ import { CLIENT_GAMES } from '../games/registry';
 import { msUntil } from '../net/clock';
 import { music } from '../music';
 import { sfx } from '../audio';
-import { socket } from '../net/socket';
 import { useStore } from '../store';
 import { useT } from '../strings';
-import { Button } from './Button';
 import { prefersReducedMotion } from './motion';
 import { landedAt, msUntilLand } from './rouletteTiming';
 
@@ -33,12 +31,9 @@ import { landedAt, msUntilLand } from './rouletteTiming';
 /** How many cells of art a reel scrolls through before it stops. */
 const STRIP_CELLS = 14;
 
-interface Props {
-  series: SeriesView;
-  isHost: boolean;
-}
+interface Props { series: SeriesView; }
 
-export function RouletteReveal({ series, isHost }: Props): JSX.Element {
+export function RouletteReveal({ series }: Props): JSX.Element {
   const t = useT();
   const reduced = prefersReducedMotion();
   const pool = useStore((s) => s.room?.seriesSetup.pool);
@@ -127,13 +122,6 @@ export function RouletteReveal({ series, isHost }: Props): JSX.Element {
           ))}
         </div>
 
-        {isHost && (
-          <div className="overlay__actions">
-            <Button variant="primary" size="lg" full onClick={() => socket.seriesSkip()}>
-              {t.skipTheWait}
-            </Button>
-          </div>
-        )}
       </div>
     </div>
   );

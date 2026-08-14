@@ -13,6 +13,7 @@ import { exitFullscreen, useIsFullscreen } from './useFullscreen';
 import type { TouchControlsMode } from '../store';
 import { LANGS, type Dict, type Lang } from '../i18n';
 import { GearIcon } from './Icons';
+import { VoiceBar } from './VoiceBar';
 
 const TOUCH_MODES: Array<{ mode: TouchControlsMode; label: (t: Dict) => string }> = [
   { mode: 'auto', label: (t) => t.touchAuto },
@@ -175,6 +176,17 @@ export function OptionsMenu(): JSX.Element {
                       {t.restartMatch}
                     </Button>
                   )}
+                  {series?.phase === 'leg' && (
+                    <Button
+                      full
+                      onClick={() => {
+                        socket.seriesNext();
+                        close();
+                      }}
+                    >
+                      {t.skipCurrentGame}
+                    </Button>
+                  )}
                   <Button
                     variant="danger"
                     full
@@ -253,6 +265,8 @@ export function OptionsMenu(): JSX.Element {
               }}
             />
           </label>
+
+          {room && <VoiceBar />}
 
           {voice.active && <VoicePeers />}
         </section>

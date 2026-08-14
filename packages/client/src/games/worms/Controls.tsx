@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, type JSX, type ReactNode } from 'react'
 import {
   IN_AIM_DOWN,
   IN_AIM_UP,
-  IN_FIRE,
   IN_JUMP,
   IN_LEFT,
   IN_RIGHT,
@@ -11,12 +10,16 @@ import {
 import { Thumbstick, type StickVector } from '../../ui/Thumbstick';
 import { newStickState, stickToBits } from './stickBits';
 import { AimDownIcon, AimUpIcon, ShootIcon, WormsWeaponIcon } from './WormsWeaponIcons';
+import { useT } from '../../strings';
 
 interface Props {
   onButton: (bit: number, down: boolean) => void;
   currentWeapon: WormsWeaponId;
   ammo: Record<string, number>;
   onOpenPicker: () => void;
+  power: number;
+  onPower: (power: number) => void;
+  onFire: () => void;
 }
 
 const STICK_BITS = [IN_LEFT, IN_RIGHT, IN_JUMP];
@@ -30,7 +33,11 @@ export function Controls({
   currentWeapon,
   ammo,
   onOpenPicker,
+  power,
+  onPower,
+  onFire,
 }: Props): JSX.Element {
+  const t = useT();
   const stick = useRef(newStickState());
   const stickBits = useRef(0);
   const lastVector = useRef<StickVector | null>(null);
@@ -100,7 +107,25 @@ export function Controls({
           <HoldButton bit={IN_AIM_UP} label={<AimUpIcon size={18} />} ariaLabel="Aim Up" onButton={onButton} />
           <HoldButton bit={IN_AIM_DOWN} label={<AimDownIcon size={18} />} ariaLabel="Aim Down" onButton={onButton} />
         </div>
-        <HoldButton bit={IN_FIRE} label={<ShootIcon size={38} />} ariaLabel="Fire Weapon" onButton={onButton} big />
+        <div className="worms__power-control">
+          <label className="worms__power-label">
+            <span>{t.wormsPower}</span>
+            <output>{power}%</output>
+          </label>
+          <input
+            className="worms__power-slider"
+            type="range"
+            min="15"
+            max="100"
+            step="1"
+            value={power}
+            aria-label={t.wormsPower}
+            onChange={(event) => onPower(Number(event.currentTarget.value))}
+          />
+        </div>
+        <button type="button" className="worms__btn worms__btn--big" aria-label={t.padFire} onClick={onFire}>
+          <ShootIcon size={38} />
+        </button>
       </div>
     </div>
   );

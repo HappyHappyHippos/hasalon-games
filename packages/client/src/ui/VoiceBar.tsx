@@ -96,6 +96,36 @@ export function VoiceBar({ compact = false }: Props): JSX.Element | null {
   );
 }
 
+/** Always-visible microphone shortcut beside settings and fullscreen. */
+export function MicButton(): JSX.Element | null {
+  const room = useStore((state) => state.room);
+  const playerId = useStore((state) => state.playerId);
+  const state = useVoice();
+  const t = useT();
+  if (!room || !playerId) return null;
+
+  const toggle = (): void => {
+    sfx.click();
+    if (!state.active) void voice.start(playerId);
+    else voice.setMuted(!state.muted);
+  };
+  const label = !state.active ? t.voiceJoin : state.muted ? t.voiceUnmute : t.voiceMute;
+  const icon = !state.active ? 'נ™' : state.muted ? 'נ”‡' : 'נ₪';
+
+  return (
+    <button
+      type="button"
+      className={`micbtn${state.active && !state.muted ? ' micbtn--live' : ''}`}
+      onClick={toggle}
+      aria-pressed={state.active && !state.muted}
+      aria-label={label}
+      title={label}
+    >
+      <span aria-hidden="true">{icon}</span>
+    </button>
+  );
+}
+
 function VoiceNote({
   error,
   failed,

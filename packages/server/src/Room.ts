@@ -59,6 +59,7 @@ import { serverNow } from './serverClock';
  */
 
 const DEFAULT_GAME: GameId = 'gunmayhem';
+const READY_NUDGE_COOLDOWN_MS = 10_000;
 
 export type { RoomPlayer } from './roster';
 
@@ -107,6 +108,7 @@ export class Room {
   private lastPrivate = new Map<string, string>();
   /** When that snapshot was authored. Replayed with it, so it stays honest about its age. */
   private lastSnapshotAt = 0;
+  private readyNudgeUntil = 0;
 
   /**
    * The tick loop.
@@ -305,6 +307,19 @@ export class Room {
   setReady(player: RoomPlayer, ready: boolean): void {
     player.ready = ready;
     this.broadcastRoom();
+  }
+
+  /** Remind only the other connected, unready players; clients share the cooldown deadline. */
+  nudgeReady(player: RoomPlayer): boolean {
+    if (this.phase !== 'lobby') return false;
+    const now = serverNow();
+    if (now < this.readyNudgeUntil) return false;
+    if (!this.players.some((candidate) => candidate.id !== player.id && candidate.client && !candidate.ready)) {
+      return false;
+    }
+    this.readyNudgeUntil = now + READY_NUDGE_COOLDOWN_MS;
+    this.broadcast({ t: 'readyNudge', from: player.id, until: this.readyNudgeUntil });
+    return true;
   }
 
   setVoice(player: RoomPlayer, on: boolean): void {
@@ -548,10 +563,28 @@ export class Room {
     return true;
   }
 
-  /** Host only — cut the reveal or the between-legs break short. */
+  /** Host only — cut the between-legs break short. The initial reveal always completes. */
   skipSeriesWait(): boolean {
-    if (this.series.phase !== 'reveal' && this.series.phase !== 'break') return false;
+    if (this.series.phase !== 'break') return false;
     this.advanceLeg();
+    return true;
+  }
+
+  /** Host only — abandon a live roulette leg, award nothing, then continue the run. */
+  skipSeriesLeg(): boolean {
+    if (this.phase !== 'playing' || this.series.phase !== 'leg') return false;
+
+    this.clock.stop();
+    this.clock.clearPause();
+    this.phase = 'matchOver';
+    this.series.legWinners.push(null);
+    this.series.skippedLegs.push(this.series.index);
+    for (const p of this.players) p.ready = false;
+
+    if (this.series.index + 1 >= this.series.lineup.length) this.series.finish(false);
+    else this.series.armBreak(SERIES_BREAK_MS);
+
+    this.broadcast({ t: 'matchEnded', room: this.view(), winnerSeat: null, skipped: true });
     return true;
   }
 

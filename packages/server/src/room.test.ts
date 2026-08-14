@@ -194,6 +194,30 @@ describe('Room membership', () => {
 });
 
 describe('Room match gating', () => {
+  it('lets anyone remind unready players, with one room-wide cooldown', () => {
+    const room = new Room('TEST');
+    const aClient = fakeClient();
+    const bClient = fakeClient();
+    const a = room.addPlayer(aClient, identity('A', 0))!;
+    const b = room.addPlayer(bClient, identity('B', 1))!;
+    aClient.sent.length = 0;
+    bClient.sent.length = 0;
+
+    expect(room.nudgeReady(a)).toBe(true);
+    expect(bClient.sent.at(-1)).toMatchObject({ t: 'readyNudge', from: a.id });
+    expect(room.nudgeReady(b)).toBe(false);
+
+    // Move only the feature's own deadline; faking the monotonic process clock
+    // here would contaminate the real tick-loop tests later in this file.
+    (room as unknown as { readyNudgeUntil: number }).readyNudgeUntil = 0;
+    expect(room.nudgeReady(b)).toBe(true);
+    room.setReady(a, true);
+    room.setReady(b, true);
+    (room as unknown as { readyNudgeUntil: number }).readyNudgeUntil = 0;
+    expect(room.nudgeReady(a)).toBe(false);
+    room.dispose();
+  });
+
   it('will not start without two ready players', () => {
     const room = new Room('TEST');
     const a = room.addPlayer(fakeClient(), identity('A', 0))!;
@@ -588,6 +612,12 @@ describe('Room series', () => {
     return (room as unknown as { settingsByGame: Record<string, GameConfig> }).settingsByGame;
   }
 
+  /** Test-only: the public reveal is intentionally not skippable anymore. */
+  function beginDrawnLeg(room: Room): void {
+    (room as unknown as { advanceLeg(): void }).advanceLeg();
+    expect(room.seriesView?.phase).toBe('leg');
+  }
+
   /** A lobby of `count` ready players with the roulette configured. */
   function lobby(count: number, setup: Partial<SeriesSetup> = {}) {
     const room = new Room('TEST');
@@ -700,7 +730,7 @@ describe('Room series', () => {
     room.setSettings({ targetWins: 15, roundSeconds: 180 });
 
     expect(room.startSeries()).toBe(true);
-    expect(room.skipSeriesWait()).toBe(true);
+    beginDrawnLeg(room);
 
     expect(room.gameId).toBe('tanks');
     const live = room.settings;
@@ -721,7 +751,7 @@ describe('Room series', () => {
     room.setGame('tanks');
     room.setSettings({ targetWins: 15 });
     expect(room.startSeries()).toBe(true);
-    expect(room.skipSeriesWait()).toBe(true);
+    beginDrawnLeg(room);
 
     room.rematch();
 
@@ -738,7 +768,7 @@ describe('Room series', () => {
     try {
       const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
       expect(room.startSeries()).toBe(true);
-      expect(room.skipSeriesWait()).toBe(true);
+      beginDrawnLeg(room);
 
       const seatsBefore = players.map((p) => p.seat);
       const firstLeg = room.gameId;
@@ -764,7 +794,7 @@ describe('Room series', () => {
   it('records each leg winner by player id', () => {
     const { room, players } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
     expect(room.startSeries()).toBe(true);
-    expect(room.skipSeriesWait()).toBe(true);
+    beginDrawnLeg(room);
 
     const winner = players.find((p) => p.seat === 1)!;
     endMatch(room, 1);
@@ -780,7 +810,7 @@ describe('Room series', () => {
     try {
       const { room } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
       expect(room.startSeries()).toBe(true);
-      expect(room.skipSeriesWait()).toBe(true);
+      beginDrawnLeg(room);
 
       endMatch(room, 0);
       vi.advanceTimersByTime(SERIES_BREAK_MS + 50);
@@ -806,7 +836,7 @@ describe('Room series', () => {
     try {
       const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
       expect(room.startSeries()).toBe(true);
-      expect(room.skipSeriesWait()).toBe(true);
+      beginDrawnLeg(room);
 
       endMatch(room, 0);
       const before = startedMatches(room).length;
@@ -833,7 +863,7 @@ describe('Room series', () => {
     try {
       const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
       expect(room.startSeries()).toBe(true);
-      expect(room.skipSeriesWait()).toBe(true);
+      beginDrawnLeg(room);
 
       endMatch(room, 0);
       const before = startedMatches(room).length;
@@ -858,7 +888,7 @@ describe('Room series', () => {
     try {
       const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
       expect(room.startSeries()).toBe(true);
-      expect(room.skipSeriesWait()).toBe(true);
+      beginDrawnLeg(room);
       endMatch(room, 0);
 
       const before = startedMatches(room).length;
@@ -880,7 +910,7 @@ describe('Room series', () => {
     try {
       const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
       expect(room.startSeries()).toBe(true);
-      expect(room.skipSeriesWait()).toBe(true);
+      beginDrawnLeg(room);
       endMatch(room, 0);
       expect(vi.getTimerCount()).toBeGreaterThan(0);
 
@@ -896,7 +926,7 @@ describe('Room series', () => {
   it('refuses a restart during a break, so a scored leg cannot be scored twice', () => {
     const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
     expect(room.startSeries()).toBe(true);
-    expect(room.skipSeriesWait()).toBe(true);
+    beginDrawnLeg(room);
 
     endMatch(room, 0);
     const totals = players.map((p) => p.totalScore);
@@ -911,11 +941,30 @@ describe('Room series', () => {
   it('still allows a restart mid-leg', () => {
     const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
     expect(room.startSeries()).toBe(true);
-    expect(room.skipSeriesWait()).toBe(true);
+    beginDrawnLeg(room);
     expect(room.seriesView!.phase).toBe('leg');
 
     expect(room.restart()).toBe(true);
 
+    room.dispose();
+  });
+
+  it('skips a live leg without awarding points and records it in the run', () => {
+    const { room, players } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
+    expect(room.startSeries()).toBe(true);
+    beginDrawnLeg(room);
+
+    expect(room.skipSeriesLeg()).toBe(true);
+    expect(room.phase).toBe('matchOver');
+    expect(room.seriesView).toMatchObject({
+      phase: 'break',
+      legWinners: [null],
+      skippedLegs: [0],
+    });
+    expect(players.map((player) => player.totalScore)).toEqual([0, 0, 0]);
+    const sent = (players[0]!.client as unknown as { sent: ServerMessage[] }).sent;
+    expect(sent.at(-1)).toMatchObject({ t: 'matchEnded', skipped: true, winnerSeat: null });
+    expect(room.skipSeriesLeg()).toBe(false);
     room.dispose();
   });
 

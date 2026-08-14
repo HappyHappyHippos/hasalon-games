@@ -54,7 +54,7 @@ const TRACKS: Record<MusicTrack, string> = {
   // URL is unchanged and lets it continue rather than restarting on match start.
   skribbl: '/music/lobby.mp3',
   worms: '/music/worms.mp3',
-  telephone: '/music/lobby.mp3',
+  telephone: '/music/telephone.mp3',
 };
 
 /** Long enough to feel deliberate, short enough not to overlap two melodies. */

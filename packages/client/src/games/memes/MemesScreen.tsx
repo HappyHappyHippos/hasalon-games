@@ -3,7 +3,6 @@ import { TICK_RATE, type RoomView } from '@mg/shared';
 import { useStore } from '../../store';
 import { useT } from '../../strings';
 import { MatchEndOverlay, Paused } from '../../ui/MatchOverlays';
-import { VoiceBar } from '../../ui/VoiceBar';
 import { Composer } from './Composer';
 import { MemeCard } from './MemeCard';
 import { preloadMemes } from './preload';
@@ -96,10 +95,6 @@ export function MemesScreen({ room, mySeat }: Props): JSX.Element {
           <Countdown ticks={view?.phaseTicks ?? 0} total={view?.phaseTotal ?? 0} low={seconds <= 10 && (phase === 'writing' || phase === 'voting')} />
           <strong>{t.memesRound(round || 1, view?.rounds ?? 1)}</strong>
         </div>
-        {/* Memes and Skribbl build their own chrome rather than using `Screen`,
-            which is the only reason they were the two games with no microphone
-            toggle on the surface. */}
-        <VoiceBar compact />
       </header>}
       {room.phase !== 'matchOver' && <div key={view?.phaseSeq ?? 0} className="memes__phase">{body}</div>}
       <p className="sr-only" role="status" aria-live="polite">{announcement}</p>

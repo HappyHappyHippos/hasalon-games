@@ -21,7 +21,16 @@ import {
   WORM_HIT_R,
 } from './constants';
 import { outOfWorld, solidAt, surfaceNormal } from './terrain';
-import type { Projectile, TerrainMask, WeaponSpec, Worm } from './types';
+import type { Projectile, TerrainMask, WeaponSpec } from './types';
+
+/** The collision-sized subset needed while a projectile is in flight. */
+export interface ProjectileTarget {
+  id: number;
+  seat: number;
+  x: number;
+  y: number;
+  alive: boolean;
+}
 
 export type ProjectileOutcome =
   /** Still going. */
@@ -44,7 +53,7 @@ export function stepProjectile(
   shot: Projectile,
   spec: WeaponSpec,
   mask: TerrainMask,
-  worms: readonly Worm[],
+  worms: readonly ProjectileTarget[],
   wind: number,
 ): ProjectileOutcome {
   const physics = spec.projectile;
@@ -108,7 +117,7 @@ export function stepProjectile(
  * weapons — a mine you dropped is a mine, and standing on it is your problem.
  */
 function wormAt(
-  worms: readonly Worm[],
+  worms: readonly ProjectileTarget[],
   x: number,
   y: number,
   owner: number,

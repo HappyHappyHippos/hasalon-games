@@ -8,7 +8,6 @@ import { socket } from '../../net/socket';
 import { Button } from '../../ui/Button';
 import { Avatar } from '../../ui/Avatar';
 import { MatchEndOverlay, Paused } from '../../ui/MatchOverlays';
-import { VoiceBar } from '../../ui/VoiceBar';
 import { InkSurface } from '../skribbl/InkSurface';
 import { attachDrawInput, type DrawInput } from '../skribbl/input';
 import { Toolbar } from '../skribbl/Toolbar';
@@ -196,7 +195,7 @@ export function TelephoneScreen({ room, mySeat }: { room: RoomView; mySeat: numb
   const phaseClass = contributing && mine?.task === 'drawing' ? 'draw' : contributing ? 'write' : 'reveal';
   return (
     <main className="telephone">
-      {room.phase !== 'matchOver' && <header className="telephone__top"><div><span className={`telephone__clock${seconds <= 10 && contributing ? ' telephone__clock--low' : ''}`} dir="ltr">{seconds}</span>{contributing && <strong>{t.telephoneStep((view?.contributionIndex ?? 0) + 1, view?.contributionCount ?? room.players.length)}</strong>}</div><VoiceBar compact /></header>}
+      {room.phase !== 'matchOver' && <header className="telephone__top"><div><span className={`telephone__clock${seconds <= 10 && contributing ? ' telephone__clock--low' : ''}`} dir="ltr">{seconds}</span>{contributing && <strong>{t.telephoneStep((view?.contributionIndex ?? 0) + 1, view?.contributionCount ?? room.players.length)}</strong>}</div></header>}
       <div key={view?.phaseSeq ?? 0} className={`telephone__phase telephone__phase--${phaseClass}`}>
         {contributing && mySeat >= 0 && mine ? (mine.task === 'drawing' ? <DrawingComposer previous={mine.previous} submitted={mine.submitted} /> : <TextComposer task={mine.task} previous={mine.previous} initial={mine.draft} submitted={mine.submitted} />) : contributing ? <div className="telephone__waiting"><h2>{t.telephoneSpectating}</h2></div> : view?.phase === 'intro' ? <div className="telephone__intro"><span>☎</span><h1>{t.telephoneIntro}</h1></div> : <Reveal room={room} mySeat={mySeat} />}
       </div>

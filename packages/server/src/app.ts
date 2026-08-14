@@ -236,6 +236,10 @@ export function createApp(options: AppOptions): App {
         room.setReady(player, message.ready === true);
         return;
 
+      case 'readyNudge':
+        room.nudgeReady(player);
+        return;
+
       case 'game':
         if (!requireHost(client, room, player)) return;
         if (room.phase === 'playing') {
@@ -309,6 +313,11 @@ export function createApp(options: AppOptions): App {
         // Ignored outside a wait rather than an error, matching `game` — the
         // host tapping as the timer runs out is routine, not a mistake.
         room.skipSeriesWait();
+        return;
+
+      case 'seriesNext':
+        if (!requireHost(client, room, player)) return;
+        room.skipSeriesLeg();
         return;
 
       case 'rematch':

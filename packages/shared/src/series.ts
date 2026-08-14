@@ -77,6 +77,8 @@ export interface SeriesView {
    * tank round is not seat 2 in the next one. Null for a leg nobody won.
    */
   legWinners: (string | null)[];
+  /** Lineup indices the host abandoned; distinct from a completed leg with no winner. */
+  skippedLegs: number[];
   /** The series stopped short because a leg could not be seated. */
   aborted: boolean;
 }

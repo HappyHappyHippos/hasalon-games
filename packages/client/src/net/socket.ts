@@ -247,6 +247,10 @@ class GameSocket {
     this.send({ t: 'ready', ready });
   }
 
+  nudgeReady(): void {
+    this.send({ t: 'readyNudge' });
+  }
+
   setGame(gameId: GameId): void {
     this.send({ t: 'game', gameId });
   }
@@ -283,6 +287,10 @@ class GameSocket {
   /** Cut the reveal or the between-legs break short. Host only, server-enforced. */
   seriesSkip(): void {
     this.send({ t: 'seriesSkip' });
+  }
+
+  seriesNext(): void {
+    this.send({ t: 'seriesNext' });
   }
 
   leave(): void {
@@ -362,6 +370,13 @@ class GameSocket {
         this.confirmMembership(store.playerId);
         return;
 
+      case 'readyNudge': {
+        store.setReadyNudge({ from: message.from, until: message.until });
+        const me = store.room?.players.find((player) => player.id === store.playerId);
+        if (me && !me.ready && message.from !== store.playerId) sfx.powerup();
+        return;
+      }
+
       case 'matchStarted':
         feed.reset();
         resetInk();
@@ -387,7 +402,7 @@ class GameSocket {
 
       case 'matchEnded':
         store.onMatchEnded(message.room, message.winnerSeat);
-        sfx.win();
+        if (!message.skipped) sfx.win();
         return;
 
       case 'pong':

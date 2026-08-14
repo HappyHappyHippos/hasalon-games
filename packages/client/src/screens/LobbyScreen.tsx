@@ -8,10 +8,10 @@ import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
 import { GamePicker } from '../ui/GamePicker';
 import { SeriesSetup } from '../ui/SeriesSetup';
-import { VoiceBar } from '../ui/VoiceBar';
 import { useVoice } from '../ui/useVoice';
 import { CLIENT_GAMES } from '../games/registry';
 import { resetIOSLobbyViewport } from '../ui/mobileViewport';
+import { msUntil } from '../net/clock';
 
 export function LobbyScreen(): JSX.Element {
   const room = useStore((s) => s.room)!;
@@ -21,6 +21,8 @@ export function LobbyScreen(): JSX.Element {
   const t = useT();
   const speaking = new Set(useVoice().speaking);
   const [copied, setCopied] = useState(false);
+  const readyNudge = useStore((s) => s.readyNudge);
+  const [, setNudgeClock] = useState(0);
 
   useEffect(() => {
     // Creating/joining can replace HomeScreen while its input is still focused.
@@ -38,6 +40,14 @@ export function LobbyScreen(): JSX.Element {
   const readyPlayers = room.players.filter((p) => p.ready && p.connected);
   const connectedPlayers = room.players.filter((p) => p.connected);
   const everyoneReady = connectedPlayers.length > 0 && readyPlayers.length === connectedPlayers.length;
+  const otherUnready = connectedPlayers.some((player) => player.id !== playerId && !player.ready);
+  const nudgeCoolingDown = readyNudge?.until != null && msUntil(readyNudge.until) > 0;
+
+  useEffect(() => {
+    if (!nudgeCoolingDown) return;
+    const timer = window.setInterval(() => setNudgeClock((value) => value + 1), 250);
+    return () => window.clearInterval(timer);
+  }, [nudgeCoolingDown]);
 
   const canStart = readyPlayers.length >= game.meta.minPlayers;
   const overflow = Math.max(0, readyPlayers.length - game.meta.maxPlayers);
@@ -178,21 +188,29 @@ export function LobbyScreen(): JSX.Element {
               ))}
             </ul>
 
-            <div className="lobby__voice">
-              <VoiceBar />
-            </div>
-
             <div className="lobby__ready">
-              <Button
-                variant={me?.ready ? 'plain' : 'primary'}
-                size="lg"
-                full
-                tone={me?.ready ? undefined : colorFor(identity.colorIndex)}
-                disabled={!me?.connected}
-                onClick={() => socket.setReady(!me?.ready)}
-              >
-                {me?.ready ? t.notReady : t.ready}
-              </Button>
+              <div className="lobby__ready-actions">
+                <Button
+                  variant={me?.ready ? 'plain' : 'primary'}
+                  size="lg"
+                  full
+                  tone={me?.ready ? undefined : colorFor(identity.colorIndex)}
+                  disabled={!me?.connected}
+                  onClick={() => socket.setReady(!me?.ready)}
+                >
+                  {me?.ready ? t.notReady : t.ready}
+                </Button>
+                <button
+                  type="button"
+                  className="ready-nudge"
+                  disabled={!otherUnready || nudgeCoolingDown}
+                  onClick={() => socket.nudgeReady()}
+                  aria-label={t.readyNudge}
+                  title={t.readyNudge}
+                >
+                  <span aria-hidden="true">🔔</span>
+                </button>
+              </div>
               {rouletteOn && !canStartSeries && (
                 <p className="muted small center" style={{ marginTop: '0.5rem' }}>
                   {!everyoneReady

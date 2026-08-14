@@ -116,9 +116,9 @@ export const IN_MASK = 0b111111;
  * The 60 Hz half of the controller.
  *
  * `seq` lets the client replay its own inputs after a correction and lets the
- * server say which one it had already applied. Power lives on the held `IN_FIRE`
- * bit rather than in a message, so charging is deterministic and the client can
- * predict its own meter without asking.
+ * server say which one it had already applied. `IN_FIRE` remains in this mask
+ * for old deterministic input replays; current clients fire reliably with the
+ * explicit slider-power command below.
  */
 export interface WormsBitInput {
   seq: number;
@@ -129,13 +129,15 @@ export interface WormsBitInput {
  * The rare half: things that happen once a turn, not sixty times a second.
  *
  * Sent reliably, because there is no next sample to supersede a dropped weapon
- * switch. All three are rejected unless they come from the active seat during
+ * switch or shot. All are rejected unless they come from the active seat during
  * its own turn.
  */
 export type WormsCommand =
   | { k: 'weapon'; w: WormsWeaponId }
   | { k: 'fuse'; s: number }
-  | { k: 'target'; x: number; y: number };
+  | { k: 'target'; x: number; y: number }
+  /** Fire immediately at an explicit, visible slider power (15..100). */
+  | { k: 'fire'; p: number };
 
 // ---------------------------------------------------------------------------
 // Config
@@ -262,6 +264,8 @@ export interface WormsSeatState {
   /** Remaining shots per weapon this round. Unlimited weapons are absent. */
   ammo: Partial<Record<WormsWeaponId, number>>;
   weapon: WormsWeaponId;
+  /** Slider fire command waiting for the next deterministic tick. */
+  pendingFirePower: number | null;
   fuse: number;
   /** Highest input sequence applied, echoed back for prediction. */
   ackSeq: number;

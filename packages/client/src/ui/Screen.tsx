@@ -3,7 +3,6 @@ import type { RoomView } from '@mg/shared';
 import { useStore } from '../store';
 import { useT } from '../strings';
 import { MatchEndOverlay, Paused } from './MatchOverlays';
-import { VoiceBar } from './VoiceBar';
 import { useHasTouch } from './useTouchControls';
 
 interface Props {
@@ -59,7 +58,6 @@ export function Screen({
           )}
         </div>
         <div className="rail__list">{hud}</div>
-        <VoiceBar compact />
         <NetBadge />
       </aside>
 

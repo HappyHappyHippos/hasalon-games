@@ -178,6 +178,7 @@ export interface AppState {
    * already on screen when someone switches language switches with it.
    */
   error: ErrorCode | null;
+  readyNudge: { from: string; until: number } | null;
   pendingCode: string;
   busy: boolean;
   hud: Hud;
@@ -218,6 +219,7 @@ export interface AppState {
   setRoom(room: RoomView | null): void;
   setIdentity(patch: Partial<Identity>): void;
   setError(error: ErrorCode | null): void;
+  setReadyNudge(value: { from: string; until: number } | null): void;
   setPendingCode(code: string): void;
   setBusy(busy: boolean): void;
   setHud(hud: Hud): void;
@@ -346,6 +348,7 @@ export const useStore = create<AppState>((set) => ({
   playerId: null,
   identity: loadIdentity(),
   error: null,
+  readyNudge: null,
   pendingCode: '',
   busy: false,
   hud: emptyHud,
@@ -378,6 +381,7 @@ export const useStore = create<AppState>((set) => ({
     }),
 
   setError: (error) => set({ error, busy: false }),
+  setReadyNudge: (readyNudge) => set({ readyNudge }),
   setPendingCode: (pendingCode) => set({ pendingCode }),
   setBusy: (busy) => set({ busy }),
   setHud: (hud) => set({ hud }),
@@ -446,6 +450,7 @@ export const useStore = create<AppState>((set) => ({
       telephonePrivate: null,
       matchWinnerSeat: null,
       busy: false,
+      readyNudge: null,
     }),
 }));
 

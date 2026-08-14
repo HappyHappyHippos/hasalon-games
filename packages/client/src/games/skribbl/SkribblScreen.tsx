@@ -14,7 +14,6 @@ import { Toolbar } from './Toolbar';
 import { WordBanner } from './WordBanner';
 import { WordPicker } from './WordPicker';
 import { MatchEndOverlay, Paused } from '../../ui/MatchOverlays';
-import { VoiceBar } from '../../ui/VoiceBar';
 
 interface Props {
   room: RoomView;
@@ -164,10 +163,6 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
           <span className="skribbl__round">{t.skribblRound(round || 1, total)}</span>
         </div>
 
-        {/* Memes and Skribbl build their own chrome rather than using `Screen`,
-            which is the only reason they were the two games with no microphone
-            toggle on the surface. */}
-        <VoiceBar compact />
       </header>
 
       <div className="skribbl__wordwrap">

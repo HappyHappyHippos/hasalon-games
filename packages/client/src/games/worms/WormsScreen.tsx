@@ -12,7 +12,7 @@ import { WormsRenderer } from './Renderer';
 import { attachWormsInput } from './input';
 import { Controls } from './Controls';
 import { WeaponPickerModal } from './WeaponPickerModal';
-import { WormsWeaponIcon } from './WormsWeaponIcons';
+import { ShootIcon, WormsWeaponIcon } from './WormsWeaponIcons';
 
 interface Props {
   room: RoomView;
@@ -25,6 +25,10 @@ export function WormsScreen({ room, mySeat }: Props): JSX.Element {
   const inputRef = useRef<ReturnType<typeof attachWormsInput> | null>(null);
   const showTouch = useShowTouchControls();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [power, setPower] = useState(60);
+  const powerRef = useRef(power);
+  powerRef.current = power;
+  const t = useT();
 
   const hud = useStore((s) => s.hud);
   const worms = hud.worms;
@@ -56,13 +60,15 @@ export function WormsScreen({ room, mySeat }: Props): JSX.Element {
       colorBySeat: {},
       nameBySeat: {},
       paused: false,
+      power,
     });
     rendererRef.current = renderer;
     renderer.start();
 
     inputRef.current = attachWormsInput({
       onBits: (bits, seq) => socket.sendInput({ seq, bits }),
-      onCommand: (command) => socket.sendInput(command),
+      onCommand: (command) => socket.sendInputReliable(command),
+      getPower: () => powerRef.current,
     });
 
     return () => {
@@ -82,8 +88,8 @@ export function WormsScreen({ room, mySeat }: Props): JSX.Element {
       colorBySeat[player.seat] = player.colorIndex;
       nameBySeat[player.seat] = player.name;
     }
-    rendererRef.current?.setContext({ mySeat, colorBySeat, nameBySeat, paused: room.paused });
-  }, [room.players, room.paused, mySeat]);
+    rendererRef.current?.setContext({ mySeat, colorBySeat, nameBySeat, paused: room.paused, power });
+  }, [room.players, room.paused, mySeat, power]);
 
   const drag = useRef<{ id: number; x: number; y: number; moved: number } | null>(null);
 
@@ -145,6 +151,9 @@ export function WormsScreen({ room, mySeat }: Props): JSX.Element {
               ammo={worms?.ammo ?? {}}
               onOpenPicker={() => setPickerOpen(true)}
               onButton={(bit, down) => inputRef.current?.setButton(bit, down)}
+              power={power}
+              onPower={setPower}
+              onFire={() => inputRef.current?.fire()}
             />
           )}
 
@@ -160,6 +169,24 @@ export function WormsScreen({ room, mySeat }: Props): JSX.Element {
                   {worms?.ammo[weapon] !== undefined ? worms.ammo[weapon] : '∞'}
                 </span>
                 <span className="worms__weapon-trigger-arrow">▾</span>
+              </button>
+              <div className="worms__power-control worms__power-control--desktop">
+                <label className="worms__power-label">
+                  <span>{t.wormsPower}</span>
+                  <output>{power}%</output>
+                </label>
+                <input
+                  className="worms__power-slider"
+                  type="range"
+                  min="15"
+                  max="100"
+                  value={power}
+                  aria-label={t.wormsPower}
+                  onChange={(event) => setPower(Number(event.currentTarget.value))}
+                />
+              </div>
+              <button type="button" className="worms__desktop-fire" aria-label={t.padFire} onClick={() => inputRef.current?.fire()}>
+                <ShootIcon size={28} />
               </button>
             </div>
           )}
