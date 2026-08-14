@@ -5484,3 +5484,71 @@ strong,
   outline: 3px solid var(--yellow);
   outline-offset: 2px;
 }
+
+/* ==========================================================================
+   Bomb It
+   ========================================================================== */
+
+/* The kit line under a name in the score rail: bombs in hand, blast range, and
+   shields when there are any. Tabular figures so the numbers do not jog
+   sideways as they tick over, and `ltr` because it is a readout rather than
+   prose — it reads the same way round in both languages. */
+.bombit__kit {
+  display: flex;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+  direction: ltr;
+}
+
+.bombit__kit-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  white-space: nowrap;
+}
+
+/* The two debuffs somebody else picked up. Yellow because they are a warning
+   about your own controls, not a property of the person who threw them. */
+.bombit__effect {
+  font-size: 13px;
+  line-height: 1;
+  color: var(--yellow);
+}
+
+/* The map picker's card: the stage art with the board diagram over it. The
+   diagram is drawn from the layout string rather than from a screenshot, so
+   editing a map updates the picker with it. */
+.bombit__map-card {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.bombit__map-backdrop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bombit__map-preview {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* The bomb trigger. Wider than the tank pad's, because dropping a bomb is the
+   one input in this game you never want to miss and there is nothing else
+   competing for that thumb. */
+.bombit__bomb-btn {
+  font-size: 15px;
+  letter-spacing: 0.5px;
+}

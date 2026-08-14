@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./achtung": "./src/games/achtung/index.ts",
+    "./bombit": "./src/games/bombit/index.ts",
     "./gravity": "./src/games/gravity/index.ts",
     "./gunmayhem": "./src/games/gunmayhem/index.ts",
     "./memes": "./src/games/memes/index.ts",

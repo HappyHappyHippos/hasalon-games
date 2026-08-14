@@ -50,6 +50,15 @@ const TRACKS: Record<MusicTrack, string> = {
   memes: '/music/memes.mp3',
   tanks: '/music/tanks.mp3',
   gravity: '/music/gravity.mp3',
+  // ── ASSET SWAP POINT ──────────────────────────────────────────────────────
+  // Bomb It borrows Gun Mayhem's bed until a track of its own is sourced. This
+  // deliberately points at a file that *exists*: an entry pointing at a missing
+  // `/music/bombit.mp3` would fail twice, land in `broken`, and leave the game
+  // silent — which is indistinguishable from the Ogg bug that cost two rounds
+  // of fixes. Drop a `bombit.mp3` in `public/music/`, change this one line, and
+  // add it to ATTRIBUTION.md.
+  // ──────────────────────────────────────────────────────────────────────────
+  bombit: '/music/gunmayhem.mp3',
   // Skribbl deliberately shares the quiet lo-fi lobby bed. `play` notices the
   // URL is unchanged and lets it continue rather than restarting on match start.
   skribbl: '/music/lobby.mp3',

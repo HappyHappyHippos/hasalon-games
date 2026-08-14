@@ -8,7 +8,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 a room, share the code/link, everyone joins, the host picks a game from a
 live game picker, then plays. No accounts, rooms live in memory only. The games
 that ship today: **Gun Mayhem** (2–6 player platform fighter, the priority —
-this is the flagship game and should get the most care), **Worms** (up to
+this is the flagship game and should get the most care), **Bomb It** (2–8 player
+grid-based bomber with kickable bombs), **Worms** (up to
 8-player turn-based artillery on destructible terrain), **Tank Trouble** (up to
 8-player top-down maze duel with ricocheting shells), **Achtung die Kurve** (up
 to 8-player curve/Snake game), **Gravity Guy** (up to 8-player one-button
@@ -336,11 +337,12 @@ obvious once you know they exist:
 ### Per-game notes
 
 The details that only matter when you are inside one game live next to a
-pointer instead of in this file, so every session does not pay for all eight.
+pointer instead of in this file, so every session does not pay for all nine.
 **Read the one you are touching before you touch it** — each is a list of
 things that cost real debugging time to learn.
 
 - **Achtung die Kurve** — [`docs/games/achtung.md`](docs/games/achtung.md)
+- **Bomb It** — [`docs/games/bombit.md`](docs/games/bombit.md)
 - **Gun Mayhem** — [`docs/games/gunmayhem.md`](docs/games/gunmayhem.md)
 - **Worms** — [`docs/games/worms.md`](docs/games/worms.md)
 - **Tank Trouble** — [`docs/games/tanks.md`](docs/games/tanks.md)

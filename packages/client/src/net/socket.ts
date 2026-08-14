@@ -487,6 +487,7 @@ class GameSocket {
       // No hidden state; their `privateFor` returns null and the server never
       // sends this. `undefined` is "no room yet", which clears the same way.
       case 'achtung':
+      case 'bombit':
       case 'gravity':
       case 'gunmayhem':
       case 'tanks':
@@ -562,6 +563,21 @@ class GameSocket {
           seat: p.s,
           score: p.p,
           alive: p.al === 1,
+        }));
+        break;
+      case 'bombit':
+        players = snap.players.map((p) => ({
+          seat: p.s,
+          score: p.p,
+          alive: p.al === 1,
+          // Bombs in hand and blast range are what a player checks before
+          // committing to a fight, so they belong in the rail rather than only
+          // on the canvas. `effects` carries the two debuffs somebody else
+          // picked up, which are otherwise invisible until you try to move.
+          bombs: p.b,
+          range: p.r,
+          shields: p.sh,
+          effects: [...(p.sl ? ['slow'] : []), ...(p.rv ? ['reverse'] : [])],
         }));
         break;
       case 'worms': {

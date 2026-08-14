@@ -42,6 +42,10 @@ export interface HudPlayer {
   health?: number;
   /** Worms: how many of this seat's worms are still alive. */
   wormsLeft?: number;
+  /** Bomb It: how far this seat's blast reaches, in tiles. */
+  range?: number;
+  /** Bomb It: explosions this seat can still walk away from. */
+  shields?: number;
 }
 
 /**
