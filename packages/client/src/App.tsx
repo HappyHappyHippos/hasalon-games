@@ -16,7 +16,7 @@ import { PauseButton } from './ui/PauseButton';
 import { MicButton } from './ui/VoiceBar';
 import { Toast } from './ui/Toast';
 import { useVoiceMesh } from './ui/useVoice';
-import { enableKeyboardOverlay } from './ui/mobileViewport';
+import { enableKeyboardOverlay, enableVisibleViewportSizing } from './ui/mobileViewport';
 
 export function App(): JSX.Element {
   const room = useStore((s) => s.room);
@@ -29,6 +29,7 @@ export function App(): JSX.Element {
   useVoiceMesh();
 
   useEffect(() => enableKeyboardOverlay(), []);
+  useEffect(() => enableVisibleViewportSizing(), []);
 
   // The document element, not a wrapper div: `dir` has to be on an ancestor of
   // everything, and that includes the portal-free overlays and the browser's own

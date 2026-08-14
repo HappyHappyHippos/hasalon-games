@@ -643,7 +643,7 @@ export class WormsRenderer {
       ctx.globalAlpha = 0.78;
       ctx.beginPath();
       ctx.moveTo(shot.x, shot.y);
-      for (let tick = 0; tick < 240; tick += 1) {
+      for (let tick = 0; tick < 210; tick += 1) {
         const outcome = stepProjectile(shot, spec, mask, targets, snap.wd / 1000);
         if (tick % 2 === 0 || outcome.kind !== 'fly') ctx.lineTo(shot.x, shot.y);
         if (outcome.kind !== 'fly') break;
@@ -655,7 +655,7 @@ export class WormsRenderer {
     }
 
     ctx.fillStyle = color;
-    for (let d = 26; d <= 134; d += 12) {
+    for (let d = 26; d <= 122; d += 12) {
       ctx.globalAlpha = 1 - (d - 26) / 160;
       ctx.beginPath();
       ctx.arc(x + dx * d, y + dy * d, 2.4, 0, Math.PI * 2);

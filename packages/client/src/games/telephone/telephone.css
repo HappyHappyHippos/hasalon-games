@@ -67,8 +67,10 @@
   overscroll-behavior: contain;
   display: grid;
   place-items: center;
-  padding: clamp(10px, 2.5vw, 26px);
-  padding-block-end: max(clamp(10px, 2.5vw, 26px), env(safe-area-inset-bottom));
+  padding-top: max(clamp(10px, 2.5vw, 26px), env(safe-area-inset-top));
+  padding-right: max(clamp(10px, 2.5vw, 26px), env(safe-area-inset-right));
+  padding-bottom: max(clamp(10px, 2.5vw, 26px), env(safe-area-inset-bottom));
+  padding-left: max(clamp(10px, 2.5vw, 26px), env(safe-area-inset-left));
   box-sizing: border-box;
 }
 
@@ -78,8 +80,7 @@
 }
 
 .telephone__composer,
-.telephone__draw,
-.telephone__album {
+.telephone__draw {
   width: min(100%, 900px);
   min-height: 0;
   padding-right: calc(var(--lift-lg) + 2px);
@@ -261,11 +262,11 @@
   overflow: auto;
   scroll-behavior: smooth;
   overscroll-behavior: contain;
-  padding: 4px 12px 18px 4px;
+  padding: 4px 10px 18px;
   display: flex;
   flex-direction: column;
   gap: clamp(14px, 2.4vh, 24px);
-  scrollbar-gutter: stable;
+  scrollbar-gutter: stable both-edges;
   box-sizing: border-box;
   direction: ltr;
 }
@@ -488,7 +489,12 @@
   .telephone__top > div { gap: 7px; }
   .telephone__top strong { font-size: 0.82rem; }
   .telephone__clock { width: 40px; height: 40px; border-width: 2px; font-size: 1rem; }
-  .telephone__phase { padding: 7px; padding-block-end: max(7px, env(safe-area-inset-bottom)); }
+  .telephone__phase {
+    padding-top: max(7px, env(safe-area-inset-top));
+    padding-right: max(7px, env(safe-area-inset-right));
+    padding-bottom: max(7px, env(safe-area-inset-bottom));
+    padding-left: max(7px, env(safe-area-inset-left));
+  }
   .telephone__composer { gap: 12px; }
   .telephone__composer textarea { min-height: 100px; padding: 12px; }
   .telephone__composer-foot .btn { min-height: 44px; }
@@ -499,7 +505,7 @@
   .telephone__draw-controls > .btn { min-height: 42px; padding-block: 7px; }
   .telephone__album { gap: 9px; }
   .telephone__album-head h1 { font-size: clamp(1.25rem, 6vw, 1.65rem); }
-  .telephone__chat { padding-inline: 2px 10px; gap: 16px; }
+  .telephone__chat { padding-inline: 8px; gap: 16px; }
   .telephone__message { width: 91%; }
   .telephone__message-bubble--drawing { width: min(74vw, 520px); }
   .telephone__message-heart { width: 38px; height: 38px; font-size: 1.55rem; }
@@ -509,7 +515,12 @@
 @media (max-height: 560px) and (orientation: landscape) {
   .telephone__top { min-height: 52px; padding-block: 4px; }
   .telephone__clock { width: 36px; height: 36px; }
-  .telephone__phase { padding: 3px; }
+  .telephone__phase {
+    padding-top: max(3px, env(safe-area-inset-top));
+    padding-right: max(3px, env(safe-area-inset-right));
+    padding-bottom: max(3px, env(safe-area-inset-bottom));
+    padding-left: max(3px, env(safe-area-inset-left));
+  }
   .telephone__draw { width: 100%; grid-template-rows: auto minmax(0, 1fr); gap: 3px; padding-right: 7px; padding-bottom: 7px; }
   .telephone__draw > .eyebrow { display: none; }
   .telephone__draw > .telephone__previous-text { grid-row: 1; max-height: 10dvh; padding: 3px 10px; font-size: 0.9rem; }

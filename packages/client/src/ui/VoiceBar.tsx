@@ -4,6 +4,7 @@ import { useT } from '../strings';
 import { voice } from '../net/voice';
 import { useVoice } from './useVoice';
 import { sfx } from '../audio';
+import { MicrophoneIcon, MicrophoneOffIcon } from './Icons';
 
 interface Props {
   /** Compact form for the in-match HUD; the lobby gets the full thing. */
@@ -37,7 +38,7 @@ export function VoiceBar({ compact = false }: Props): JSX.Element | null {
   };
 
   const label = !state.active ? t.voiceJoin : state.muted ? t.voiceUnmute : t.voiceMute;
-  const icon = !state.active ? '🎙' : state.muted ? '🔇' : '🎤';
+  const icon = state.active && state.muted ? <MicrophoneOffIcon /> : <MicrophoneIcon />;
 
   return (
     <div className={`voicebar${compact ? ' voicebar--compact' : ''}`}>
@@ -110,7 +111,7 @@ export function MicButton(): JSX.Element | null {
     else voice.setMuted(!state.muted);
   };
   const label = !state.active ? t.voiceJoin : state.muted ? t.voiceUnmute : t.voiceMute;
-  const icon = !state.active ? 'נ™' : state.muted ? 'נ”‡' : 'נ₪';
+  const icon = state.active && state.muted ? <MicrophoneOffIcon /> : <MicrophoneIcon />;
 
   return (
     <button

@@ -88,3 +88,63 @@ export function MinimizeIcon(props: IconProps): JSX.Element {
     </svg>
   );
 }
+
+/** Microphone icon matching the weight and rounded geometry of the HUD chrome. */
+export function MicrophoneIcon(props: IconProps): JSX.Element {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <rect x="9" y="2.5" width="6" height="12" rx="3" />
+      <path d="M5.5 10.5v1.25a6.5 6.5 0 0 0 13 0V10.5M12 18.25v3.25M8.5 21.5h7" />
+    </svg>
+  );
+}
+
+/** Muted microphone state; a slash is clearer than changing emoji artwork. */
+export function MicrophoneOffIcon(props: IconProps): JSX.Element {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <rect x="9" y="2.5" width="6" height="12" rx="3" />
+      <path d="M5.5 10.5v1.25a6.5 6.5 0 0 0 13 0V10.5M12 18.25v3.25M8.5 21.5h7M3 3l18 18" />
+    </svg>
+  );
+}
+
+/** Ready reminder bell in the same bold, hand-drawn HUD vocabulary. */
+export function BellIcon(props: IconProps): JSX.Element {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M18 9a6 6 0 0 0-12 0c0 6-2.5 6.5-2.5 8.5h17C20.5 15.5 18 15 18 9Z" />
+      <path d="M9.5 20.5a3 3 0 0 0 5 0M12 2.4V1.2M20 5l1.5-1.2M4 5 2.5 3.8" />
+    </svg>
+  );
+}

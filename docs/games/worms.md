@@ -187,7 +187,8 @@ that as the weapon being unreliable rather than as physics.
   command. The old held `IN_FIRE` path remains accepted by the simulation for
   replay/backward compatibility, but no current client emits it. The trajectory
   preview advances a temporary projectile through `stepProjectile`, the same
-  marcher the server uses, against the live client terrain mask.
+  marcher the server uses, against the live client terrain mask, capped at 210
+  ticks so it hints the shot without drawing most of the eventual flight.
 - The sprite is drawn taller than its movement box, and projectile/blast hit
   tests use `WORM_HIT_R`. Do not enlarge `WORM_HALF_W/H` just to make the art or
   target easier to see: those constants define whether ramps are walkable.

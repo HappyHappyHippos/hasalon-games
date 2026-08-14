@@ -10,6 +10,42 @@ interface VirtualKeyboardControl {
 }
 
 /**
+ * Size the fixed app shell from the pixels the phone is actually showing.
+ *
+ * Android can briefly keep the pre-fullscreen dynamic viewport while the
+ * Fullscreen API is expanding the layout viewport. A `100dvh` shell then ends
+ * up larger than the visible screen and every game looks zoomed/cropped. The
+ * Visual Viewport API follows the real display through that transition, pinch
+ * zoom and browser-chrome changes, so expose its dimensions to CSS globally.
+ */
+export function enableVisibleViewportSizing(): () => void {
+  const root = document.documentElement;
+  const viewport = window.visualViewport;
+  const update = (): void => {
+    const width = viewport?.width ?? window.innerWidth;
+    const height = viewport?.height ?? window.innerHeight;
+    if (Number.isFinite(width) && width > 0) root.style.setProperty('--app-visible-width', `${width}px`);
+    if (Number.isFinite(height) && height > 0) root.style.setProperty('--app-visible-height', `${height}px`);
+  };
+
+  update();
+  window.addEventListener('resize', update);
+  viewport?.addEventListener('resize', update);
+  viewport?.addEventListener('scroll', update);
+  document.addEventListener('fullscreenchange', update);
+  document.addEventListener('webkitfullscreenchange', update);
+  return () => {
+    window.removeEventListener('resize', update);
+    viewport?.removeEventListener('resize', update);
+    viewport?.removeEventListener('scroll', update);
+    document.removeEventListener('fullscreenchange', update);
+    document.removeEventListener('webkitfullscreenchange', update);
+    root.style.removeProperty('--app-visible-width');
+    root.style.removeProperty('--app-visible-height');
+  };
+}
+
+/**
  * Ask supporting mobile Chromium browsers to place the keyboard over the app
  * instead of shrinking and reflowing the entire game shell upward. Safari does
  * not expose this API, so its existing fixed Skribbl word header remains the

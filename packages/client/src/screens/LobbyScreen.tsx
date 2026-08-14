@@ -6,6 +6,7 @@ import { socket } from '../net/socket';
 import { AppearancePicker } from '../ui/AppearancePicker';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
+import { BellIcon } from '../ui/Icons';
 import { GamePicker } from '../ui/GamePicker';
 import { SeriesSetup } from '../ui/SeriesSetup';
 import { useVoice } from '../ui/useVoice';
@@ -208,7 +209,7 @@ export function LobbyScreen(): JSX.Element {
                   aria-label={t.readyNudge}
                   title={t.readyNudge}
                 >
-                  <span aria-hidden="true">🔔</span>
+                  <BellIcon aria-hidden="true" />
                 </button>
               </div>
               {rouletteOn && !canStartSeries && (
