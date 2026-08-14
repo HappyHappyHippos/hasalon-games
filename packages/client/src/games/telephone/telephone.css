@@ -242,6 +242,8 @@
 .telephone__album {
   height: 100%;
   width: min(100%, 920px);
+  margin-inline: auto;
+  justify-self: center;
   display: flex;
   flex-direction: column;
   gap: clamp(8px, 1.4vh, 14px);

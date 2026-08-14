@@ -65,8 +65,8 @@ textarea,
   display: flex;
   flex-direction: column;
   position: fixed;
-  top: 0;
-  left: 0;
+  top: var(--app-visible-top, 0);
+  left: var(--app-visible-left, 0);
   width: var(--app-visible-width, 100%);
 }
 
@@ -5099,9 +5099,9 @@ strong,
   padding: 0 12px;
   border: 3px solid rgba(255, 255, 255, 0.75);
   border-radius: 999px;
-  background: rgba(20, 17, 15, 0.65);
-  backdrop-filter: blur(4px);
+  background: rgba(20, 17, 15, 0.22);
   color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   font-family: var(--font-display);
   font-weight: 800;
@@ -5161,10 +5161,10 @@ strong,
   padding: 7px 10px;
   border: 2px solid rgba(255, 255, 255, 0.78);
   border-radius: 13px;
-  background: rgba(20, 17, 15, 0.76);
+  background: rgba(20, 17, 15, 0.2);
   color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.75);
   pointer-events: auto;
-  backdrop-filter: blur(5px);
 }
 .worms__power-control--desktop { width: 190px; }
 .worms__power-label {
@@ -5192,7 +5192,7 @@ strong,
   place-items: center;
   border: 3px solid #fff;
   border-radius: 999px;
-  background: var(--yellow);
+  background: rgba(255, 210, 63, 0.58);
   color: var(--ink);
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.38);
   cursor: pointer;
@@ -5413,6 +5413,17 @@ strong,
   flex-direction: column;
   gap: 6px;
 }
+.worms__pad .stick__ring {
+  background: rgba(20, 17, 15, 0.1);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+}
+.worms__pad .stick__knob {
+  background: rgba(20, 17, 15, 0.2);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.22);
+}
+.worms__pad .stick__ring--live .stick__knob {
+  background: rgba(255, 210, 63, 0.58);
+}
 
 .worms__btn {
   pointer-events: auto;
@@ -5420,8 +5431,7 @@ strong,
   height: 46px;
   border: 3px solid rgba(255, 255, 255, 0.75);
   border-radius: 999px;
-  background: rgba(20, 17, 15, 0.65);
-  backdrop-filter: blur(4px);
+  background: rgba(20, 17, 15, 0.22);
   color: #fff;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
   font-family: var(--font-display);
@@ -5446,7 +5456,7 @@ strong,
   width: 66px;
   height: 66px;
   font-size: 22px;
-  background: rgba(20, 17, 15, 0.65);
+  background: rgba(20, 17, 15, 0.22);
   border-color: rgba(255, 255, 255, 0.75);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
 }

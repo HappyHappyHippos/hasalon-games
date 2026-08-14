@@ -187,11 +187,15 @@ that as the weapon being unreliable rather than as physics.
   command. The old held `IN_FIRE` path remains accepted by the simulation for
   replay/backward compatibility, but no current client emits it. The trajectory
   preview advances a temporary projectile through `stepProjectile`, the same
-  marcher the server uses, against the live client terrain mask, capped at 210
-  ticks so it hints the shot without drawing most of the eventual flight.
+  marcher the server uses, against the live client terrain mask. It renders only
+  the first 62% of that computed path (and caps long paths at roughly 110 ticks),
+  so even a nearby collision remains a hint rather than revealing the endpoint.
 - The sprite is drawn taller than its movement box, and projectile/blast hit
   tests use `WORM_HIT_R`. Do not enlarge `WORM_HALF_W/H` just to make the art or
   target easier to see: those constants define whether ramps are walkable.
+- Touch and desktop controls use translucent fills with no backdrop blur. They
+  must remain readable over every stage, but should never hide a worm beneath
+  an opaque control panel.
 - **The camera is a local, per-client spring**, and that is a deliberate
   divergence from `gravity/camera.ts`, whose whole point is being identical
   everywhere. Free pan and zoom is a feature here and two players looking at

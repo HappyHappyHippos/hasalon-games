@@ -47,6 +47,7 @@ import { bracket, lerp } from '../../game/interpolation';
 import { feed } from '../../net/feed';
 import { sfx } from '../../audio';
 import { prefersReducedMotion } from '../../ui/motion';
+import { aimPreviewPointCount } from './aimPreview';
 import { BOOM_HOLD_MS, WormsCamera, type Viewport } from './camera';
 import { wormsInput } from './input';
 import { predictWorm } from './predictor';
@@ -637,16 +638,25 @@ export class WormsRenderer {
         alive: target.al === 1,
       }));
 
+      const path: Array<{ x: number; y: number }> = [{ x: shot.x, y: shot.y }];
+      for (let tick = 0; tick < 240; tick += 1) {
+        const outcome = stepProjectile(shot, spec, mask, targets, snap.wd / 1000);
+        if (tick % 2 === 0 || outcome.kind !== 'fly') path.push({ x: shot.x, y: shot.y });
+        if (outcome.kind !== 'fly') break;
+      }
+
+      // This is an aiming hint, not a promised landing marker. Always hide the
+      // final part even when the projectile hits before the simulation cap;
+      // merely lowering that cap still drew short shots all the way to impact.
+      const visiblePoints = aimPreviewPointCount(path.length);
       ctx.strokeStyle = color;
       ctx.lineWidth = 2;
       ctx.setLineDash([7, 7]);
       ctx.globalAlpha = 0.78;
       ctx.beginPath();
-      ctx.moveTo(shot.x, shot.y);
-      for (let tick = 0; tick < 210; tick += 1) {
-        const outcome = stepProjectile(shot, spec, mask, targets, snap.wd / 1000);
-        if (tick % 2 === 0 || outcome.kind !== 'fly') ctx.lineTo(shot.x, shot.y);
-        if (outcome.kind !== 'fly') break;
+      ctx.moveTo(path[0].x, path[0].y);
+      for (let index = 1; index < visiblePoints; index += 1) {
+        ctx.lineTo(path[index].x, path[index].y);
       }
       ctx.stroke();
       ctx.setLineDash([]);

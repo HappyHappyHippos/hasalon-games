@@ -46,7 +46,12 @@ describe('enableVisibleViewportSizing', () => {
       setProperty: (name: string, value: string) => values.set(name, value),
       removeProperty: (name: string) => values.delete(name),
     };
-    const visualViewport = Object.assign(new EventTarget(), { width: 412, height: 732 });
+    const visualViewport = Object.assign(new EventTarget(), {
+      width: 412,
+      height: 732,
+      offsetLeft: 0,
+      offsetTop: 0,
+    });
     const fakeWindow = Object.assign(new EventTarget(), {
       innerWidth: 500,
       innerHeight: 900,
@@ -62,9 +67,13 @@ describe('enableVisibleViewportSizing', () => {
 
     visualViewport.width = 732;
     visualViewport.height = 384;
+    visualViewport.offsetLeft = 14;
+    visualViewport.offsetTop = 6;
     visualViewport.dispatchEvent(new Event('resize'));
     expect(values.get('--app-visible-width')).toBe('732px');
     expect(values.get('--app-visible-height')).toBe('384px');
+    expect(values.get('--app-visible-left')).toBe('14px');
+    expect(values.get('--app-visible-top')).toBe('6px');
 
     cleanup();
     expect(values.size).toBe(0);

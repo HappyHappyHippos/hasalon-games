@@ -16,7 +16,9 @@ interface VirtualKeyboardControl {
  * Fullscreen API is expanding the layout viewport. A `100dvh` shell then ends
  * up larger than the visible screen and every game looks zoomed/cropped. The
  * Visual Viewport API follows the real display through that transition, pinch
- * zoom and browser-chrome changes, so expose its dimensions to CSS globally.
+ * zoom and browser-chrome changes, so expose its dimensions and physical origin
+ * to CSS globally. The origin matters in landscape when the visible viewport
+ * begins to the right of a cutout or browser-owned strip.
  */
 export function enableVisibleViewportSizing(): () => void {
   const root = document.documentElement;
@@ -24,8 +26,12 @@ export function enableVisibleViewportSizing(): () => void {
   const update = (): void => {
     const width = viewport?.width ?? window.innerWidth;
     const height = viewport?.height ?? window.innerHeight;
+    const left = viewport?.offsetLeft ?? 0;
+    const top = viewport?.offsetTop ?? 0;
     if (Number.isFinite(width) && width > 0) root.style.setProperty('--app-visible-width', `${width}px`);
     if (Number.isFinite(height) && height > 0) root.style.setProperty('--app-visible-height', `${height}px`);
+    if (Number.isFinite(left)) root.style.setProperty('--app-visible-left', `${left}px`);
+    if (Number.isFinite(top)) root.style.setProperty('--app-visible-top', `${top}px`);
   };
 
   update();
@@ -42,6 +48,8 @@ export function enableVisibleViewportSizing(): () => void {
     document.removeEventListener('webkitfullscreenchange', update);
     root.style.removeProperty('--app-visible-width');
     root.style.removeProperty('--app-visible-height');
+    root.style.removeProperty('--app-visible-left');
+    root.style.removeProperty('--app-visible-top');
   };
 }
 
