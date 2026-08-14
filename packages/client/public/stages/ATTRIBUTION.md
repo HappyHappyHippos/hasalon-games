@@ -80,3 +80,6 @@ rule the music in `../music/ATTRIBUTION.md` follows. Kenney
 | `gun_mayhem_stage_*.png` (9) | | | _unrecorded_ | |
 | `tanks/tank_stage_*.png` (6) | | | _unrecorded_ | |
 | `worms/worms_stage_*.png` (6) | | | _unrecorded_ | derived from `assets/stages/worms/` |
+| `bombit/bombit_stage_*.png` (4) | | | _unrecorded_ | supplied with the Bomb It art set |
+| `../bombit/wall.png`, `../bombit/crate.png` | | | _unrecorded_ | supplied with the Bomb It art set |
+| `../boxart/bombit.png` | | | _unrecorded_ | supplied with the Bomb It art set |

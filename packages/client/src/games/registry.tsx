@@ -13,6 +13,9 @@
 import type { ComponentType, JSX } from 'react';
 import { GAMES, type GameConfig, type GameId, type GameMeta, type RoomView } from '@mg/shared';
 import { AchtungBoxArt } from './achtung/BoxArt';
+import { BombitBoxArt } from './bombit/BoxArt';
+import { BombitScreen } from './bombit/BombitScreen';
+import { BombitSettings } from './bombit/Settings';
 import { SkribblBoxArt } from './skribbl/BoxArt';
 import { SkribblScreen } from './skribbl/SkribblScreen';
 import { SkribblSettings } from './skribbl/Settings';
@@ -97,6 +100,13 @@ export const CLIENT_GAMES: Record<GameId, ClientGame> = {
     Settings: TanksSettings,
     accent: 'var(--green)',
   },
+  bombit: {
+    meta: GAMES.bombit.meta,
+    BoxArt: BombitBoxArt,
+    Screen: BombitScreen,
+    Settings: BombitSettings,
+    accent: 'var(--orange)',
+  },
   gravity: {
     meta: GAMES.gravity.meta,
     BoxArt: GravityBoxArt,
@@ -126,6 +136,7 @@ export const CLIENT_GAMES: Record<GameId, ClientGame> = {
  */
 export const CLIENT_GAME_IDS: GameId[] = [
   'gunmayhem',
+  'bombit',
   'worms',
   'tanks',
   'achtung',

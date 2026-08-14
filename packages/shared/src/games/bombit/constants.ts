@@ -1,0 +1,137 @@
+/**
+ * Bomb It tuning.
+ *
+ * Everything is expressed against `TILE`, so the arena can be rescaled without
+ * re-deriving a single feel number.
+ */
+
+import { seconds } from '../../engine';
+
+export const MIN_PLAYERS = 2;
+export const MAX_PLAYERS = 8;
+
+// ---------------------------------------------------------------------------
+// Geometry
+// ---------------------------------------------------------------------------
+
+/** One grid square, in arena units. Every other length here is a multiple. */
+export const TILE = 48;
+
+/**
+ * The player's collision box, as a half-extent.
+ *
+ * Deliberately well under `TILE / 2`: a body as wide as a corridor catches on
+ * every doorway, and the whole feel of the game is running through gaps at
+ * speed. At 0.36 there is a fifth of a tile of clearance either side.
+ */
+export const PLAYER_HALF = TILE * 0.36;
+
+/**
+ * The box that decides whether a flame killed you, as a half-extent.
+ *
+ * Smaller than the collision box on purpose. Being clipped by the very edge of
+ * a tile you had already left reads as a bad call, and this is the one place in
+ * the game where generosity costs nothing: the blast pattern is public, fully
+ * telegraphed, and identical for everyone.
+ */
+export const PLAYER_HIT_HALF = TILE * 0.26;
+
+// ---------------------------------------------------------------------------
+// Movement
+// ---------------------------------------------------------------------------
+
+/** Units per second at speed level 0, and what each level adds. */
+export const BASE_SPEED = TILE * 3.9;
+export const SPEED_PER_LEVEL = TILE * 0.62;
+export const SPEED_STEPS = 4;
+
+/** The `slow` powerup, as a multiplier on everyone else's speed. */
+export const SLOW_FACTOR = 0.55;
+
+/**
+ * How far off a rail the player may be and still have the corner assist find
+ * the neighbouring one.
+ *
+ * This single number is most of what "responsive" means here. Below about half
+ * a tile the assist only fires when you were nearly aligned anyway, which is
+ * the case that needed no help; much above it and the character lurches
+ * sideways into corridors you were not aiming at.
+ */
+export const CORNER_ASSIST = TILE * 0.62;
+
+/** Closer than this to a rail counts as on it, so alignment terminates. */
+export const ALIGN_EPS = 0.05;
+
+// ---------------------------------------------------------------------------
+// Bombs
+// ---------------------------------------------------------------------------
+
+export const FUSE_TICKS = seconds(2.4);
+/** How long a tile burns. Long enough to read, short enough to run past. */
+export const FLAME_TICKS = seconds(0.5);
+
+export const START_BOMBS = 1;
+export const MAX_BOMBS = 8;
+export const START_RANGE = 2;
+export const MAX_RANGE = 8;
+export const MAX_SHIELDS = 3;
+
+/** Mercy window after a shield takes a hit, so one blast cannot eat two. */
+export const SHIELD_MERCY = FLAME_TICKS + seconds(0.35);
+
+/**
+ * How fast a kicked bomb slides, in units per second.
+ *
+ * Faster than a player at full speed. A bomb you can outrun is a bomb you can
+ * herd, which turns the mechanic from a threat into a chore.
+ */
+export const KICK_SPEED = TILE * 6.5;
+
+// ---------------------------------------------------------------------------
+// Powerups
+// ---------------------------------------------------------------------------
+
+/** Share of destroyed crates that were hiding something. */
+export const POWERUP_CHANCE = 0.36;
+
+/**
+ * Relative weights for what a crate hides.
+ *
+ * The three that compound — bombs, range, speed — are common, because a round
+ * where nobody grew is a round of two people poking at each other from across
+ * the map. The two that reach across the arena are rare: they are the ones that
+ * decide a fight rather than tilt it.
+ */
+export const POWERUP_WEIGHTS: Record<string, number> = {
+  bomb: 26,
+  range: 26,
+  speed: 18,
+  shield: 12,
+  slow: 9,
+  reverse: 9,
+};
+
+export const SLOW_DURATION = seconds(7);
+export const REVERSE_DURATION = seconds(6);
+
+// ---------------------------------------------------------------------------
+// Round flow
+// ---------------------------------------------------------------------------
+
+export const COUNTDOWN_TICKS = seconds(3);
+export const ROUND_OVER_TICKS = seconds(2.5);
+
+export const DEFAULT_TARGET_WINS = 3;
+export const DEFAULT_ROUND_SECONDS = 90;
+
+/**
+ * Crate fill per density setting, as a share of the template's candidate cells.
+ *
+ * Never 1: a fully packed board has exactly one route out of each pocket, and
+ * the first thirty seconds are spent digging rather than fighting.
+ */
+export const DENSITY_FILL: Record<string, number> = {
+  sparse: 0.5,
+  normal: 0.72,
+  packed: 0.88,
+};
