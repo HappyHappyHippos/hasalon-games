@@ -36,7 +36,10 @@ function fakeClient(): Client & { sent: ServerMessage[]; closed: boolean } {
       state.closed = true;
     },
   };
-  const client = new Client(socket as never) as Client & { sent: ServerMessage[]; closed: boolean };
+  const client = new Client(socket as never, { openedAt: 0, userAgent: '' }) as Client & {
+    sent: ServerMessage[];
+    closed: boolean;
+  };
   Object.defineProperty(client, 'sent', { value: sent });
   Object.defineProperty(client, 'closed', { get: () => state.closed });
   return client;

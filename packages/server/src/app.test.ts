@@ -139,6 +139,40 @@ afterEach(async () => {
   await app.close();
 });
 
+describe('the usage dashboard', () => {
+  async function get(path: string): Promise<{ status: number; body: string }> {
+    const response = await fetch(`http://127.0.0.1:${port}${path}`);
+    return { status: response.status, body: await response.text() };
+  }
+
+  it('renders, and serves the raw log beside it', async () => {
+    // `ADMIN_TOKEN` is unset in the test environment, and `NODE_ENV` is not
+    // production, so this is the development-open path.
+    const page = await get('/admin');
+    expect(page.status).toBe(200);
+    expect(page.body).toContain('<!doctype html>');
+
+    const raw = await get('/admin/events.ndjson');
+    expect(raw.status).toBe(200);
+  });
+
+  it('404s with a wrong key rather than admitting it exists', async () => {
+    process.env.ADMIN_TOKEN = 'let-me-in';
+    try {
+      expect((await get('/admin')).status).toBe(404);
+      expect((await get('/admin?key=nope')).status).toBe(404);
+      expect((await get('/admin?key=let-me-in')).status).toBe(200);
+    } finally {
+      delete process.env.ADMIN_TOKEN;
+    }
+  });
+
+  it('will not answer a POST', async () => {
+    const response = await fetch(`http://127.0.0.1:${port}/admin`, { method: 'POST' });
+    expect(response.status).toBe(405);
+  });
+});
+
 describe('lobby', () => {
   it('creates a room and lets others join with the code', async () => {
     const [host, guest] = await makeLobby(2);

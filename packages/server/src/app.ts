@@ -14,6 +14,7 @@
  *   `GameModule`. If a change to one game needs a change in this file,
  *   something has been put in the wrong place.
  */
+import { timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { WebSocketServer, type WebSocket } from 'ws';
@@ -24,7 +25,9 @@ import {
   isFaceIndex,
   isGameId,
   isHatIndex,
+  parseClientHello,
   parseClientMessage,
+  parseClientReport,
   type ClientMessage,
   type Identity,
 } from '@mg/shared';
@@ -34,6 +37,9 @@ import type { Room, RoomPlayer } from './Room';
 import { serveStatic } from './static';
 import { getIceConfig } from './ice';
 import { serverNow } from './serverClock';
+import { analytics } from './Analytics';
+import { summarize } from './summary';
+import { renderDashboard } from './dashboard';
 
 /** Above this many messages per second a socket is assumed to be misbehaving. */
 const MAX_MESSAGES_PER_SECOND = 200;
@@ -99,6 +105,13 @@ export function createApp(options: AppOptions): App {
       return;
     }
 
+    // Below the method guard, unlike `/healthz`: this one is a page, and a page
+    // has no business answering a POST.
+    if (url.pathname === '/admin' || url.pathname === '/admin/events.ndjson') {
+      handleAdmin(url, res);
+      return;
+    }
+
     // Voice chat's ICE servers, including TURN credentials that must not be
     // baked into the client bundle. Never fails — see `ice.ts`.
     if (url.pathname === '/ice') {
@@ -139,6 +152,52 @@ export function createApp(options: AppOptions): App {
     );
   }
 
+  /**
+   * The usage dashboard, and the raw log behind it.
+   *
+   * Two endpoints and no more: `/admin` renders, `/admin/events.ndjson` hands
+   * over every row. The download is not a nicety — it is what stops this being a
+   * one-way trip. If the built-in page ever stops answering the question, the
+   * whole history is one `curl` away from a spreadsheet or `jq`.
+   *
+   * Access is `ADMIN_TOKEN`, and when that is unset the page is available in
+   * development only. A guess based on the requester's address would be the
+   * obvious alternative and is wrong behind a proxy, where every request arrives
+   * from the platform's edge and none of them look remote.
+   */
+  function handleAdmin(url: URL, res: ServerResponse): void {
+    const token = process.env.ADMIN_TOKEN?.trim();
+    const allowed = token
+      ? matches(url.searchParams.get('key') ?? '', token)
+      : process.env.NODE_ENV !== 'production';
+
+    if (!allowed) {
+      // 404 rather than 401: an unauthenticated visitor learns nothing about
+      // whether there is anything here to find.
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Not found');
+      return;
+    }
+
+    // Never cached and never indexed. It has people's names in it.
+    const headers = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' };
+
+    if (url.pathname === '/admin/events.ndjson') {
+      res.writeHead(200, { ...headers, 'Content-Type': 'application/x-ndjson; charset=utf-8' });
+      res.end(analytics.ndjson());
+      return;
+    }
+
+    const days = Number(url.searchParams.get('days'));
+    const summary = summarize(analytics.all(), {
+      days: Number.isFinite(days) && days > 0 && days <= 365 ? days : 30,
+    });
+    // Only the key is carried across links, so `days` in the URL cannot be
+    // doubled up by the window buttons.
+    const query = token ? `key=${encodeURIComponent(url.searchParams.get('key') ?? '')}` : '';
+    res.writeHead(200, { ...headers, 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(renderDashboard(summary, query));
+  }
+
   // -------------------------------------------------------------------------
   // WebSocket
   // -------------------------------------------------------------------------
@@ -155,8 +214,13 @@ export function createApp(options: AppOptions): App {
     wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
   });
 
-  wss.on('connection', (socket: WebSocket) => {
-    const client = new Client(socket);
+  wss.on('connection', (socket: WebSocket, req: IncomingMessage) => {
+    const client = new Client(socket, {
+      openedAt: serverNow(),
+      // Read here and reduced to a family immediately — the raw string is never
+      // stored, and no address is recorded at all.
+      userAgent: singleHeader(req.headers['user-agent']),
+    });
     clients.add(client);
 
     socket.on('pong', () => {
@@ -189,6 +253,16 @@ export function createApp(options: AppOptions): App {
       clients.delete(client);
       const room = client.roomCode ? rooms.get(client.roomCode) : undefined;
       room?.detach(client);
+
+      // Only for sockets that introduced themselves, so `visit` and `leave`
+      // always come in pairs. A socket with no `hello` is a stale tab or a probe,
+      // and counting it as a visit would put a phantom in the bounce rate.
+      if (client.hello) {
+        analytics.record('leave', {
+          ms: Math.round(serverNow() - client.openedAt),
+          rooms: client.roomsJoined,
+        });
+      }
     });
 
     socket.on('error', () => {
@@ -202,6 +276,12 @@ export function createApp(options: AppOptions): App {
 
   function handleMessage(client: Client, message: ClientMessage): void {
     switch (message.t) {
+      case 'hello':
+        handleHello(client, message.hello);
+        return;
+      case 'log':
+        handleLog(client, message.log);
+        return;
       case 'create':
         handleCreate(client, message.v, message.identity);
         return;
@@ -411,6 +491,76 @@ export function createApp(options: AppOptions): App {
     }
   }
 
+  /**
+   * The opening frame: what kind of browser this is.
+   *
+   * Accepted once per socket and ignored afterwards, so a client cannot inflate
+   * the visit count by repeating it. Version-free on purpose — it carries no
+   * game state and a stale tab never sends one at all, which is itself the
+   * signal (it shows up as a `BAD_VERSION` error instead).
+   */
+  function handleHello(client: Client, raw: unknown): void {
+    if (client.hello) return;
+    const hello = parseClientHello(raw);
+    if (!hello) return;
+
+    client.hello = hello;
+    analytics.record('visit', {
+      visitor: hello.visitor,
+      device: hello.device,
+      browser: client.browser,
+      os: client.os,
+      lang: hello.lang,
+      touch: hello.touch,
+      standalone: hello.standalone,
+      controls: hello.controls,
+      entry: hello.entry,
+      screen: hello.screen,
+    });
+  }
+
+  /**
+   * The three things the browser knows and we do not.
+   *
+   * Room, game and name are stamped on *here* rather than trusted from the
+   * payload — the server already knows all three, and letting a client name its
+   * own room in a log line is how a log stops being evidence.
+   */
+  function handleLog(client: Client, raw: unknown): void {
+    const report = parseClientReport(raw);
+    if (!report) return;
+
+    const found = currentSeat(client);
+    const context = {
+      room: found?.room.code,
+      game: found?.room.gameId,
+      name: found?.player.name,
+    };
+
+    switch (report.e) {
+      case 'crash':
+        analytics.record('crash', {
+          msg: report.msg,
+          at: report.at,
+          browser: client.browser,
+          os: client.os,
+          ...context,
+        });
+        return;
+      case 'net':
+        analytics.record('net', {
+          rtt: report.rtt,
+          p90: report.p90,
+          delay: report.delay,
+          ...context,
+        });
+        return;
+      case 'ui':
+        analytics.record('ui', { what: report.what, ...context });
+        return;
+    }
+  }
+
   function handleCreate(client: Client, version: number, identity: Identity): void {
     if (!checkVersion(client, version)) return;
     leaveCurrentRoom(client);
@@ -553,6 +703,20 @@ export function createApp(options: AppOptions): App {
 
 function singleHeader(value: string | string[] | undefined): string {
   return typeof value === 'string' ? value : '';
+}
+
+/**
+ * Compare a supplied key against the configured one without leaking its length
+ * or its prefix through timing.
+ *
+ * Overkill for a family game site, and three lines. The alternative is an
+ * ordinary `===`, which is a textbook oracle, and there is no reason to write
+ * the textbook version of the wrong thing.
+ */
+function matches(supplied: string, expected: string): boolean {
+  const a = Buffer.from(supplied);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 function checkVersion(client: Client, version: number): boolean {

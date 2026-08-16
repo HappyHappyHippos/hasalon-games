@@ -21,6 +21,7 @@ import {
   type ServerMessage,
 } from '@mg/shared';
 import type { Client } from './Client';
+import { analytics } from './Analytics';
 import { MatchClock } from './MatchClock';
 import { Series } from './Series';
 import {
@@ -60,6 +61,22 @@ import { serverNow } from './serverClock';
 
 const DEFAULT_GAME: GameId = 'gunmayhem';
 const READY_NUDGE_COOLDOWN_MS = 10_000;
+
+/**
+ * Why somebody stopped being in this room.
+ *
+ * The distinction is the whole value of the `part` event: `gone` is a
+ * connection that never recovered, which is a problem with the site, while
+ * `left` is somebody deciding they had had enough, which is a problem with the
+ * evening. Counting them together would hide the first inside the second.
+ *
+ * There is no reason for "the room was torn down": nobody leaves a room that
+ * way, and `room_close` already names everyone who was ever in it.
+ */
+export type PartReason = 'left' | 'kicked' | 'gone';
+
+/** How a match stopped. Everything other than `finished` is a match cut short. */
+export type MatchEndReason = 'finished' | 'short' | 'restart' | 'skipped' | 'quit' | 'closed';
 
 export type { RoomPlayer } from './roster';
 
@@ -131,6 +148,28 @@ export class Room {
 
   emptySince: number | null = Date.now();
 
+  // ---------------------------------------------------------------------------
+  // Usage log bookkeeping. None of this is read by the game.
+  // ---------------------------------------------------------------------------
+
+  private readonly createdAt = Date.now();
+  private peakPlayers = 0;
+  private matchesPlayed = 0;
+  private gamesPlayed = new Set<GameId>();
+  private everyoneSeen = new Set<string>();
+  /** When the running match began, or 0 outside one. Also the "is a match open" flag. */
+  private matchOpenedAt = 0;
+  private matchPauses = 0;
+  /**
+   * How many were seated when the match began.
+   *
+   * Captured rather than counted at close, because one of the ways a match ends
+   * is somebody leaving — `removePlayer` splices them out and *then* ends the
+   * match, so counting seats at that moment reports a two-player match as
+   * having had one player in it.
+   */
+  private matchPlayers = 0;
+
   constructor(code: string) {
     this.code = code;
     this.settingsByGame = {
@@ -199,11 +238,24 @@ export class Room {
 
     const player = createPlayer(client, identity, colorIndex);
     this.players.push(player);
-    if (!this.hostId) this.hostId = player.id;
+    const isHost = !this.hostId;
+    if (isHost) this.hostId = player.id;
     this.emptySince = null;
 
     client.roomCode = this.code;
     client.playerId = player.id;
+
+    this.peakPlayers = Math.max(this.peakPlayers, this.players.length);
+    this.everyoneSeen.add(player.name);
+    client.roomsJoined += 1;
+    // `host` is what distinguishes creating a room from joining one, which is
+    // why there is no separate "room opened" event to keep in step with this.
+    analytics.record('join', {
+      room: this.code,
+      name: player.name,
+      size: this.players.length,
+      host: isHost || undefined,
+    });
     return player;
   }
 
@@ -211,6 +263,22 @@ export class Room {
   resumePlayer(client: Client, playerId: string, token: string): RoomPlayer | null {
     const player = this.players.find((p) => p.id === playerId && p.token === token);
     if (!player) return null;
+
+    // However they got here, this socket is in a room and is not a bounce.
+    client.roomsJoined += 1;
+
+    // Recorded before the seat is patched up, while `disconnectedAt` still says
+    // how long they were away. A reload is a sub-second gap; a tunnel is twenty
+    // seconds; the difference is the whole reason to log the number rather than
+    // the fact. A resume with no recorded drop is an ordinary page refresh.
+    if (player.disconnectedAt !== null) {
+      analytics.record('back', {
+        room: this.code,
+        name: player.name,
+        gap: Date.now() - player.disconnectedAt,
+        mid: this.phase === 'playing' || undefined,
+      });
+    }
 
     player.client?.close();
     player.client = client;
@@ -270,16 +338,18 @@ export class Room {
     if (!player) return false;
 
     player.client?.sendError('KICKED', 'The host removed you from the room.');
-    this.removePlayer(playerId);
+    this.removePlayer(playerId, 'kicked');
     return true;
   }
 
-  removePlayer(playerId: string): void {
+  removePlayer(playerId: string, why: PartReason = 'left'): void {
     const index = this.players.findIndex((p) => p.id === playerId);
     if (index === -1) return;
 
     const [player] = this.players.splice(index, 1);
     this.instance?.setConnected?.(playerId, false);
+
+    if (player) analytics.record('part', { room: this.code, name: player.name, why });
 
     // Detach the socket but leave it open. Removal also happens when a client
     // moves to another room, and closing the connection out from under it
@@ -318,7 +388,10 @@ export class Room {
 
   /** Drop seats whose grace period expired. Called by the manager's sweeper. */
   reapDisconnected(now: number): void {
-    for (const player of expiredSeats(this.players, now)) this.removePlayer(player.id);
+    // `gone` and not `left`: this is a minute of somebody's connection never
+    // coming back, which is the number that says whether the site is holding up
+    // on a phone.
+    for (const player of expiredSeats(this.players, now)) this.removePlayer(player.id, 'gone');
   }
 
   isExpired(now: number): boolean {
@@ -389,7 +462,11 @@ export class Room {
     // A running series owns `gameId` — it is the lineup's job to say what plays
     // next, and letting the picker fight it mid-run would desync the two.
     if (this.phase === 'playing' || this.series.active || !(gameId in GAMES)) return;
+    const changed = this.gameId !== gameId;
     this.gameId = gameId;
+    // Only a real change. Re-selecting what is already selected is a stray tap,
+    // and counting it would make "picked but never played" meaningless.
+    if (changed) analytics.record('pick', { room: this.code, game: gameId });
     this.broadcastRoom();
   }
 
@@ -499,6 +576,10 @@ export class Room {
 
   /** The half of starting a match that `start`, `restart` and a series leg agree on. */
   private beginMatch(seated: RoomPlayer[], config: GameConfig): void {
+    // `restart` and a series leg both begin a match while one is already
+    // running; without this the old one would never be written down.
+    this.closeMatch('restart');
+
     this.lastSnapshot = null;
     this.legConfig = config;
     this.instance = this.module.create(
@@ -510,10 +591,59 @@ export class Room {
     this.phase = 'playing';
     this.clock.start();
 
+    this.matchOpenedAt = Date.now();
+    this.matchPauses = 0;
+    this.matchPlayers = seated.length;
+    this.matchesPlayed += 1;
+    this.gamesPlayed.add(this.gameId);
+    analytics.record('match_open', {
+      room: this.code,
+      game: this.gameId,
+      players: seated.length,
+      names: seated.map((p) => p.name),
+      series: this.series.active || undefined,
+      // The one nested field in the whole vocabulary, and it earns its place:
+      // this is how the host actually configured the game, and "everybody plays
+      // Gun Mayhem on five stocks and nobody has ever touched the stage picker"
+      // is not recoverable from anything else.
+      cfg: config,
+    });
+
     this.broadcast({ t: 'matchStarted', room: this.view() });
   }
 
+  /**
+   * Write down a match that has stopped, whichever of the six ways it stopped.
+   *
+   * One place rather than a line at each exit, because there are more exits than
+   * anyone remembers: the clock running out, the room falling below the minimum,
+   * the host restarting, a series leg being skipped, everyone being dropped back
+   * to the lobby, and the room being torn down underneath a live match. Five of
+   * those do not go through `endMatch`.
+   *
+   * Idempotent — `matchOpenedAt` is the guard — so callers can be blunt about
+   * calling it, which is the only way this stays correct as exits are added.
+   */
+  private closeMatch(why: MatchEndReason, winner?: RoomPlayer | null): void {
+    if (this.matchOpenedAt === 0) return;
+    const ms = Date.now() - this.matchOpenedAt;
+    this.matchOpenedAt = 0;
+
+    analytics.record('match_close', {
+      room: this.code,
+      game: this.gameId,
+      why,
+      ms,
+      players: this.matchPlayers,
+      winner: winner?.name,
+      pauses: this.matchPauses || undefined,
+    });
+  }
+
   rematch(): void {
+    // "End match" in the options menu lands here mid-match; from the match-over
+    // card the match is already closed and this is a no-op.
+    this.closeMatch('quit');
     this.clock.stop();
     // Back to the lobby ends a series too, timer and all. `setup` survives, so
     // the host's hat and pace are still there for the next spin.
@@ -571,6 +701,14 @@ export class Room {
     const lineup = drawLineup(eligible, this.series.setup.rounds);
     if (lineup.length === 0) return false;
 
+    analytics.record('series_open', {
+      room: this.code,
+      legs: lineup.length,
+      pace: this.series.setup.pace,
+      pool: lineup,
+      players: roster.length,
+    });
+
     this.series.reset();
     this.clock.stop();
     this.clock.clearPause();
@@ -605,6 +743,7 @@ export class Room {
   skipSeriesLeg(): boolean {
     if (this.phase !== 'playing' || this.series.phase !== 'leg') return false;
 
+    this.closeMatch('skipped');
     this.clock.stop();
     this.clock.clearPause();
     this.phase = 'matchOver';
@@ -650,6 +789,10 @@ export class Room {
   setPaused(player: RoomPlayer, paused: boolean): void {
     if (this.phase !== 'playing' || player.seat < 0) return;
     if (!this.clock.setPaused(paused, player.id)) return;
+    // Counted, not logged one row at a time: a pause is only interesting in
+    // aggregate ("this match was interrupted four times"), and it rides out on
+    // `match_close` where that reads as one fact rather than four.
+    if (paused) this.matchPauses += 1;
     this.broadcastRoom();
   }
 
@@ -716,6 +859,12 @@ export class Room {
     this.clock.stop();
     this.clock.clearPause();
 
+    // A winner means it ran to a real conclusion; a null one here means the room
+    // dropped below the minimum and the match was ended for it. Distinguishing
+    // the two is what turns the games table into a verdict rather than a count.
+    const winner = this.players.find((p) => p.seat === winnerSeat) ?? null;
+    this.closeMatch(winnerSeat === null ? 'short' : 'finished', winner);
+
     if (this.instance) {
       const scores = this.instance.scores();
       for (const p of this.players) {
@@ -744,7 +893,6 @@ export class Room {
     // whoever dropped a few seconds to come back, and `advanceLeg` is the one
     // place that decides whether the next leg can actually be seated.
     if (this.series.phase === 'leg') {
-      const winner = this.players.find((p) => p.seat === winnerSeat);
       this.series.legWinners.push(winner?.id ?? null);
       if (this.series.index + 1 >= this.series.lineup.length) this.series.finish(false);
       else this.series.armBreak(SERIES_BREAK_MS);
@@ -755,6 +903,21 @@ export class Room {
 
   /** Called when the room is torn down, so no timer outlives it. */
   dispose(): void {
+    // The one row that describes a whole evening: how long the room lived, how
+    // many people were ever in it, and what they got through. Written here
+    // rather than assembled by the dashboard, because these are counters the
+    // room kept as it went and nothing downstream could reconstruct them
+    // without replaying every join and part in order.
+    this.closeMatch('closed');
+    analytics.record('room_close', {
+      room: this.code,
+      ms: Date.now() - this.createdAt,
+      peak: this.peakPlayers,
+      people: [...this.everyoneSeen],
+      matches: this.matchesPlayed,
+      games: [...this.gamesPlayed],
+    });
+
     this.clock.stop();
     // The series timer is the room's only other one, and a stray break would
     // fire `advanceLeg` into a room that no longer exists.

@@ -197,6 +197,10 @@ builds the client, bundles the server, and serves both on `PORT` (default 3000).
 | `PORT` | no (3000) | Port the server listens on. |
 | `CF_TURN_KEY_ID` | no | Cloudflare Realtime TURN key id. |
 | `CF_TURN_KEY_TOKEN` | no | Its API token. |
+| `ADMIN_TOKEN` | no | Unlocks `/admin`, the usage dashboard. Unset in production means the page 404s. |
+| `ANALYTICS_FILE` | no (`data/events.ndjson`) | Where the usage log is kept. `off` disables the file and leaves stdout. |
+| `ANALYTICS_DAYS` | no (90) | How long events are kept. |
+| `ANALYTICS_TZ` | no (`Asia/Jerusalem`) | Which day and hour a timestamp falls in. |
 
 The two Cloudflare variables are what make voice chat work for a player behind
 carrier-grade NAT — which is the norm on Israeli mobile networks. Create a TURN
@@ -218,6 +222,24 @@ made a broken deployment look healthy.
 headers. Never paste the long-lived Cloudflare token into chat, source, logs or a
 client bundle; set it directly in Railway. Use separate TURN keys for dev and
 production, and configure production only after the dev device matrix passes.
+
+### Usage logging
+
+Who plays, when, which games hold them and what breaks — at `/admin`, behind
+`ADMIN_TOKEN`. No third-party analytics, no cookies, no tracking script, and no
+SDK tying this to any host: events are one line of JSON each, written to stdout
+(which every platform collects for free) and to a file (which is what the
+dashboard reads back after a restart).
+
+```bash
+railway variables --set ADMIN_TOKEN="$(openssl rand -hex 16)"
+```
+
+The default log path is inside the container and therefore ephemeral, like the
+rooms themselves. To keep history across deploys, mount a Railway volume at
+`/app/data`. [`docs/analytics.md`](docs/analytics.md) is the field reference and
+covers what moving to AWS or Google Cloud would change (one environment
+variable, at most).
 
 > **Moving to Israel.** Every player is in Israel and Railway has no Middle East
 > region — EU West measures ~114 ms median round trip, against ~10–20 ms for a

@@ -13,6 +13,7 @@ import { useVoice } from '../ui/useVoice';
 import { CLIENT_GAMES } from '../games/registry';
 import { resetIOSLobbyViewport } from '../ui/mobileViewport';
 import { msUntil } from '../net/clock';
+import { trackUi } from '../analytics';
 
 export function LobbyScreen(): JSX.Element {
   const room = useStore((s) => s.room)!;
@@ -81,6 +82,9 @@ export function LobbyScreen(): JSX.Element {
 
   const copyLink = async (): Promise<void> => {
     const link = `${location.origin}${location.pathname}#/room/${room.code}`;
+    // Counted on intent, not on success: cancelling the share sheet still says
+    // the host reached for the invite, and how rooms fill up is the question.
+    trackUi('invite');
     if (navigator.share) {
       try {
         await navigator.share({

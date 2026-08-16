@@ -6,6 +6,7 @@
  * things — `createState`, `stepTick`, `ARENA_WIDTH` — and flattening them into
  * one namespace would silently drop the collisions.
  */
+export * from './analytics';
 export * from './engine';
 export * from './players';
 export * from './appearance';
