@@ -184,6 +184,23 @@ export function LobbyScreen(): JSX.Element {
                     >
                       {player.ready ? '✓' : ''}
                     </span>
+                    {isHost && player.id !== playerId && (
+                      <button
+                        type="button"
+                        className="person__kick"
+                        title={t.kickPlayer(player.name)}
+                        aria-label={t.kickPlayer(player.name)}
+                        onClick={() => {
+                          // Confirmed because it cannot be undone and the button
+                          // sits a thumb's width from the avatar carousel.
+                          if (window.confirm(t.kickConfirm(player.name))) {
+                            socket.kick(player.id);
+                          }
+                        }}
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}

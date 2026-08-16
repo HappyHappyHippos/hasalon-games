@@ -398,6 +398,14 @@ export function createApp(options: AppOptions): App {
         client.playerId = null;
         return;
 
+      case 'kick':
+        if (!requireHost(client, room, player)) return;
+        // Allowed mid-match on purpose: the reason to remove somebody rarely
+        // waits for the lobby. `removePlayer` already ends a match that drops
+        // below its minimum rather than leaving one person in the arena.
+        room.kick(String(message.playerId ?? ''));
+        return;
+
       default:
         client.sendError('BAD_MESSAGE', 'Unknown message type.');
     }

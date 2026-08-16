@@ -50,6 +50,21 @@ export const BOMBIT_STAGE_URL: Record<BombitStageId, string> = {
 // ---------------------------------------------------------------------------
 
 /**
+ * Every board is 23×13.
+ *
+ * That is 1.77:1 — 16:9 to within half a percent, and the closest an odd×odd
+ * grid gets to it. Odd is not negotiable: the pillar lattice needs walls on the
+ * even coordinates and a solid border on both, and an even dimension puts two
+ * open rows or two pillars side by side at one edge.
+ *
+ * The ratio is the *display* ratio, not just bookkeeping — `Renderer.stageFor`
+ * builds its `CanvasStage` at `cols * TILE` by `rows * TILE`, so the grid's
+ * shape is the letterbox's shape. At 15×13 the board was nearly square and a
+ * phone held sideways spent most of its screen on bars, while the stage art
+ * behind it (drawn 16:9) was cropped hard to cover. Both fit now.
+ */
+
+/**
  * The pillar lattice everyone already knows how to read. Wide open rows between
  * the pillars, so a chase can go a long way before it has to commit.
  */
@@ -57,22 +72,22 @@ const CLASSIC: BombitMap = {
   id: 'classic',
   name: 'Classic',
   stage: 'green',
-  cols: 15,
+  cols: 23,
   rows: 13,
   layout: [
-    '###############',
-    '#SxxxxxSxxxxxS#',
-    '#x#x#x#x#x#x#x#',
-    '#xxxxxxxxxxxxx#',
-    '#x#x#x#x#x#x#x#',
-    '#xxxxxxxxxxxxx#',
-    '#S#x#x#x#x#x#S#',
-    '#xxxxxxxxxxxxx#',
-    '#x#x#x#x#x#x#x#',
-    '#xxxxxxxxxxxxx#',
-    '#x#x#x#x#x#x#x#',
-    '#SxxxxxSxxxxxS#',
-    '###############',
+    '#######################',
+    '#SxxxxxxxxxSxxxxxxxxxS#',
+    '#x#x#x#x#x#x#x#x#x#x#x#',
+    '#xxxxxxxxxxxxxxxxxxxxx#',
+    '#x#x#x#x#x#x#x#x#x#x#x#',
+    '#xxxxxxxxxxxxxxxxxxxxx#',
+    '#S#x#x#x#x#x#x#x#x#x#S#',
+    '#xxxxxxxxxxxxxxxxxxxxx#',
+    '#x#x#x#x#x#x#x#x#x#x#x#',
+    '#xxxxxxxxxxxxxxxxxxxxx#',
+    '#x#x#x#x#x#x#x#x#x#x#x#',
+    '#SxxxxxxxxxSxxxxxxxxxS#',
+    '#######################',
   ],
 };
 
@@ -84,20 +99,22 @@ const CROSSROADS: BombitMap = {
   id: 'crossroads',
   name: 'Crossroads',
   stage: 'desert',
-  cols: 15,
-  rows: 11,
+  cols: 23,
+  rows: 13,
   layout: [
-    '###############',
-    '#SxxxxxSxxxxxS#',
-    '#x#x#x.x#x#x#x#',
-    '#xxxxxxxxxxxxx#',
-    '#x#x#x.x#x#x#x#',
-    '#S...........S#',
-    '#x#x#x.x#x#x#x#',
-    '#xxxxxxxxxxxxx#',
-    '#x#x#x.x#x#x#x#',
-    '#SxxxxxSxxxxxS#',
-    '###############',
+    '#######################',
+    '#SxxxxxxxxxSxxxxxxxxxS#',
+    '#x#x#x#x#x#.#x#x#x#x#x#',
+    '#xxxxxxxxxxxxxxxxxxxxx#',
+    '#x#x#x#x#x#.#x#x#x#x#x#',
+    '#xxxxxxxxxxxxxxxxxxxxx#',
+    '#S...................S#',
+    '#xxxxxxxxxxxxxxxxxxxxx#',
+    '#x#x#x#x#x#.#x#x#x#x#x#',
+    '#xxxxxxxxxxxxxxxxxxxxx#',
+    '#x#x#x#x#x#.#x#x#x#x#x#',
+    '#SxxxxxxxxxSxxxxxxxxxS#',
+    '#######################',
   ],
 };
 
@@ -109,20 +126,22 @@ const ARENA: BombitMap = {
   id: 'arena',
   name: 'Arena',
   stage: 'living_room',
-  cols: 17,
-  rows: 11,
+  cols: 23,
+  rows: 13,
   layout: [
-    '#################',
-    '#Sxxxxx.S.xxxxxS#',
-    '#xxx#xxxxxxx#xxx#',
-    '#xxxxx##.##xxxxx#',
-    '#xxxxx#...#xxxxx#',
-    '#S...x.....x...S#',
-    '#xxxxx#...#xxxxx#',
-    '#xxxxx##.##xxxxx#',
-    '#xxx#xxxxxxx#xxx#',
-    '#Sxxxxx.S.xxxxxS#',
-    '#################',
+    '#######################',
+    '#Sxxxxxxxx.S.xxxxxxxxS#',
+    '#xxx#xxxxxxxxxxxxx#xxx#',
+    '#xxxxxxxxxxxxxxxxxxxxx#',
+    '#xxxxxxxx##.##xxxxxxxx#',
+    '#xxxxxxxx#...#xxxxxxxx#',
+    '#S....x.........x....S#',
+    '#xxxxxxxx#...#xxxxxxxx#',
+    '#xxxxxxxx##.##xxxxxxxx#',
+    '#xxxxxxxxxxxxxxxxxxxxx#',
+    '#xxx#xxxxxxxxxxxxx#xxx#',
+    '#Sxxxxxxxx.S.xxxxxxxxS#',
+    '#######################',
   ],
 };
 
@@ -131,20 +150,22 @@ const WAREHOUSE: BombitMap = {
   id: 'warehouse',
   name: 'Warehouse',
   stage: 'arctic',
-  cols: 15,
-  rows: 11,
+  cols: 23,
+  rows: 13,
   layout: [
-    '###############',
-    '#Sxx#xxSxx#xxS#',
-    '#x.x#x.x.x#x.x#',
-    '#x.xxx.x.xxx.x#',
-    '#xxx#xxxxx#xxx#',
-    '#Sx.........xS#',
-    '#xxx#xxxxx#xxx#',
-    '#x.xxx.x.xxx.x#',
-    '#x.x#x.x.x#x.x#',
-    '#Sxx#xxSxx#xxS#',
-    '###############',
+    '#######################',
+    '#Sxx#xxxxxxSxxxxxx#xxS#',
+    '#x.x#x.xx.x.x.xx.x#x.x#',
+    '#x.xxx.xx.x.x.xx.xxx.x#',
+    '#xxx#xxxxxxxxxxxxx#xxx#',
+    '#xxxxxxxxxxxxxxxxxxxxx#',
+    '#Sx.....x.x.x.x.....xS#',
+    '#xxxxxxxxxxxxxxxxxxxxx#',
+    '#xxx#xxxxxxxxxxxxx#xxx#',
+    '#x.xxx.xx.x.x.xx.xxx.x#',
+    '#x.x#x.xx.x.x.xx.x#x.x#',
+    '#Sxx#xxxxxxSxxxxxx#xxS#',
+    '#######################',
   ],
 };
 

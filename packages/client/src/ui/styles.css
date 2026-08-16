@@ -1016,6 +1016,35 @@ strong,
   font-size: 14px;
 }
 
+/* Host-only, on everybody else's row. Same disc as the ready tick so the row
+   keeps its rhythm, and deliberately quiet until you reach for it — it is the
+   one control in the lobby with no undo. */
+.person__kick {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  padding: 0;
+  border-radius: 50%;
+  border: 2.5px solid var(--ink);
+  background: var(--paper-2);
+  color: var(--ink-soft);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.person__kick:hover,
+.person__kick:focus-visible {
+  opacity: 1;
+  background: var(--red);
+  color: var(--paper);
+}
+
 /* Groups the mic heading and `VoiceBar` into one flex item so mobile's
    `order` can move "microphone" as a single unit (see the mobile media
    query). Same gap as `.lobby__people`'s own so nesting it doesn't change
@@ -3576,9 +3605,13 @@ strong,
   padding: 4px 0;
 }
 
+/* The guess bar sits at the very bottom of the chat column, which is exactly
+   where an overlaying keyboard lands. `--keyboard-inset` is 0 with the keyboard
+   down, so this is inert everywhere else. */
 .skribbl__guessbar {
   border-top: 2.5px solid var(--ink);
   padding: 8px;
+  padding-bottom: calc(8px + var(--keyboard-inset));
   display: flex;
   gap: 8px;
   align-items: stretch;
@@ -4120,6 +4153,10 @@ strong,
      it is simply clipped, under the header. `start` keeps the overflow on one
      side, where the scrollbar can reach it. */
   align-content: start;
+  /* Room for an overlaying keyboard under the caption fields. It is a scroller,
+     so the padding is what lets the last field actually be scrolled clear of
+     the keyboard rather than sitting behind it. 0 when there is none. */
+  padding-block-end: var(--keyboard-inset);
   animation: meme-deal 180ms cubic-bezier(0.22, 1.35, 0.4, 1) both;
 }
 
@@ -4376,6 +4413,98 @@ strong,
 .memes__rank { font-size: 20px; font-weight: 900; }
 .memes__standing-delta { color: var(--green); font-weight: 900; }
 
+/* ---------------------------------------------------------------------------
+   End-of-match gallery
+   ---------------------------------------------------------------------------
+   Sits behind the champion card, which is a centred overlay — so the gallery
+   reserves `--chrome-gutter` at the top for the fixed gear/pause/maximize
+   buttons and simply scrolls under everything else. */
+.memes__phase--gallery {
+  padding-inline-end: calc(var(--chrome-gutter) + env(safe-area-inset-right));
+}
+
+.memes__gallery {
+  width: min(1080px, 100%);
+  height: 100%;
+  min-height: 0;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.memes__gallery-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.memes__gallery-head h2 {
+  margin: 0;
+  font-family: var(--font-display);
+}
+
+/* The scroller, and the only thing on this screen that scrolls. `min-height: 0`
+   is what lets it actually shrink inside the flex column above rather than
+   growing to the height of every meme in the match. */
+.memes__gallery-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  padding-bottom: calc(4px + var(--keyboard-inset));
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(240px, 100%), 1fr));
+  gap: 12px;
+  align-content: start;
+}
+
+.memes__gallery-item {
+  margin: 0;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  background: var(--surface);
+  border: var(--outline);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+}
+
+.memes__gallery-item--top {
+  background: color-mix(in srgb, var(--yellow) 20%, var(--surface));
+}
+
+.memes__gallery-item figcaption {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-display);
+  font-size: 13px;
+}
+
+.memes__gallery-item figcaption strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.memes__gallery-round {
+  color: var(--ink-soft);
+  font-size: 11px;
+}
+
+/* Pushed to the end of the caption row, and `dir="ltr"` in the JSX so a score
+   reads the same way in Hebrew. */
+.memes__gallery-award {
+  margin-inline-start: auto;
+  font-weight: 900;
+}
+
 @keyframes meme-deal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @keyframes meme-card-deal { from { opacity: 0; transform: scale(0.88) translateY(12px); } to { opacity: 1; transform: none; } }
 @keyframes meme-tick { 50% { transform: scale(1.08); } }
@@ -4467,7 +4596,7 @@ strong,
      clipped was the submit button. A scrollbar of last resort is far better
      than a caption you cannot send, and this is the outer box, so it is still
      one scroller rather than one nested in another. */
-  .memes__phase { overflow-y: auto; padding-inline-end: 7px; padding-block-end: 7px; }
+  .memes__phase { overflow-y: auto; padding-inline-end: 7px; padding-block-end: calc(7px + var(--keyboard-inset)); }
   .memes__composer {
     min-height: 0;
     grid-template-columns: minmax(240px, 1.15fr) minmax(280px, 0.85fr);
@@ -4545,6 +4674,7 @@ strong,
   .person__avatar .avatar { width: 38px; height: 38px; }
   .person__meta { font-size: 10px; }
   .person__tick { width: 24px; height: 24px; }
+  .person__kick { width: 24px; height: 24px; font-size: 12px; }
   .person--self .appearance { gap: 4px; }
   .person--self .appearance__preview { width: 52px; height: 52px; }
   .person--self .appearance__preview .avatar { width: 48px; height: 48px; }
@@ -4616,7 +4746,7 @@ strong,
     margin-inline-start: 0;
   }
   .skribbl__log { padding: 6px; font-size: 12px; }
-  .skribbl__guessbar { padding: 6px; }
+  .skribbl__guessbar { padding: 6px; padding-bottom: calc(6px + var(--keyboard-inset)); }
 }
 
 @media (prefers-reduced-motion: reduce) {

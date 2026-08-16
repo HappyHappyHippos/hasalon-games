@@ -50,7 +50,7 @@ import { stepProjectile } from './ballistics';
 import { stepWorm, supported } from './physics';
 import { makeRng, mixSeed, nextFloat, shuffle } from './rng';
 import { WORMS_STAGES, resolveStage, stageMask } from './stages';
-import { carveCrater, cloneMask, outOfWorld, overlapsSolid, solidAt } from './terrain';
+import { carveCrater, cloneMask, outOfWorld, overlapsSolid } from './terrain';
 import { WEAPONS, isWeaponId, startingAmmo, weaponsFor } from './weapons';
 import {
   IN_AIM_DOWN,
@@ -78,28 +78,13 @@ import type { GameSeat } from '../../gameModule';
  *
  * A whole spec rather than just a blast, because `detonate` takes one — and a
  * death has to be able to chain into the next death, which is the best thing
- * that happens in a game of Worms.
+ * that happens in a game of Worms. It lives in the weapons table like everything
+ * else, `selectable: false`, so there is exactly one place a spec can come from.
  */
-const DEATH_SPEC: WeaponSpec = {
-  id: 'dynamite',
-  aim: 'drop',
-  kind: 'projectile',
-  selectable: false,
-  isAttack: false,
-  endsTurn: false,
-  ammo: -1,
-  uses: 1,
-  usesPower: false,
-  launchSpeed: 0,
-  projectile: { gravityScale: 1, windScale: 0, bounce: 0, friction: 0, detonate: 'impact' },
-  blast: { radius: 58, damage: 22, knockback: 300 },
-};
+const DEATH_SPEC: WeaponSpec = WEAPONS.death;
 
 /** A tap of the fire button is still a shot, just a feeble one. */
 const MIN_POWER = 0.15;
-
-/** Below this speed a persistent projectile is considered to have settled. */
-const MINE_REST_SPEED = 6;
 
 export function defaultConfig(): WormsConfig {
   return {
@@ -144,6 +129,7 @@ export function createState(seats: GameSeat[], config: WormsConfig, seed: number
         weapon: 'bazooka',
         pendingFirePower: null,
       fuse: WEAPONS.grenade.fuse?.default ?? 3,
+      lastWorm: -1,
       ackSeq: 0,
       heldBits: 0,
       pressedBits: 0,
@@ -151,7 +137,8 @@ export function createState(seats: GameSeat[], config: WormsConfig, seed: number
     worms: [],
     projectiles: [],
     order: [],
-    turnCursor: -1,
+    seatOrder: [],
+    seatCursor: -1,
     activeWorm: -1,
     turnTicks: 0,
     attackUsed: false,
@@ -216,7 +203,8 @@ function startRound(state: WormsState): void {
   }
 
   state.order = state.worms.map((w) => w.id);
-  state.turnCursor = -1;
+  state.seatOrder = seatOrder;
+  state.seatCursor = -1;
   state.activeWorm = -1;
   state.phase = 'countdown';
   state.phaseTicks = COUNTDOWN_TICKS;
@@ -225,6 +213,7 @@ function startRound(state: WormsState): void {
   for (const seat of state.seats) {
     seat.ammo = startingAmmo(state.config.extrasEnabled);
     seat.weapon = 'bazooka';
+    seat.lastWorm = -1;
     seat.heldBits = 0;
     seat.pressedBits = 0;
   }
@@ -483,9 +472,6 @@ function fire(state: WormsState, worm: Worm, spec: WeaponSpec, power: number): v
     case 'projectile':
       spawnProjectile(state, worm, spec, power);
       break;
-    case 'melee':
-      meleeSweep(state, worm, spec);
-      break;
     case 'airstrike':
       spawnStrike(state, worm, spec);
       break;
@@ -534,62 +520,8 @@ function spawnProjectile(state: WormsState, worm: Worm, spec: WeaponSpec, power:
       age: 0,
       tx: state.targetX,
       ty: state.targetY,
-      resting: false,
     });
     state.nextEntityId += 1;
-  }
-}
-
-/**
- * A swing. No projectile and no crater — this is the one weapon that moves
- * somebody without changing the map, which is what makes it the answer to a
- * worm standing next to water.
- */
-function meleeSweep(state: WormsState, worm: Worm, spec: WeaponSpec): void {
-  const melee = spec.melee!;
-  const aim = aimVector(worm);
-  const hitX = worm.x + aim.x * melee.reach;
-  const hitY = worm.y + aim.y * melee.reach;
-
-  if (spec.blast.radius > 0) {
-    carveCrater(state.mask, hitX, hitY, spec.blast.radius);
-    state.craters.push({
-      x: Math.round(hitX),
-      y: Math.round(hitY),
-      r: spec.blast.radius,
-      tick: state.tick,
-    });
-  }
-
-  // Impact feedback effect at the swing location.
-  state.events.push({
-    t: 'boom',
-    x: Math.round(hitX),
-    y: Math.round(hitY),
-    r: spec.blast.radius > 0 ? spec.blast.radius : 16,
-    w: spec.id,
-  });
-
-  for (const target of state.worms) {
-    if (!target.alive || target.id === worm.id) continue;
-    const dx = target.x - worm.x;
-    const dy = target.y - worm.y;
-    const dist = Math.hypot(dx, dy);
-
-    // Target must be within swing reach (plus target worm hit radius).
-    if (dist > melee.reach + WORM_HIT_R) continue;
-
-    // Target must be in front of swing direction (dot product with aim vector).
-    const dot = dist < 1 ? 1 : (dx * aim.x + dy * aim.y) / dist;
-    if (dot < -0.25) continue;
-
-    hurt(state, target, spec.blast.damage);
-    // Launched along the aim, not radially — a bat is a direction, and being
-    // able to choose it is the whole skill of the weapon.
-    target.vx = aim.x * spec.blast.knockback;
-    target.vy = aim.y * spec.blast.knockback - 120;
-    target.y -= 2;
-    target.onGround = false;
   }
 }
 
@@ -614,7 +546,6 @@ function spawnStrike(state: WormsState, worm: Worm, spec: WeaponSpec): void {
       age: 0,
       tx: state.targetX,
       ty: state.targetY,
-      resting: false,
     });
     state.nextEntityId += 1;
   }
@@ -686,21 +617,6 @@ function moveProjectiles(state: WormsState): void {
   const survivors: Projectile[] = [];
 
   for (const shot of state.projectiles) {
-    if (shot.resting) {
-      // A settled mine still has to notice somebody walking past it.
-      const spec = WEAPONS[shot.kind];
-      const physics = spec.projectile!;
-      if (physics.detonate === 'proximity') {
-        const near = nearestWorm(state, shot.x, shot.y, physics.proximityR ?? 0);
-        if (near) {
-          detonate(state, shot.x, shot.y, spec, shot.owner);
-          continue;
-        }
-      }
-      survivors.push(shot);
-      continue;
-    }
-
     const spec = WEAPONS[shot.kind];
     const outcome = stepProjectile(shot, spec, state.mask, state.worms, state.wind);
 
@@ -710,32 +626,10 @@ function moveProjectiles(state: WormsState): void {
     }
     if (outcome.kind === 'gone') continue;
 
-    // Persistent weapons stop being simulated once they have stopped moving.
-    const physics = spec.projectile!;
-    if (
-      physics.persist &&
-      Math.hypot(shot.vx, shot.vy) < MINE_REST_SPEED &&
-      solidAt(state.mask, shot.x, shot.y + 3)
-    ) {
-      shot.vx = 0;
-      shot.vy = 0;
-      shot.resting = true;
-    }
-
     survivors.push(shot);
   }
 
   state.projectiles = survivors;
-}
-
-function nearestWorm(state: WormsState, x: number, y: number, radius: number): Worm | null {
-  for (const worm of state.worms) {
-    if (!worm.alive) continue;
-    const dx = worm.x - x;
-    const dy = worm.y - y;
-    if (dx * dx + dy * dy <= radius * radius) return worm;
-  }
-  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -821,7 +715,6 @@ function spawnCluster(
       age: 0,
       tx: -1,
       ty: -1,
-      resting: false,
     });
     state.nextEntityId += 1;
   }
@@ -899,7 +792,7 @@ function advancePhase(state: WormsState): void {
 
     case 'turn': {
       const active = activeWorm(state);
-      // Their worm died mid-turn — to a mine, or to their own dynamite.
+      // Their worm died mid-turn — to a chained death blast, or to its own shot.
       if (!active) {
         beginResolve(state);
         return;
@@ -975,15 +868,50 @@ function beginTurn(state: WormsState): void {
   state.events.push({ t: 'turn', worm: next, seat: worm.seat, wind: Math.round(state.wind * 1000) });
 }
 
-/** Walk the order from wherever it was, skipping the dead. */
+/**
+ * Whose turn is next: the next seat still in the round, then that seat's next
+ * worm.
+ *
+ * **Rotation is by seat, not by position in `order`.** The two look equivalent
+ * while everyone is alive — `order` is dealt copy-major precisely so it
+ * alternates — and they stop being equivalent the moment a worm dies. A flat
+ * cursor that skips the dead closes the gap the corpse left, and the seat after
+ * it inherits that slot on top of its own. With two players holding two worms
+ * each, `[A1, B1, A2, B2]` losing A1 played B1, A2, B2, then wrapped past dead
+ * A1 straight back to B1 — B twice in a row, for the rest of the round.
+ *
+ * Skipping a seat with nothing alive is the same walk, so a wiped-out player
+ * drops out of the rotation without disturbing anyone else's place in it.
+ */
 function nextLivingWorm(state: WormsState): number | null {
-  for (let i = 1; i <= state.order.length; i += 1) {
-    const at = (state.turnCursor + i) % state.order.length;
-    const worm = state.worms.find((w) => w.id === state.order[at]);
-    if (worm?.alive) {
-      state.turnCursor = at;
-      return worm.id;
+  for (let i = 1; i <= state.seatOrder.length; i += 1) {
+    const at = (state.seatCursor + i) % state.seatOrder.length;
+    const seat = state.seats[state.seatOrder[at]!];
+    if (!seat) continue;
+    const worm = nextLivingWormForSeat(state, seat.seat);
+    if (worm !== null) {
+      state.seatCursor = at;
+      seat.lastWorm = worm;
+      return worm;
     }
+  }
+  return null;
+}
+
+/**
+ * That seat's own worms cycle too, resuming after the one it played last, so a
+ * player with two worms alternates between them instead of driving one until it
+ * dies.
+ */
+function nextLivingWormForSeat(state: WormsState, seat: number): number | null {
+  const mine = state.order.filter(
+    (id) => state.worms.find((w) => w.id === id)?.seat === seat,
+  );
+  // -1 for a seat that has not played yet, which starts the walk at index 0.
+  const from = mine.indexOf(state.seats[seat]!.lastWorm);
+  for (let i = 1; i <= mine.length; i += 1) {
+    const id = mine[(from + i) % mine.length]!;
+    if (state.worms.find((w) => w.id === id)?.alive) return id;
   }
   return null;
 }
@@ -1007,11 +935,7 @@ function beginResolve(state: WormsState): void {
  * `RESOLVE_MAX_TICKS` exists above.
  */
 function settled(state: WormsState): boolean {
-  for (const shot of state.projectiles) {
-    // A resting mine is scenery, not a pending event, and waiting on one would
-    // hang every turn after the first one is laid.
-    if (!shot.resting) return false;
-  }
+  if (state.projectiles.length > 0) return false;
   for (const worm of state.worms) {
     if (!worm.alive) continue;
     if (worm.dying > 0) return false;
@@ -1023,7 +947,7 @@ function settled(state: WormsState): boolean {
 
 /** Stop everything where it is, deterministically, and get on with the match. */
 function forceSettle(state: WormsState): void {
-  state.projectiles = state.projectiles.filter((p) => p.resting);
+  state.projectiles = [];
   for (const worm of state.worms) {
     if (!worm.alive) continue;
     worm.vx = 0;
@@ -1085,19 +1009,9 @@ function nextRound(state: WormsState): void {
 // ---------------------------------------------------------------------------
 
 export function makeSnapshot(state: WormsState, events: WormsEvent[]): WormsSnapshot {
-  const mines: WormsSnapshot['mines'] = [];
   const proj: WormSnapProjectile[] = [];
 
   for (const shot of state.projectiles) {
-    if (WEAPONS[shot.kind].projectile?.persist) {
-      mines.push({
-        i: shot.id,
-        x: Math.round(shot.x),
-        y: Math.round(shot.y),
-        a: shot.age > (WEAPONS[shot.kind].projectile?.armTicks ?? 0) ? 1 : 0,
-      });
-      continue;
-    }
     const wire: WormSnapProjectile = {
       i: shot.id,
       k: shot.kind,
@@ -1156,7 +1070,6 @@ export function makeSnapshot(state: WormsState, events: WormsEvent[]): WormsSnap
     worms,
     seats,
     proj,
-    mines,
     events,
   };
 }

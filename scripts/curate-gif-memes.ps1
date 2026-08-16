@@ -1,4 +1,4 @@
-param([int]$Count = 80)
+param([int]$Count = 180)
 
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Net.Http
@@ -26,7 +26,11 @@ for ($page = 1; $cards.Count -lt $Count; $page += 1) {
     })
     if ($cards.Count -ge $Count) { break }
   }
-  if ($page -gt 8) { throw "Imgflip returned only $($cards.Count) animated templates." }
+  # Pages are 40 items; scale the ceiling with the count plus four spare rather
+  # than fixing it at the eight a run of 80 happened to need.
+  if ($page -gt ([Math]::Ceiling($Count / 40.0) + 4)) {
+    throw "Imgflip returned only $($cards.Count) animated templates, need $Count."
+  }
 }
 
 $items = [System.Collections.Generic.List[object]]::new()

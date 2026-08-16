@@ -129,9 +129,15 @@ export const DEFAULT_ROUND_SECONDS = 90;
  *
  * Never 1: a fully packed board has exactly one route out of each pocket, and
  * the first thirty seconds are spent digging rather than fighting.
+ *
+ * These sit higher than they first shipped at, and the 23×13 boards carry more
+ * candidate cells than the old near-square ones did, so a round now starts with
+ * roughly twice the crates. Both halves of that were the point: crates are what
+ * a bomb is *for* before anyone is in range of anyone, and a sparse board on a
+ * wide map is two people walking toward each other across open floor.
  */
 export const DENSITY_FILL: Record<string, number> = {
-  sparse: 0.5,
-  normal: 0.72,
-  packed: 0.88,
+  sparse: 0.62,
+  normal: 0.85,
+  packed: 0.95,
 };

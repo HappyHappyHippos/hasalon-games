@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { enableKeyboardOverlay, enableVisibleViewportSizing } from './mobileViewport';
+import {
+  enableKeyboardInsetTracking,
+  enableKeyboardOverlay,
+  enableVisibleViewportSizing,
+} from './mobileViewport';
 
 const originalNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
 const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
@@ -36,6 +40,94 @@ describe('enableKeyboardOverlay', () => {
       value: {},
     });
     expect(() => enableKeyboardOverlay()()).not.toThrow();
+  });
+});
+
+describe('enableKeyboardInsetTracking', () => {
+  /** Stand up the three globals the tracker reads, and hand back the values written. */
+  function setup(options: {
+    keyboard?: { boundingRect: { height: number } } & Partial<EventTarget>;
+    viewportHeight?: number;
+    offsetTop?: number;
+    innerHeight?: number;
+  }) {
+    const values = new Map<string, string>();
+    const style = {
+      setProperty: (name: string, value: string) => values.set(name, value),
+      removeProperty: (name: string) => values.delete(name),
+    };
+    const visualViewport = Object.assign(new EventTarget(), {
+      width: 800,
+      height: options.viewportHeight ?? 900,
+      offsetLeft: 0,
+      offsetTop: options.offsetTop ?? 0,
+    });
+    const fakeWindow = Object.assign(new EventTarget(), {
+      innerWidth: 800,
+      innerHeight: options.innerHeight ?? 900,
+      visualViewport,
+    });
+    const keyboard = options.keyboard
+      ? Object.assign(new EventTarget(), options.keyboard)
+      : undefined;
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: fakeWindow });
+    Object.defineProperty(globalThis, 'document', {
+      configurable: true,
+      value: Object.assign(new EventTarget(), { documentElement: { style } }),
+    });
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: keyboard ? { virtualKeyboard: keyboard } : {},
+    });
+    return { values, visualViewport, keyboard };
+  }
+
+  it('reads the Chromium keyboard geometry, which resizes nothing', () => {
+    // `overlaysContent` means the viewport keeps its full height, so the only
+    // thing that knows a keyboard is up is `boundingRect`.
+    const { values, keyboard } = setup({ keyboard: { boundingRect: { height: 320 } } });
+
+    const cleanup = enableKeyboardInsetTracking();
+    expect(values.get('--keyboard-inset')).toBe('320px');
+
+    keyboard!.boundingRect = { height: 0 };
+    keyboard!.dispatchEvent(new Event('geometrychange'));
+    expect(values.get('--keyboard-inset')).toBe('0px');
+
+    cleanup();
+    expect(values.has('--keyboard-inset')).toBe(false);
+  });
+
+  it('falls back to the shrunken visual viewport on Safari, which has no API', () => {
+    const { values, visualViewport } = setup({ innerHeight: 900, viewportHeight: 900 });
+
+    enableKeyboardInsetTracking();
+    expect(values.get('--keyboard-inset')).toBe('0px');
+
+    visualViewport.height = 560;
+    visualViewport.dispatchEvent(new Event('resize'));
+    expect(values.get('--keyboard-inset')).toBe('340px');
+  });
+
+  it('counts a viewport that was pushed down rather than only shortened', () => {
+    const { values, visualViewport } = setup({ innerHeight: 900, viewportHeight: 700 });
+    enableKeyboardInsetTracking();
+    expect(values.get('--keyboard-inset')).toBe('200px');
+
+    visualViewport.offsetTop = 60;
+    visualViewport.dispatchEvent(new Event('scroll'));
+    expect(values.get('--keyboard-inset')).toBe('140px');
+  });
+
+  /**
+   * Android reports a few pixels of inset for its navigation bar with no
+   * keyboard up at all. Without the floor every phone would sit permanently
+   * padded for a keyboard that is not there.
+   */
+  it('ignores an inset too small to be a keyboard', () => {
+    const { values } = setup({ innerHeight: 900, viewportHeight: 852 });
+    enableKeyboardInsetTracking();
+    expect(values.get('--keyboard-inset')).toBe('0px');
   });
 });
 

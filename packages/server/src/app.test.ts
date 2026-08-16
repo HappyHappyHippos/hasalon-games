@@ -189,6 +189,37 @@ describe('lobby', () => {
     expect((await guest!.next('error')).code).toBe('NOT_HOST');
   });
 
+  it('only lets the host kick, and tells the kicked player why', async () => {
+    const [host, guest, other] = await makeLobby(3);
+    const guestId = guest!.playerId;
+
+    // A guest aiming at somebody else gets nothing but the refusal.
+    guest!.send({ t: 'kick', playerId: other!.playerId });
+    expect((await guest!.next('error')).code).toBe('NOT_HOST');
+
+    host!.send({ t: 'kick', playerId: guestId });
+    expect((await guest!.next('error')).code).toBe('KICKED');
+
+    const after = await host!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'room' }> =>
+        m.t === 'room' && m.room.players.length === 2,
+    );
+    expect(after.room.players.some((p) => p.id === guestId)).toBe(false);
+  });
+
+  it('refuses to let the host kick themselves', async () => {
+    const [host] = await makeLobby(2);
+    host!.send({ t: 'kick', playerId: host!.playerId });
+    host!.send({ t: 'game', gameId: 'achtung' });
+
+    // No error and no removal: the next message through is the game change,
+    // which proves the kick was dropped rather than merely slow.
+    const next = await host!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'room' }> => m.t === 'room' && m.room.gameId === 'achtung',
+    );
+    expect(next.room.players).toHaveLength(2);
+  });
+
   it('broadcasts host settings to everyone', async () => {
     const [host, guest] = await makeLobby(2);
     host!.send({ t: 'game', gameId: 'achtung' });

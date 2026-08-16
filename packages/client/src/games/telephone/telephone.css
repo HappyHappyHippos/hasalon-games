@@ -69,7 +69,9 @@
   place-items: center;
   padding-top: max(clamp(10px, 2.5vw, 26px), env(safe-area-inset-top));
   padding-right: max(clamp(10px, 2.5vw, 26px), env(safe-area-inset-right));
-  padding-bottom: max(clamp(10px, 2.5vw, 26px), env(safe-area-inset-bottom));
+  padding-bottom: calc(
+    max(clamp(10px, 2.5vw, 26px), env(safe-area-inset-bottom)) + var(--keyboard-inset)
+  );
   padding-left: max(clamp(10px, 2.5vw, 26px), env(safe-area-inset-left));
   box-sizing: border-box;
 }
@@ -77,6 +79,24 @@
 .telephone__phase--draw,
 .telephone__phase--reveal {
   overflow: hidden;
+}
+
+/*
+ * The reveal stretches; every other phase centres.
+ *
+ * `.telephone__phase` is a centred grid, which sizes its row to its content —
+ * so `.telephone__album`'s `height: 100%` resolved against its own content
+ * height rather than the screen's. `.telephone__chat`'s `flex: 1; min-height: 0`
+ * then had nothing to shrink against, the chat grew to the full height of the
+ * chain, and the phase's `overflow: hidden` simply cut it off: the finished
+ * conversation could not be scrolled back through at all, worst in landscape
+ * where the least of it fits. Stretching the row gives the album a real height
+ * to divide up. `justify-items` stays centred, which is what holds the column
+ * on the midline.
+ */
+.telephone__phase--reveal {
+  align-items: stretch;
+  justify-items: center;
 }
 
 .telephone__composer,
@@ -494,7 +514,7 @@
   .telephone__phase {
     padding-top: max(7px, env(safe-area-inset-top));
     padding-right: max(7px, env(safe-area-inset-right));
-    padding-bottom: max(7px, env(safe-area-inset-bottom));
+    padding-bottom: calc(max(7px, env(safe-area-inset-bottom)) + var(--keyboard-inset));
     padding-left: max(7px, env(safe-area-inset-left));
   }
   .telephone__composer { gap: 12px; }
@@ -517,11 +537,33 @@
 @media (max-height: 560px) and (orientation: landscape) {
   .telephone__top { min-height: 52px; padding-block: 4px; }
   .telephone__clock { width: 36px; height: 36px; }
+  /*
+   * Landscape pads the two sides *equally*, to the larger of the two insets.
+   *
+   * A landscape cutout is on one side only. Padding each side by its own inset
+   * clears the notch correctly and then shifts everything centred inside by half
+   * the difference — which on a phone with a camera in the long edge is a
+   * visible, wrong-looking lean, and is why the reveal column read as off-centre
+   * in landscape while looking fine in portrait. Matching the two keeps the
+   * column on the screen's midline and still clears whichever side the cutout is
+   * on. Top and bottom stay independent; nothing is centred against them.
+   */
   .telephone__phase {
     padding-top: max(3px, env(safe-area-inset-top));
-    padding-right: max(3px, env(safe-area-inset-right));
-    padding-bottom: max(3px, env(safe-area-inset-bottom));
-    padding-left: max(3px, env(safe-area-inset-left));
+    padding-bottom: calc(max(3px, env(safe-area-inset-bottom)) + var(--keyboard-inset));
+    padding-inline: max(3px, env(safe-area-inset-left), env(safe-area-inset-right));
+  }
+
+  /*
+   * The gear/pause/maximize buttons are fixed to the viewport at the top and
+   * span `--chrome-gutter` in from the inline end. In landscape the header is
+   * only 52px tall and disappears completely once the match is over, so they
+   * come down over the album's own heading. Reserving the gutter on *both*
+   * sides keeps that heading clear of them and still centred; the chat below is
+   * left full width, since it starts under the buttons rather than beside them.
+   */
+  .telephone__album-head {
+    padding-inline: var(--chrome-gutter);
   }
   .telephone__draw { width: 100%; grid-template-rows: auto minmax(0, 1fr); gap: 3px; padding-right: 7px; padding-bottom: 7px; }
   .telephone__draw > .eyebrow { display: none; }

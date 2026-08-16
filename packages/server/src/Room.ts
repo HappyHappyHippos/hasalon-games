@@ -244,6 +244,36 @@ export class Room {
     this.broadcastRoom();
   }
 
+  /**
+   * Throw somebody out, at the host's request.
+   *
+   * The notice goes out *before* the removal, because `removePlayer` unhooks the
+   * socket from the room and a message sent afterwards would have nowhere to go.
+   * The socket itself stays open — they land on the home screen rather than
+   * watching a connection drop and getting an automatic retry.
+   *
+   * There is no ban list, and it would be dead weight if there were. Removal
+   * already defeats the way a kicked client comes back by itself: `resume` looks
+   * the seat up in `players`, so it fails the moment they are spliced out, and
+   * the client answers `RESUME_FAILED` by dropping its stored session. What no
+   * server-side set could stop is somebody typing the code in again — identity
+   * here is a name and a colour, so they would arrive as a new player with a new
+   * id. With no accounts there is nothing to key a ban on. This ends an argument;
+   * it does not lock a door.
+   *
+   * Returns false for an id that is not here and for the host's own, so the one
+   * button with no undo cannot be aimed at yourself.
+   */
+  kick(playerId: string): boolean {
+    if (playerId === this.hostId) return false;
+    const player = this.players.find((p) => p.id === playerId);
+    if (!player) return false;
+
+    player.client?.sendError('KICKED', 'The host removed you from the room.');
+    this.removePlayer(playerId);
+    return true;
+  }
+
   removePlayer(playerId: string): void {
     const index = this.players.findIndex((p) => p.id === playerId);
     if (index === -1) return;

@@ -6,6 +6,7 @@ import {
   INTRO_TICKS,
   RESULT_TICKS,
   REVEAL_TICKS,
+  SKIPS_PER_ROUND,
   STANDINGS_TICKS,
   SWEEP_BONUS,
   TOP_MEME_BONUS,
@@ -356,35 +357,116 @@ describe('Meme Machine determinism', () => {
   });
 });
 
+describe('Meme Machine gallery', () => {
+  /** Drive a whole match to `matchOver`, voting whenever asked. */
+  function playOut(state: MemesState): void {
+    for (let guard = 0; guard < 60 * 900 && state.phase !== 'matchOver'; guard += 1) {
+      if (state.phase === 'writing') {
+        for (const player of state.players) {
+          if (!player.submitted) {
+            applyInput(state, player.id, { k: 'submit', texts: [`r${state.round}-${player.id}`] });
+          }
+        }
+      }
+      if (state.phase === 'voting') cast(state, [1, 0]);
+      stepTick(state);
+    }
+    expect(state.phase).toBe('matchOver');
+  }
+
+  it('keeps every meme of every round, with its author and score', () => {
+    const state = makeState(3, { rounds: 2 });
+    playOut(state);
+
+    // Three players, two rounds, one meme each.
+    expect(state.gallery).toHaveLength(6);
+    expect(state.gallery.map((entry) => entry.round)).toEqual([1, 1, 1, 2, 2, 2]);
+    for (const entry of state.gallery) {
+      expect(entry.templateId).not.toBe('');
+      expect(entry.authorSeat).toBeGreaterThanOrEqual(0);
+      expect(entry.texts.some((text) => text.startsWith(`r${entry.round}-`))).toBe(true);
+    }
+    // `top` is settled by `awardTopMemes`, which runs before the archive.
+    expect(state.gallery.some((entry) => entry.top === 1)).toBe(true);
+  });
+
+  /**
+   * The whole reason the gallery is not in every snapshot: it would be
+   * re-encoded and re-broadcast thirty times a second to say something nobody
+   * can look at until the match is over.
+   */
+  it('rides in the snapshot only once the match is over', () => {
+    const state = makeState(3, { rounds: 1 });
+    intoWriting(state);
+    expect(makeSnapshot(state).gallery).toBeNull();
+
+    submitAll(state);
+    expect(makeSnapshot(state).gallery).toBeNull();
+
+    playOut(state);
+    const final = makeSnapshot(state);
+    expect(final.gallery).toHaveLength(3);
+    expect(final.gallery).toEqual(state.gallery);
+  });
+
+  it('is a copy, so recycling the entries for the next round cannot edit it', () => {
+    const state = makeState(3, { rounds: 2 });
+    playOut(state);
+
+    const roundOne = state.gallery.filter((entry) => entry.round === 1);
+    expect(roundOne).toHaveLength(3);
+    // `dealRound` empties `entries` between rounds; the archive must not have
+    // been holding references into it.
+    for (const entry of roundOne) expect(entry.texts[0]).toMatch(/^r1-/);
+  });
+});
+
 describe('Meme Machine skip template', () => {
-  it('defaults skipsRemaining to 2 per player in caption phase and allows up to 2 skips', () => {
+  it('deals a fresh template for each of the round’s skips, then stops', () => {
     const state = makeState(3);
     intoWriting(state);
 
     const player = state.players[0]!;
-    expect(player.skipsRemaining).toBe(2);
-    expect(privateFor(state, player.id)?.skipsRemaining).toBe(2);
+    expect(player.skipsRemaining).toBe(SKIPS_PER_ROUND);
+    expect(privateFor(state, player.id)?.skipsRemaining).toBe(SKIPS_PER_ROUND);
 
-    const firstTemplateId = player.templateId;
+    // Every skip must spend one and land on a template not seen before, or the
+    // budget buys nothing.
+    const seen = new Set([player.templateId]);
+    for (let spent = 1; spent <= SKIPS_PER_ROUND; spent += 1) {
+      applyInput(state, player.id, { k: 'skipMeme' });
+      expect(player.skipsRemaining).toBe(SKIPS_PER_ROUND - spent);
+      expect(privateFor(state, player.id)?.skipsRemaining).toBe(SKIPS_PER_ROUND - spent);
+      expect(seen.has(player.templateId)).toBe(false);
+      seen.add(player.templateId);
+    }
 
-    // First skip
-    applyInput(state, player.id, { k: 'skipMeme' });
-    expect(player.skipsRemaining).toBe(1);
-    expect(privateFor(state, player.id)?.skipsRemaining).toBe(1);
-    const secondTemplateId = player.templateId;
-    expect(secondTemplateId).not.toBe(firstTemplateId);
-
-    // Second skip
-    applyInput(state, player.id, { k: 'skipMeme' });
-    expect(player.skipsRemaining).toBe(0);
-    expect(privateFor(state, player.id)?.skipsRemaining).toBe(0);
-    const thirdTemplateId = player.templateId;
-    expect(thirdTemplateId).not.toBe(secondTemplateId);
-
-    // Third skip attempt - should be ignored as 2 skips max limit is reached
+    const exhausted = player.templateId;
     applyInput(state, player.id, { k: 'skipMeme' });
     expect(player.skipsRemaining).toBe(0);
-    expect(player.templateId).toBe(thirdTemplateId);
+    expect(player.templateId).toBe(exhausted);
+  });
+
+  it('refills the skip budget every round', () => {
+    const state = makeState(3, { rounds: 2 });
+    intoWriting(state);
+
+    for (let i = 0; i < SKIPS_PER_ROUND; i += 1) {
+      applyInput(state, state.players[0]!.id, { k: 'skipMeme' });
+    }
+    expect(state.players[0]!.skipsRemaining).toBe(0);
+
+    // Play the round out. Voting is the only phase that waits on anybody.
+    submitAll(state);
+    for (let guard = 0; guard < 60 * 300; guard += 1) {
+      if (state.round === 2 && state.phase === 'writing') break;
+      if (state.phase === 'voting') cast(state, [1, 1]);
+      stepTick(state);
+    }
+
+    expect(state.round).toBe(2);
+    expect(state.phase).toBe('writing');
+    expect(state.players[0]!.skipsRemaining).toBe(SKIPS_PER_ROUND);
   });
 
   it('ignores skipMeme after player submits or outside writing phase', () => {
@@ -398,7 +480,7 @@ describe('Meme Machine skip template', () => {
     const templateBefore = player.templateId;
     applyInput(state, player.id, { k: 'skipMeme' });
     expect(player.templateId).toBe(templateBefore);
-    expect(player.skipsRemaining).toBe(2);
+    expect(player.skipsRemaining).toBe(SKIPS_PER_ROUND);
   });
 });
 

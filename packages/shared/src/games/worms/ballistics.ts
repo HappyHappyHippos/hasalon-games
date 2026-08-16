@@ -81,7 +81,7 @@ export function stepProjectile(
     const ny = shot.y + sy;
 
     if (armed) {
-      const hit = wormAt(worms, nx, ny, shot.owner, physics.persist === true);
+      const hit = wormAt(worms, nx, ny, shot.owner, false);
       if (hit >= 0) return { kind: 'detonate', x: nx, y: ny, hitWorm: hit };
     }
 
@@ -98,11 +98,6 @@ export function stepProjectile(
   if (shot.fuse > 0) {
     shot.fuse -= 1;
     if (shot.fuse === 0) return { kind: 'detonate', x: shot.x, y: shot.y, hitWorm: -1 };
-  }
-
-  if (physics.detonate === 'proximity' && armed) {
-    const near = wormAt(worms, shot.x, shot.y, -1, true, physics.proximityR ?? 0);
-    if (near >= 0) return { kind: 'detonate', x: shot.x, y: shot.y, hitWorm: near };
   }
 
   if (outOfWorld(shot.x, shot.y, OUT_OF_BOUNDS_X)) return { kind: 'gone' };

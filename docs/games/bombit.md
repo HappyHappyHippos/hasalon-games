@@ -12,6 +12,15 @@ plays differently twice running while its walls, routes and sight lines stay
 exactly as authored. Adding a map is one entry in `BOMBIT_MAPS`, one id in
 `BombitMapId`, and one name in both dictionaries.
 
+**Every board is 23×13, and a new one must be too.** That is 1.769:1 — 16:9 to
+within half a percent, and the closest an odd×odd grid gets. Odd is not
+negotiable: the pillar lattice wants walls on the even coordinates *and* a solid
+border on both, and an even dimension puts two pillars or two open rows together
+at one edge. The grid's shape is the *display* shape — `Renderer.stageFor` sizes
+its `CanvasStage` at `cols * TILE` by `rows * TILE` — so a near-square board
+(they were 15×13 and 15×11) spent most of a sideways phone on letterbox bars and
+cropped the 16:9 stage art hard to cover it. Both fit now.
+
 **`validateMap` is what makes hand-editing a map safe**, and `maps.test.ts` runs
 it over every one. It catches a short row, an unknown glyph, an open edge, a
 region walled off from the spawns, and — the one that actually bites — a spawn
@@ -95,9 +104,11 @@ round into an unloseable next one.
 ## Assets
 
 - `public/stages/bombit/bombit_stage_*.png` — one backdrop per stage, named by
-  the map's `stage` field. Drawn **cover**, not stretched: the art is 16:9 and
-  the boards are nearer square. A darkening wash goes over it so bombs, fire and
-  eight seat colours stay legible on artwork drawn to be looked at.
+  the map's `stage` field. Drawn **cover**, not stretched. The art is 16:9 and
+  the boards now are too, so cover crops almost nothing; keep it on `cover`
+  anyway, since a stage whose art is off-ratio should letterbox its picture
+  rather than the board. A darkening wash goes over it so bombs, fire and eight
+  seat colours stay legible on artwork drawn to be looked at.
 - `public/bombit/wall.png` and `crate.png` — one tile each, drawn at `TILE`
   square.
 - `public/boxart/bombit.png` — the lobby card.

@@ -193,6 +193,87 @@ describe('Room membership', () => {
   });
 });
 
+describe('Room kick', () => {
+  it('tells them why, then takes the seat away', () => {
+    const room = new Room('TEST');
+    const hostClient = fakeClient();
+    const guestClient = fakeClient();
+    room.addPlayer(hostClient, identity('Host', 0));
+    const guest = room.addPlayer(guestClient, identity('Guest', 1))!;
+
+    expect(room.kick(guest.id)).toBe(true);
+    expect(guestClient.sent.at(-1)).toMatchObject({ t: 'error', code: 'KICKED' });
+    expect(room.players.map((p) => p.name)).toEqual(['Host']);
+
+    room.dispose();
+  });
+
+  /**
+   * The notice has to be sent before the removal, not after: `removePlayer`
+   * unhooks the socket from the room, and a message sent afterwards has nowhere
+   * to go. Ordering this the obvious way removes them in silence.
+   */
+  it('sends the notice before it unhooks the socket', () => {
+    const room = new Room('TEST');
+    room.addPlayer(fakeClient(), identity('Host', 0));
+    const guestClient = fakeClient();
+    const guest = room.addPlayer(guestClient, identity('Guest', 1))!;
+
+    room.kick(guest.id);
+    expect(guestClient.sent.some((m) => m.t === 'error' && m.code === 'KICKED')).toBe(true);
+    expect(guestClient.closed).toBe(false);
+
+    room.dispose();
+  });
+
+  it('will not kick the host, or anybody who is not here', () => {
+    const room = new Room('TEST');
+    const host = room.addPlayer(fakeClient(), identity('Host', 0))!;
+    room.addPlayer(fakeClient(), identity('Guest', 1));
+
+    expect(room.kick(host.id)).toBe(false);
+    expect(room.kick('nobody')).toBe(false);
+    expect(room.players).toHaveLength(2);
+
+    room.dispose();
+  });
+
+  /**
+   * The seat is gone from `players`, so the kicked client's own automatic
+   * `resume` finds nothing and fails — which is what stops them reappearing on
+   * their next dropped frame, without needing a ban list to enforce it.
+   */
+  it('leaves nothing for their reconnect to resume into', () => {
+    const room = new Room('TEST');
+    room.addPlayer(fakeClient(), identity('Host', 0));
+    const guestClient = fakeClient();
+    const guest = room.addPlayer(guestClient, identity('Guest', 1))!;
+    const token = guest.token;
+
+    room.kick(guest.id);
+    expect(room.resumePlayer(fakeClient(), guest.id, token)).toBeNull();
+
+    room.dispose();
+  });
+
+  it('hands the host on when the host leaves, and the new host can kick', () => {
+    const room = new Room('TEST');
+    const hostClient = fakeClient();
+    const host = room.addPlayer(hostClient, identity('Host', 0))!;
+    const second = room.addPlayer(fakeClient(), identity('Second', 1))!;
+    const third = room.addPlayer(fakeClient(), identity('Third', 2))!;
+
+    expect(room.hostId).toBe(host.id);
+    room.removePlayer(host.id);
+    expect(room.hostId).toBe(second.id);
+
+    expect(room.kick(second.id)).toBe(false);
+    expect(room.kick(third.id)).toBe(true);
+
+    room.dispose();
+  });
+});
+
 describe('Room match gating', () => {
   it('lets anyone remind unready players, with one room-wide cooldown', () => {
     const room = new Room('TEST');
@@ -995,10 +1076,22 @@ describe('Room series', () => {
 });
 
 describe('Room input handover', () => {
-  /** A started Gun Mayhem match; `p` is seat 0. */
+  /**
+   * A started Gun Mayhem match; `p` is seat 0.
+   *
+   * The level is pinned rather than left on `'random'`. `beginMatch` seeds the
+   * instance from `Math.random()`, so the stage — and with it seat 0's footing —
+   * used to depend on how many draws the process had already made, i.e. on which
+   * tests ran first. These tests hold a run for 900 ms, which carries a worm
+   * ~134 units (300 ms at `RUN_SPEED` plus ~31 of `GROUND_FRICTION`); on the
+   * narrower stages that walked seat 0 off its ledge, and an airborne player
+   * coasts on `AIR_FRICTION` instead of stopping, failing the assertion below.
+   * Green Hills spawns seat 0 on a 410-wide ledge, so the run stays grounded.
+   */
   function match(): { room: Room; client: ReturnType<typeof fakeClient>; p: RoomPlayer } {
     const room = new Room('TEST');
     room.setGame('gunmayhem');
+    room.setSettings({ levelId: 'green' });
     const client = fakeClient();
     const p = room.addPlayer(client, identity('A', 0))!;
     const b = room.addPlayer(fakeClient(), identity('B', 1))!;

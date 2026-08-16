@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { isFaceIndex, isHatIndex } from '@mg/shared';
 import type { ErrorCode, Identity, RoomView } from '@mg/shared';
-import type { MemesPrivate, MemesStageEntry } from '@mg/shared/memes';
+import type { MemesGalleryEntry, MemesPrivate, MemesStageEntry } from '@mg/shared/memes';
 import type { TelephonePrivate, TelephoneSnapshot } from '@mg/shared/telephone';
 import { isLang, type Lang } from './i18n';
 import { DEFAULT_MUSIC_VOLUME } from './music';
@@ -111,6 +111,8 @@ export interface MemesHud {
   entryIndex: number;
   entryCount: number;
   stage: MemesStageEntry | null;
+  /** Every meme of the match. Null until the match is over — see the snapshot type. */
+  gallery: MemesGalleryEntry[] | null;
 }
 export type TelephoneHud = TelephoneSnapshot;
 

@@ -349,9 +349,26 @@ things that cost real debugging time to learn.
 - **Gravity Guy** — [`docs/games/gravity.md`](docs/games/gravity.md)
 - **Skribbl** — [`docs/games/skribbl.md`](docs/games/skribbl.md)
 - **Broken Telephone** — [`docs/games/telephone.md`](docs/games/telephone.md)
-- **Meme Machine** — no notes yet; `packages/shared/src/games/memes/` is
-  conventional, and its one subtlety (captions are private until the reveal)
-  is covered by *Private per-player state* above.
+- **Meme Machine** — no separate notes; `packages/shared/src/games/memes/` is
+  conventional, and its one secrecy subtlety (captions are private until the
+  reveal) is covered by *Private per-player state* above. Two things that are
+  not obvious from the code:
+  - **The catalogue is generated, and re-running the generator replaces it.**
+    `scripts/curate-memes.ps1` (stills) and `curate-gif-memes.ps1` (muted mp4
+    loops) take the top N of a *live* Imgflip ranking, so a re-run legitimately
+    changes which templates are present. `templates.test.ts` therefore asserts
+    floors, not exact counts. The stills script also emits the shared
+    `MemeAsset` interface that `gifTemplateAssets.ts` is typed against — it must
+    keep declaring `format?: 'mp4'`, or every animated template fails to compile
+    the next time it runs.
+  - **`MemesSnapshot.gallery` is null until `matchOver`.** The end-of-match
+    gallery is every meme of the match, archived in `finishRound` (after
+    `awardTopMemes` settles the scores, before `dealRound` empties `entries`).
+    It is attached to exactly one snapshot rather than carried the whole way
+    through, because `Room.broadcastSnapshot` re-encodes and re-sends the
+    snapshot thirty times a second and nobody can look at a gallery mid-match.
+    `MatchClock` broadcasts a final snapshot before stopping, and `sendCatchUp`
+    replays it, so a reconnecting player still gets the whole thing.
 
 ### Client structure
 

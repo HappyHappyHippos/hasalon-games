@@ -4,6 +4,7 @@ import { useStore } from '../../store';
 import { useT } from '../../strings';
 import { MatchEndOverlay, Paused } from '../../ui/MatchOverlays';
 import { Composer } from './Composer';
+import { MemesGallery } from './Gallery';
 import { MemeCard } from './MemeCard';
 import { preloadMemes } from './preload';
 import { ResultCard } from './ResultCard';
@@ -97,6 +98,10 @@ export function MemesScreen({ room, mySeat }: Props): JSX.Element {
         </div>
       </header>}
       {room.phase !== 'matchOver' && <div key={view?.phaseSeq ?? 0} className="memes__phase">{body}</div>}
+      {/* Behind the end overlay, not instead of it: the overlay is the champion
+          card and the rematch button, and this is what everybody actually wants
+          to do next — scroll back through the whole match. */}
+      {room.phase === 'matchOver' && <div className="memes__phase memes__phase--gallery"><MemesGallery room={room} mySeat={mySeat} /></div>}
       <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
       {warning && <p className="sr-only" role="status" aria-live="polite">{warning}</p>}
       {room.paused && room.phase === 'playing' && <Paused room={room} spectating={mySeat < 0} />}

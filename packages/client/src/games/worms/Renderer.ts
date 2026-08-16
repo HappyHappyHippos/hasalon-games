@@ -2,7 +2,7 @@
  * Drawing a game of Worms.
  *
  * Layers, bottom to top: the background plate, the destructible terrain layer,
- * mines, projectiles, worms, the active worm's aiming furniture, and effects.
+ * projectiles, worms, the active worm's aiming furniture, and effects.
  * Everything up to the effects is in world units inside one camera transform;
  * the HUD is React and lives outside this file entirely.
  *
@@ -229,7 +229,6 @@ export class WormsRenderer {
     ctx.translate(-this.camera.x, -this.camera.y);
 
     this.drawStage(ctx, drawn);
-    this.drawMines(ctx, drawn);
     this.drawProjectiles(ctx, drawn, next, alpha);
     this.drawWorms(ctx, drawn, next, alpha, renderTime);
     this.drawTargeting(ctx, drawn);
@@ -351,20 +350,6 @@ export class WormsRenderer {
     // its explosion does rather than a playback delay early.
     const layer = this.terrain.layer(snap.st, snap.tick);
     if (layer) ctx.drawImage(layer, 0, 0, WORLD_W, WORLD_H);
-  }
-
-  private drawMines(ctx: CanvasRenderingContext2D, snap: WormsSnapshot): void {
-    for (const mine of snap.mines) {
-      ctx.fillStyle = INK;
-      ctx.beginPath();
-      ctx.arc(mine.x, mine.y, 6, 0, Math.PI * 2);
-      ctx.fill();
-      // Armed mines blink; an unarmed one is inert and says so by not.
-      ctx.fillStyle = mine.a === 1 && Math.floor(performance.now() / 300) % 2 === 0 ? '#ff5a4d' : '#7a3a33';
-      ctx.beginPath();
-      ctx.arc(mine.x, mine.y - 1, 2.6, 0, Math.PI * 2);
-      ctx.fill();
-    }
   }
 
   private drawProjectiles(
@@ -628,7 +613,6 @@ export class WormsRenderer {
         age: 0,
         tx: snap.tx,
         ty: snap.ty,
-        resting: false,
       };
       const targets = snap.worms.map((target) => ({
         id: target.i,
@@ -719,7 +703,6 @@ export class WormsRenderer {
 /** Map a weapon onto the synth kit's existing voices. */
 function fireSound(weapon: string): string {
   if (weapon === 'shotgun') return 'shotgun';
-  if (weapon === 'bat') return 'knife';
   if (weapon === 'bazooka' || weapon === 'homing' || weapon === 'cluster') return 'rocket';
   return 'pistol';
 }

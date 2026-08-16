@@ -63,6 +63,18 @@
   --chrome-top: 21px;
   --chrome-gutter: 184px;
 
+  /* How much of the screen the on-screen keyboard is currently covering.
+   *
+   * Written by `ui/mobileViewport.ts:enableKeyboardInsetTracking` and 0 whenever
+   * there is no keyboard up, which is every desktop and most of every session.
+   * Anything that can end up underneath one adds it to its bottom padding; at
+   * 0px that costs nothing, so it never needs a media query around it.
+   *
+   * It has to exist because we ask Chromium for `overlaysContent` (see that
+   * file): the keyboard is then drawn *over* a layout that still thinks it is
+   * full height, and moving out of the way is the app's job. */
+  --keyboard-inset: 0px;
+
   --screen-bezel: var(--ink);
   --screen-bg: #12141c;
 }

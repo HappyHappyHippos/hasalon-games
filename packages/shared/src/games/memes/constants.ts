@@ -24,6 +24,19 @@ export const MAX_VOTE_SECONDS = 45;
 export const MIN_ROUNDS = 1;
 export const MAX_ROUNDS = 8;
 
+/**
+ * Re-deals a player's template during the writing phase. Refilled every round.
+ *
+ * Four rather than two, because the skip is what stops a round being decided by
+ * the deal: a template you have no joke for is a round you sit out, and with two
+ * you could still be looking at your third blank one. Each skip costs writing
+ * time, which is the real limit on using them — the count only stops somebody
+ * cycling the whole deck while everyone waits. Every skip draws from the
+ * unused pool, so a full room at four apiece needs 8 × 5 = 40 templates in the
+ * worst case; `templates.test.ts` holds the catalogue well above that.
+ */
+export const SKIPS_PER_ROUND = 4;
+
 export const MAX_CAPTION_CHARS = 60;
 export const MAX_CAPTION_BOXES = 4;
 /** Small enough for a short label, large enough to remain usable on a phone. */

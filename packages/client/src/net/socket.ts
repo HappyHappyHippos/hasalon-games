@@ -295,11 +295,28 @@ class GameSocket {
 
   leave(): void {
     this.send({ t: 'leave' });
+    this.tearDownRoom();
+  }
+
+  /** Host only — remove another player. Ignored by the server for anyone else. */
+  kick(playerId: string): void {
+    this.send({ t: 'kick', playerId });
+  }
+
+  /**
+   * Let go of everything that belonged to the room we were in, whether we left
+   * or were removed.
+   *
+   * Two of these are load-bearing rather than tidy. `voice.stop()`: the mesh is
+   * per-room, and leaving one up holds a live microphone open to people you are
+   * no longer in a room with. `setHashCode(null)`: the join effect in `App.tsx`
+   * reads the hash on mount, so a kicked tab that keeps `#/room/CODE` walks
+   * straight back in on the next reload.
+   */
+  private tearDownRoom(): void {
     saveSession(null);
     feed.reset();
     resetInk();
-    // The mesh is per-room; leaving one without tearing it down leaves a live
-    // microphone open to people you are no longer in a room with.
     voice.stop();
     useStore.getState().reset();
     setHashCode(null);
@@ -428,6 +445,13 @@ class GameSocket {
           feed.reset();
           store.reset();
           setHashCode(null);
+          return;
+        }
+        if (message.code === 'KICKED') {
+          // Exactly as if they had left, and then say why. The order matters:
+          // the teardown resets the store, which would wipe the toast.
+          this.tearDownRoom();
+          useStore.getState().setError('KICKED');
           return;
         }
         // `message.message` is the server's English; it stays in the logs where
@@ -652,6 +676,7 @@ class GameSocket {
           entryIndex: snap.entryIndex,
           entryCount: snap.entryCount,
           stage: snap.stage,
+          gallery: snap.gallery,
         };
         break;
       case 'telephone':

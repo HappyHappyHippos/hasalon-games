@@ -10,11 +10,8 @@ const KNOWN_WEAPONS = [
   'bazooka',
   'grenade',
   'shotgun',
-  'bat',
   'cluster',
-  'dynamite',
   'homing',
-  'mine',
   'airstrike',
   'teleport',
 ];

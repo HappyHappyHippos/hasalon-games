@@ -62,6 +62,15 @@ export type ClientMessage =
   /** Host only — abandon the running roulette leg without scoring it. */
   | { t: 'seriesNext' }
   | { t: 'leave' }
+  /**
+   * Host only — throw somebody out.
+   *
+   * The room remembers the id so their client's automatic `resume` cannot walk
+   * straight back in. It is not an account ban and cannot be: there are no
+   * accounts, so anyone still holding the code can `join` again as a new player.
+   * See `Room.kick`.
+   */
+  | { t: 'kick'; playerId: string }
   /** Game-specific payload; the game module validates it. */
   | { t: 'input'; i: unknown }
   /**
@@ -95,6 +104,8 @@ export type ErrorCode =
   | 'NOT_ENOUGH_PLAYERS'
   | 'RESUME_FAILED'
   | 'RATE_LIMITED'
+  /** The host removed you. Sent to the kicked client just before it is dropped. */
+  | 'KICKED'
   /** Nothing drawable: an empty hat, or no game in it fits this many players. */
   | 'SERIES_UNAVAILABLE'
   /**

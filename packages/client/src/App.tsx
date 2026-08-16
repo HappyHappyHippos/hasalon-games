@@ -16,7 +16,11 @@ import { PauseButton } from './ui/PauseButton';
 import { MicButton } from './ui/VoiceBar';
 import { Toast } from './ui/Toast';
 import { useVoiceMesh } from './ui/useVoice';
-import { enableKeyboardOverlay, enableVisibleViewportSizing } from './ui/mobileViewport';
+import {
+  enableKeyboardInsetTracking,
+  enableKeyboardOverlay,
+  enableVisibleViewportSizing,
+} from './ui/mobileViewport';
 
 export function App(): JSX.Element {
   const room = useStore((s) => s.room);
@@ -30,6 +34,10 @@ export function App(): JSX.Element {
 
   useEffect(() => enableKeyboardOverlay(), []);
   useEffect(() => enableVisibleViewportSizing(), []);
+  // Must come after the overlay call: with the keyboard overlaying content,
+  // nothing reflows on its own and `--keyboard-inset` is what everything that
+  // could end up underneath it reads to get out of the way.
+  useEffect(() => enableKeyboardInsetTracking(), []);
 
   // The document element, not a wrapper div: `dir` has to be on an ancestor of
   // everything, and that includes the portal-free overlays and the browser's own
