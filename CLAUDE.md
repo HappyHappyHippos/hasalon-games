@@ -216,6 +216,27 @@ And the ones no compiler catches, which is why they are worth writing down:
   `normalizeConfig`, junk input neither throwing nor escaping. A new game is
   covered the moment it is added to `GAMES`, with nothing to remember here.
 
+### Usage logging
+
+Who uses the site, when, how, and what breaks — see
+[`docs/analytics.md`](docs/analytics.md) for the field reference and the
+dashboard at `/admin`. Three things about it are worth knowing before touching
+anything nearby:
+
+- **The server is the only writer.** It already sees joins, picks, matches and
+  errors, so the client reports only what the server cannot observe: device
+  shape (`hello`), uncaught browser errors, round-trip time, and three taps that
+  send no other message. Before adding a client event, check whether the server
+  already knows — it usually does, and two writers of one fact is how a log
+  starts contradicting itself.
+- **Adding a game needs nothing here.** Events carry the `GameId` as a string
+  and the dashboard groups by whatever it finds, so a new game appears in the
+  games table the first time somebody plays it. This is the one list in this
+  file that a new game is *not* on.
+- **`analytics` is a singleton**, like `serverNow`, and `Client.sendError`
+  records every error the server sends. Recording never throws and never blocks
+  — a logging bug must not be able to stall a tick loop.
+
 ### Private per-player state
 
 `Room.broadcastSnapshot` builds the snapshot **once**, encodes it **once**, and

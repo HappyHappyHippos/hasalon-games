@@ -7,6 +7,7 @@ import {
   useToggleFullscreen,
 } from './useFullscreen';
 import { MaximizeIcon, MinimizeIcon } from './Icons';
+import { trackUi } from '../analytics';
 
 /**
  * The maximize button.
@@ -39,7 +40,16 @@ export function FullscreenButton(): JSX.Element | null {
       <button
         type="button"
         className="fullscreenbtn"
-        onClick={() => (needsInstall ? setHint((on) => !on) : toggleFullscreen())}
+        onClick={() => {
+          if (needsInstall) {
+            setHint((on) => !on);
+            return;
+          }
+          // Entering only. Leaving fullscreen is not evidence the button was
+          // found — you cannot get here without having found it already.
+          if (!fullscreen) trackUi('fullscreen');
+          toggleFullscreen();
+        }}
         aria-label={fullscreen ? t.exitFullscreen : t.enterFullscreen}
         title={fullscreen ? t.exitFullscreen : t.enterFullscreen}
       >

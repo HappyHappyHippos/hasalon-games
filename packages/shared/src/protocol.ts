@@ -2,7 +2,7 @@ import type { GameConfig, GameId, GameSnapshot } from './gameModule';
 import type { RoomView } from './roomTypes';
 
 /** Bump when the message shapes change so stale tabs fail loudly, not weirdly. */
-export const PROTOCOL_VERSION = 26;
+export const PROTOCOL_VERSION = 27;
 
 export const WS_PATH = '/ws';
 
@@ -19,6 +19,21 @@ export interface Identity {
 }
 
 export type ClientMessage =
+  /**
+   * What kind of browser this is, sent once as the opening frame.
+   *
+   * Deliberately not folded into `create`/`join`: most sockets never do either
+   * — somebody opens the site, looks at the game list and closes the tab — and
+   * that visit is exactly the one we would otherwise never see. Carries no room
+   * and no name, because the server learns those itself. See `ClientHello`.
+   */
+  | { t: 'hello'; hello: unknown }
+  /**
+   * The three things only the browser can know: an uncaught error, how the
+   * connection actually behaved, and the taps that reach no other message.
+   * Validated by `parseClientReport` — see `ClientReport`.
+   */
+  | { t: 'log'; log: unknown }
   | { t: 'create'; v: number; identity: Identity }
   | { t: 'join'; v: number; code: string; identity: Identity }
   /** Reclaim an existing seat after a reload or a dropped connection. */

@@ -47,6 +47,7 @@ import { clock } from './clock';
 import { voice } from './voice';
 import { delayed, readNetSim } from './netsim';
 import { sfx } from '../audio';
+import { helloPayload, setReportSender, trackNet } from '../analytics';
 import {
   loadSession,
   saveSession,
@@ -96,6 +97,14 @@ class GameSocket {
   private lastCountdown = 0;
   /** Voice flags may only be re-announced after this socket is accepted into a room. */
   private membershipConfirmed = false;
+  /**
+   * Round-trip samples for the match in progress, reported once when it ends.
+   *
+   * Collected off the HUD mirror, which already runs a few times a second, so
+   * this measures the connection without adding a single measurement of its own.
+   * Bounded because a long Skribbl evening would otherwise grow it without limit.
+   */
+  private rttSamples: number[] = [];
 
   connect(): void {
     if (
@@ -124,6 +133,11 @@ class GameSocket {
     ws.onopen = () => {
       this.reconnectAttempts = 0;
       useStore.getState().setStatus('open');
+
+      // First frame on the wire, before the resume. It carries no room and no
+      // name — the server learns those from what follows — so it does not have
+      // to wait for either, and a visit that never becomes a join is still seen.
+      this.raw({ t: 'hello', hello: helloPayload() });
 
       // Reclaim our seat before anything queued, so the server knows who we are.
       const session = loadSession();
@@ -345,6 +359,14 @@ class GameSocket {
     this.raw({ t: 'rtc', to, data });
   }
 
+  /**
+   * A usage report. Queued rather than dropped when the socket is down, because
+   * the most valuable one — a crash — often happens on the way to a disconnect.
+   */
+  sendLog(log: unknown): void {
+    this.send({ t: 'log', log });
+  }
+
   setVoice(on: boolean): void {
     this.send({ t: 'voice', on });
   }
@@ -406,6 +428,7 @@ class GameSocket {
         else store.onMatchStarted(message.room);
         store.setHud({ phase: 'countdown', round: 0, countdown: 0, players: [] });
         this.confirmMembership(store.playerId);
+        this.rttSamples = [];
         return;
 
       case 'snapshot':
@@ -420,6 +443,11 @@ class GameSocket {
       case 'matchEnded':
         store.onMatchEnded(message.room, message.winnerSeat);
         if (!message.skipped) sfx.win();
+        // How the match this player just finished actually felt on their link.
+        // The server cannot measure this — round trip is a client-side number —
+        // and "it was laggy" is unfalsifiable without it.
+        trackNet(this.rttSamples, feed.delayMs);
+        this.rttSamples = [];
         return;
 
       case 'pong':
@@ -540,11 +568,16 @@ class GameSocket {
     // slowly and are displayed as whole milliseconds; pushing them at the
     // snapshot rate would re-render the tree 30 times a second to show the
     // same number.
+    const rtt = Math.round(feed.rttMs);
     useStore.getState().setNet({
-      rtt: Math.round(feed.rttMs),
+      rtt,
       jitter: Math.round(feed.jitterMs),
       delay: Math.round(feed.delayMs),
     });
+
+    // Piggy-backing on the mirror's own throttle: a few samples a second is
+    // plenty to characterise a match, and the cap keeps a long one bounded.
+    if (this.rttSamples.length < 600) this.rttSamples.push(rtt);
 
     const countdown =
       snap.phase === 'countdown' ? Math.ceil(snap.phaseTicks / TICK_RATE) : 0;
@@ -698,6 +731,10 @@ export const socket = new GameSocket();
 voice.send = (to, data) => socket.sendRtc(to, data);
 voice.announce = (on) => socket.setVoice(on);
 voice.announceListening = (on) => socket.setListening(on);
+
+// Same reason, same direction: `analytics` must not import the socket, or the
+// two form a cycle.
+setReportSender((report) => socket.sendLog(report));
 
 // ---------------------------------------------------------------------------
 // Shareable #/room/CODE links
