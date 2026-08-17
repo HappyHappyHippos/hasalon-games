@@ -79,6 +79,10 @@ export function LobbyScreen(): JSX.Element {
   // Hidden until somebody's actually played something — an all-zero column
   // before the room's first match is noise, not standings.
   const showTotals = room.players.some((p) => p.totalScore > 0);
+  // Whoever is winning the room gets the trophy filled in. One number with no
+  // label read as a mystery; a number with a unit and a leader reads as a
+  // scoreboard, which is what it has been all along.
+  const topScore = Math.max(0, ...room.players.map((p) => p.totalScore));
 
   const copyLink = async (): Promise<void> => {
     const link = `${location.origin}${location.pathname}#/room/${room.code}`;
@@ -176,8 +180,14 @@ export function LobbyScreen(): JSX.Element {
                   </div>
                   <div className="person__badges">
                     {showTotals && (
-                      <span className="person__total" title={t.totalScoreTitle}>
-                        {t.totalScoreLabel(Math.round(player.totalScore))}
+                      <span
+                        className={`person__total${player.totalScore >= topScore ? ' person__total--leader' : ''}`}
+                        title={player.totalScore >= topScore ? t.totalScoreLeader : t.totalScoreTitle}
+                        aria-label={t.totalScoreLabel(Math.round(player.totalScore))}
+                      >
+                        <span aria-hidden="true" className="person__total-mark">🏆</span>
+                        <b dir="ltr">{Math.round(player.totalScore)}</b>
+                        <small>{t.totalScoreUnit}</small>
                       </span>
                     )}
                     <span

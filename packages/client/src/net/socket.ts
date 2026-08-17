@@ -741,8 +741,8 @@ setReportSender((report) => socket.sendLog(report));
 // ---------------------------------------------------------------------------
 
 export function readHashCode(): string | null {
-  const match = /^#\/room\/([A-Za-z0-9]{4})$/.exec(location.hash);
-  return match ? match[1]!.toUpperCase() : null;
+  const match = /^#\/room\/(\d{4})$/u.exec(location.hash);
+  return match ? match[1]! : null;
 }
 
 export function setHashCode(code: string | null): void {

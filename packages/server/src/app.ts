@@ -344,7 +344,7 @@ export function createApp(options: AppOptions): App {
           client.sendError('ALREADY_STARTED', 'The match has already started.');
           return;
         }
-        if (!room.start()) {
+        if (!room.start(player)) {
           const needed = room.module.meta.minPlayers;
           client.sendError(
             'NOT_ENOUGH_PLAYERS',
@@ -369,7 +369,7 @@ export function createApp(options: AppOptions): App {
           client.sendError('ALREADY_STARTED', 'The match has already started.');
           return;
         }
-        if (!room.startSeries()) {
+        if (!room.startSeries(player)) {
           // Two different failures, and telling them apart is the whole point:
           // "nothing fits" wants more games ticked, "these don't fit" wants
           // one un-ticked or more people in the room.

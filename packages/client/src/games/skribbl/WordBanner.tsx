@@ -9,7 +9,18 @@ interface Props {
   word?: string;
   /** Every letter is showing because the round is over. */
   revealed?: boolean;
+  /**
+   * Raise the keyboard, for a guesser. The blanks are the most obvious "I want
+   * to type" target on the screen and were the one thing on it that did
+   * nothing, which on a phone reads as the guess box being broken. Left
+   * undefined for the drawer and for anyone who has already got it, so the
+   * banner does not offer a box that would refuse them.
+   */
+  onActivate?: () => void;
 }
+
+/** A space in the word, held open. A plain space would collapse between spans. */
+const NBSP = ' ';
 
 /**
  * The word, as blanks that fill in.
@@ -25,7 +36,7 @@ interface Props {
  * right, and the established convention here is an explicit `dir` on content
  * whose direction is its own.
  */
-export function WordBanner({ masked, dir, word, revealed = false }: Props): JSX.Element {
+export function WordBanner({ masked, dir, word, revealed = false, onActivate }: Props): JSX.Element {
   const shown = word ?? masked;
   const previous = useRef(shown);
   const [fresh, setFresh] = useState<Set<number>>(new Set());
@@ -48,28 +59,42 @@ export function WordBanner({ masked, dir, word, revealed = false }: Props): JSX.
     return () => window.clearTimeout(timer);
   }, [shown]);
 
-  return (
-    <div
-      className={`sticker wordbanner${revealed ? ' wordbanner--revealed' : ''}`}
-      dir={dir}
-      // Read as a whole rather than letter by letter, which is what a screen
-      // reader would otherwise do with one span per character.
-      aria-label={shown.replace(/_/g, '?')}
+  const letters = [...shown].map((ch, i) => (
+    <span
+      key={i}
+      className={
+        'wordbanner__slot' +
+        (ch === '_' ? ' wordbanner__slot--blank' : '') +
+        (ch === ' ' ? ' wordbanner__slot--space' : '') +
+        (fresh.has(i) ? ' wordbanner__slot--fresh' : '')
+      }
+      aria-hidden="true"
     >
-      {[...shown].map((ch, i) => (
-        <span
-          key={i}
-          className={
-            'wordbanner__slot' +
-            (ch === '_' ? ' wordbanner__slot--blank' : '') +
-            (ch === ' ' ? ' wordbanner__slot--space' : '') +
-            (fresh.has(i) ? ' wordbanner__slot--fresh' : '')
-          }
-          aria-hidden="true"
-        >
-          {ch === ' ' ? ' ' : ch}
-        </span>
-      ))}
+      {ch === ' ' ? NBSP : ch}
+    </span>
+  ));
+
+  const className = `sticker wordbanner${revealed ? ' wordbanner--revealed' : ''}${
+    onActivate ? ' wordbanner--tappable' : ''
+  }`;
+  // Read as a whole rather than letter by letter, which is what a screen reader
+  // would otherwise do with one span per character.
+  const label = shown.replace(/_/g, '?');
+
+  // A real button when it does something: reachable by keyboard, announced as
+  // pressable, and — the part that matters on a phone — the focus call runs
+  // inside the tap, which is the only way a mobile browser raises the keyboard.
+  if (onActivate) {
+    return (
+      <button type="button" className={className} dir={dir} aria-label={label} onClick={onActivate}>
+        {letters}
+      </button>
+    );
+  }
+
+  return (
+    <div className={className} dir={dir} aria-label={label}>
+      {letters}
     </div>
   );
 }

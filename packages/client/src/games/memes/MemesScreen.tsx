@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties, type JSX } from 'react
 import { TICK_RATE, type RoomView } from '@mg/shared';
 import { useStore } from '../../store';
 import { useT } from '../../strings';
+import { Button } from '../../ui/Button';
 import { MatchEndOverlay, Paused } from '../../ui/MatchOverlays';
 import { Composer } from './Composer';
 import { MemesGallery } from './Gallery';
@@ -67,6 +68,14 @@ export function MemesScreen({ room, mySeat }: Props): JSX.Element {
     : '';
   if (warning) warnedRef.current = phase;
 
+  // The gallery is drawn behind the champion card and used to be unreachable
+  // under it, which made "look at everything we made" — the best part of the
+  // match — a thing the game did and then hid. The card steps aside instead.
+  const [browsing, setBrowsing] = useState(false);
+  const over = room.phase === 'matchOver';
+  const hasGallery = (view?.gallery?.length ?? 0) > 0;
+  useEffect(() => { if (!over) setBrowsing(false); }, [over]);
+
   const stageLabel = stage ? t.memesReveal((view?.entryIndex ?? 0) + 1, view?.entryCount ?? 0) : '';
   const author = stage?.authorSeat === undefined ? undefined : room.players.find((player) => player.seat === stage.authorSeat);
   const announcement = phase === 'result' && author && stage
@@ -97,15 +106,28 @@ export function MemesScreen({ room, mySeat }: Props): JSX.Element {
           <strong>{t.memesRound(round || 1, view?.rounds ?? 1)}</strong>
         </div>
       </header>}
-      {room.phase !== 'matchOver' && <div key={view?.phaseSeq ?? 0} className="memes__phase">{body}</div>}
+      {!over && <div key={view?.phaseSeq ?? 0} className="memes__phase">{body}</div>}
       {/* Behind the end overlay, not instead of it: the overlay is the champion
           card and the rematch button, and this is what everybody actually wants
           to do next — scroll back through the whole match. */}
-      {room.phase === 'matchOver' && <div className="memes__phase memes__phase--gallery"><MemesGallery room={room} mySeat={mySeat} /></div>}
+      {over && <div className="memes__phase memes__phase--gallery"><MemesGallery room={room} mySeat={mySeat} /></div>}
       <p className="sr-only" role="status" aria-live="polite">{announcement}</p>
       {warning && <p className="sr-only" role="status" aria-live="polite">{warning}</p>}
       {room.paused && room.phase === 'playing' && <Paused room={room} spectating={mySeat < 0} />}
-      {room.phase === 'matchOver' && <MatchEndOverlay room={room} mySeat={mySeat} winnerSeat={winnerSeat} isHost={room.players.find((player) => player.id === playerId)?.isHost ?? false} />}
+      {over && !browsing && (
+        <MatchEndOverlay
+          room={room}
+          mySeat={mySeat}
+          winnerSeat={winnerSeat}
+          isHost={room.players.find((player) => player.id === playerId)?.isHost ?? false}
+          extra={hasGallery ? <Button variant="ghost" full onClick={() => setBrowsing(true)}>{t.memesBrowseGallery}</Button> : undefined}
+        />
+      )}
+      {over && browsing && (
+        <button type="button" className="memes__back" onClick={() => setBrowsing(false)}>
+          {t.memesBackToResults}
+        </button>
+      )}
     </main>
   );
 }

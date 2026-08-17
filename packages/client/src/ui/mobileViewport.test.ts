@@ -83,8 +83,9 @@ describe('enableKeyboardInsetTracking', () => {
   }
 
   it('reads the Chromium keyboard geometry, which resizes nothing', () => {
-    // `overlaysContent` means the viewport keeps its full height, so the only
-    // thing that knows a keyboard is up is `boundingRect`.
+    // `overlaysContent` means the viewport keeps its full height — the shell
+    // still runs to the bottom of the screen — so the whole keyboard is
+    // covering it and `boundingRect` is the only thing that knows how tall.
     const { values, keyboard } = setup({ keyboard: { boundingRect: { height: 320 } } });
 
     const cleanup = enableKeyboardInsetTracking();
@@ -98,7 +99,14 @@ describe('enableKeyboardInsetTracking', () => {
     expect(values.has('--keyboard-inset')).toBe(false);
   });
 
-  it('falls back to the shrunken visual viewport on Safari, which has no API', () => {
+  /**
+   * The regression that made typing on an iPhone miserable. Safari shrinks the
+   * visual viewport, `.app` is sized from that viewport, so the shell has
+   * *already* moved above the keyboard. Reporting the keyboard's height here
+   * made every composer reserve a second keyboard's worth of padding inside an
+   * already-correct shell and pushed the field being typed into off the top.
+   */
+  it('reports nothing when the viewport shrank, because the shell already moved', () => {
     const { values, visualViewport } = setup({ innerHeight: 900, viewportHeight: 900 });
 
     enableKeyboardInsetTracking();
@@ -106,17 +114,32 @@ describe('enableKeyboardInsetTracking', () => {
 
     visualViewport.height = 560;
     visualViewport.dispatchEvent(new Event('resize'));
-    expect(values.get('--keyboard-inset')).toBe('340px');
+    expect(values.get('--keyboard-inset')).toBe('0px');
   });
 
-  it('counts a viewport that was pushed down rather than only shortened', () => {
+  it('ignores a viewport pushed down rather than shortened, for the same reason', () => {
     const { values, visualViewport } = setup({ innerHeight: 900, viewportHeight: 700 });
     enableKeyboardInsetTracking();
-    expect(values.get('--keyboard-inset')).toBe('200px');
+    expect(values.get('--keyboard-inset')).toBe('0px');
 
     visualViewport.offsetTop = 60;
     visualViewport.dispatchEvent(new Event('scroll'));
-    expect(values.get('--keyboard-inset')).toBe('140px');
+    expect(values.get('--keyboard-inset')).toBe('0px');
+  });
+
+  /**
+   * The mixed case: a browser that shrinks the viewport *and* exposes the
+   * keyboard API. Only the part of the keyboard the shell has not already given
+   * up is covering anything.
+   */
+  it('publishes only the overlap when the shell gave up some of the keyboard', () => {
+    const { values } = setup({
+      innerHeight: 900,
+      viewportHeight: 780,
+      keyboard: { boundingRect: { height: 320 } },
+    });
+    enableKeyboardInsetTracking();
+    expect(values.get('--keyboard-inset')).toBe('200px');
   });
 
   /**
@@ -125,7 +148,7 @@ describe('enableKeyboardInsetTracking', () => {
    * padded for a keyboard that is not there.
    */
   it('ignores an inset too small to be a keyboard', () => {
-    const { values } = setup({ innerHeight: 900, viewportHeight: 852 });
+    const { values } = setup({ innerHeight: 900, keyboard: { boundingRect: { height: 48 } } });
     enableKeyboardInsetTracking();
     expect(values.get('--keyboard-inset')).toBe('0px');
   });

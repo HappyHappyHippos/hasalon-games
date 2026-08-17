@@ -282,8 +282,12 @@ describe('Room match gating', () => {
     const room = new Room('TEST');
     const aClient = fakeClient();
     const bClient = fakeClient();
+    const cClient = fakeClient();
+    // A is the host and therefore already ready, so B and C are the only two
+    // who can be reminded of anything — hence three players for this one.
     const a = room.addPlayer(aClient, identity('A', 0))!;
     const b = room.addPlayer(bClient, identity('B', 1))!;
+    room.addPlayer(cClient, identity('C', 2));
     aClient.sent.length = 0;
     bClient.sent.length = 0;
 
@@ -295,10 +299,44 @@ describe('Room match gating', () => {
     // here would contaminate the real tick-loop tests later in this file.
     (room as unknown as { readyNudgeUntil: number }).readyNudgeUntil = 0;
     expect(room.nudgeReady(b)).toBe(true);
-    room.setReady(a, true);
     room.setReady(b, true);
+    room.setReady(room.players[2]!, true);
     (room as unknown as { readyNudgeUntil: number }).readyNudgeUntil = 0;
     expect(room.nudgeReady(a)).toBe(false);
+    room.dispose();
+  });
+
+  /**
+   * The host does not tick a box next to their own name. They opened the room,
+   * they choose the game, and they are the only one who can start it — the
+   * ready flag was a question they had already answered by being the host, and
+   * a start button that sat disabled waiting for it read as broken.
+   */
+  it('keeps the host ready without them ever pressing it', () => {
+    const room = new Room('TEST');
+    const host = room.addPlayer(fakeClient(), identity('A', 0))!;
+    const guest = room.addPlayer(fakeClient(), identity('B', 1))!;
+
+    expect(host.ready).toBe(true);
+    expect(guest.ready).toBe(false);
+
+    // They can still stand down — and pressing start puts them back in.
+    room.setReady(host, false);
+    room.setReady(guest, true);
+    expect(room.canStart()).toBe(false);
+    expect(room.start(host)).toBe(true);
+    expect(host.ready).toBe(true);
+    room.dispose();
+  });
+
+  it('hands the ready flag to whoever inherits the room', () => {
+    const room = new Room('TEST');
+    const host = room.addPlayer(fakeClient(), identity('A', 0))!;
+    const guest = room.addPlayer(fakeClient(), identity('B', 1))!;
+
+    room.removePlayer(host.id, 'left');
+    expect(room.hostId).toBe(guest.id);
+    expect(guest.ready).toBe(true);
     room.dispose();
   });
 

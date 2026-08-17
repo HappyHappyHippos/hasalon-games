@@ -95,8 +95,15 @@ export const ROUND_OVER_TICKS = 1.5 * TICK_RATE;
 export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 8;
 
-/** Default target score is (playerCount - 1) * this. */
-export const TARGET_SCORE_PER_OPPONENT = 10;
+/**
+ * Default target score is playerCount * this.
+ *
+ * A round pays the survivor one point per player who died before them, so a
+ * clean sweep of a full room is `playerCount - 1` points. Multiplying by the
+ * head count rather than the opponent count keeps the match roughly this many
+ * rounds long whatever the room size, which is the number people actually feel.
+ */
+export const TARGET_SCORE_PER_PLAYER = 8;
 
 // ---------------------------------------------------------------------------
 // Powerups

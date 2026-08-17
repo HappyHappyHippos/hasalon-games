@@ -914,7 +914,10 @@ describe('match', () => {
       (m): m is Extract<ServerMessage, { t: 'room' }> => m.t === 'room' && m.room.phase === 'lobby',
     );
     expect(back.room.players.every((p) => p.score === 0)).toBe(true);
-    expect(back.room.players.every((p) => !p.ready)).toBe(true);
+    // Everybody has to say they are in again — except the host, who is in by
+    // construction and starts the next match with the same button they used to
+    // start this one. See `Room.hostIsAlwaysReady`.
+    expect(back.room.players.filter((p) => p.ready).map((p) => p.isHost)).toEqual([true]);
   }, 30_000);
 });
 

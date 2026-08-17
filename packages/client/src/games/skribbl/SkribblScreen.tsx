@@ -7,6 +7,7 @@ import { sfx } from '../../audio';
 import { InkSurface } from './InkSurface';
 import { attachDrawInput, type DrawInput } from './input';
 import { drainInk, resetInk } from './inkBus';
+import { focusGuessField } from './guessFocus';
 import { shouldApplyInkEcho } from './inkEcho';
 import { Chat } from './Chat';
 import { Scoreboard } from './Scoreboard';
@@ -149,6 +150,7 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
     : guessed
       ? t.skribblAlreadyGot
       : t.skribblWaitToGuess;
+  const canGuess = !isDrawer && !guessed && phase === 'drawing';
 
   return (
     <main className={`skribbl${isDrawer ? ' skribbl--drawing' : ''}`}>
@@ -172,6 +174,9 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
             dir={dir}
             word={isDrawer && phase === 'drawing' ? secret?.word : undefined}
             revealed={phase === 'reveal'}
+            // The blanks are how long the word is, which is the moment you want
+            // to type — so they are also the button that lets you.
+            onActivate={canGuess ? focusGuessField : undefined}
           />
         ) : (
           <p className="sticker skribbl__hint">
@@ -240,7 +245,7 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
           )}
         </div>
 
-        <Chat room={room} canGuess={!isDrawer && !guessed && phase === 'drawing'} reason={guessReason} />
+        <Chat room={room} canGuess={canGuess} reason={guessReason} />
       </div>
 
 
