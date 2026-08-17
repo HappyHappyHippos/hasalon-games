@@ -165,13 +165,14 @@ function DrawingComposer({ previous, submitted }: { previous: TelephonePrevious 
     inputRef.current.tool = { color, size, mode };
   }, [color, size, mode]);
 
-  const zoom = (factor: number): void => {
-    const surface = surfaceRef.current;
-    if (!surface) return;
+  const applyView = (next: StageView): void => {
     sfx.click();
-    const next = factor === 0 ? IDENTITY_VIEW : stepZoom(surface.canvasStage.view, factor);
-    surface.setView(next);
+    surfaceRef.current?.setView(next);
     setView(next);
+  };
+  const zoomBy = (factor: number): void => {
+    const surface = surfaceRef.current;
+    if (surface) applyView(stepZoom(surface.canvasStage.view, factor));
   };
 
   if (submitted) return <Waiting />;
@@ -204,13 +205,13 @@ function DrawingComposer({ previous, submitted }: { previous: TelephonePrevious 
         )}
 
         <div className="telephone__zoom" data-draw-ignore="">
-          <button type="button" aria-label={t.telephoneZoomIn} onClick={() => zoom(1.5)}>+</button>
-          <button type="button" aria-label={t.telephoneZoomOut} onClick={() => zoom(1 / 1.5)}>−</button>
+          <button type="button" aria-label={t.telephoneZoomIn} onClick={() => zoomBy(1.5)}>+</button>
+          <button type="button" aria-label={t.telephoneZoomOut} onClick={() => zoomBy(1 / 1.5)}>−</button>
           <button
             type="button"
             className={`telephone__zoom-level${zoomed ? ' telephone__zoom-level--on' : ''}`}
             aria-label={t.telephoneZoomReset}
-            onClick={() => zoom(0)}
+            onClick={() => applyView(IDENTITY_VIEW)}
             disabled={!zoomed}
             dir="ltr"
           >
