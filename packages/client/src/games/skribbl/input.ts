@@ -65,14 +65,16 @@ export interface DrawInput {
    */
   suspended: boolean;
   /**
-   * Stop the stroke in progress, if there is one.
+   * Stop the stroke in progress, if there is one. Returns whether there was.
    *
    * The ops already sent are already on the wire — ink is cumulative and
    * nothing can un-send them — so this ends the stroke cleanly and leaves
    * taking the mark back to the caller, which is the only one that knows
-   * whether it wants an undo.
+   * whether it wants an undo. The return value is what stops that caller from
+   * undoing a stroke it never started: two fingers landing together cancel
+   * nothing, and an undo there would rub out the *previous* stroke.
    */
-  cancelStroke(): void;
+  cancelStroke(): boolean;
 }
 
 export function attachDrawInput(
@@ -166,13 +168,14 @@ export function attachDrawInput(
     cancelStroke();
   };
 
-  function cancelStroke(): void {
-    if (!drawing) return;
+  function cancelStroke(): boolean {
+    if (!drawing) return false;
     drawing = false;
     pointerId = null;
     // Flush immediately: the end of a stroke is exactly when the rest of the
     // room is waiting to see it.
     flush();
+    return true;
   }
 
   surface.addEventListener('pointerdown', onDown);

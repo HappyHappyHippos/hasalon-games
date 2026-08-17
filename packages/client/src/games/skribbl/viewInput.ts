@@ -39,7 +39,7 @@ interface Options {
   onView?: (view: StageView) => void;
   /** Suspended and cancelled while a gesture runs; omitted for a read-only surface. */
   draw?: DrawInput;
-  /** Undo the stroke a pinch started. */
+  /** Undo the stroke a pinch started — called only when there was one. */
   onCancelStroke?: () => void;
 }
 
@@ -78,12 +78,13 @@ export function attachViewInput(
     if (points.size !== 2) return;
 
     // The first finger has been drawing since it landed. Take that back before
-    // treating the pair as a pinch.
+    // treating the pair as a pinch — but only if it really did draw something,
+    // or an undo here would rub out the stroke *before* it.
     if (options.draw) {
-      options.draw.cancelStroke();
+      const drew = options.draw.cancelStroke();
       options.draw.suspended = true;
+      if (drew) options.onCancelStroke?.();
     }
-    options.onCancelStroke?.();
 
     const { x, y, distance } = midpoint();
     gesture = { distance, midX: x, midY: y };
@@ -100,7 +101,7 @@ export function attachViewInput(
 
     // Pan first, in arena units: the midpoint moving is the sheet being
     // dragged, and it moves the opposite way to the view's centre.
-    const scale = ink.canvasStage.scale / (window.devicePixelRatio || 1);
+    const scale = ink.canvasStage.cssScale;
     let next: StageView = {
       zoom: view.zoom,
       panX: view.panX - (x - gesture.midX) / scale,

@@ -86,6 +86,18 @@ export class CanvasStage {
   }
 
   /**
+   * Arena units per **CSS** pixel, for input that works in client coordinates.
+   *
+   * Not `scale`, which is per device pixel, and not `window.devicePixelRatio`
+   * either: `resize` caps the ratio at 2, so on a 3x phone the two disagree and
+   * anything converting a finger's travel into arena units with the raw ratio
+   * moves half again too far.
+   */
+  get cssScale(): number {
+    return this.scale / this.dpr;
+  }
+
+  /**
    * The world rectangle the letterbox is currently revealing, in arena units.
    *
    * At exactly the arena's aspect ratio this is the arena. At any other ratio
