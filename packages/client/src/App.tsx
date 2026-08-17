@@ -20,7 +20,9 @@ import {
   enableKeyboardInsetTracking,
   enableKeyboardOverlay,
   enableVisibleViewportSizing,
+  keepFocusedFieldVisible,
 } from './ui/mobileViewport';
+import { isStandalone } from './ui/useFullscreen';
 
 export function App(): JSX.Element {
   const room = useStore((s) => s.room);
@@ -38,6 +40,9 @@ export function App(): JSX.Element {
   // nothing reflows on its own and `--keyboard-inset` is what everything that
   // could end up underneath it reads to get out of the way.
   useEffect(() => enableKeyboardInsetTracking(), []);
+  // And the other half — reserving space only helps if the field you are typing
+  // into then scrolls into it.
+  useEffect(() => keepFocusedFieldVisible(), []);
 
   // The document element, not a wrapper div: `dir` has to be on an ancestor of
   // everything, and that includes the portal-free overlays and the browser's own
@@ -89,8 +94,14 @@ export function App(): JSX.Element {
   const endIntro = useCallback(() => setSeenNonce(matchNonce), [matchNonce]);
   const showIntro = matchNonce > seenNonce;
 
+  // `FullscreenButton` renders nothing in a standalone app — there is no browser
+  // chrome left to reclaim — which used to leave a 44px hole in the fixed button
+  // row and strand the microphone out on its own. The slot is only ever gained
+  // or lost by installing to the home screen, i.e. never within a session.
+  const noMaximize = isStandalone();
+
   return (
-    <div className={`app${inMatch ? ' app--playing' : ''}`}>
+    <div className={`app${inMatch ? ' app--playing' : ''}${noMaximize ? ' app--nomaximize' : ''}`}>
       <Toast />
       <OptionsMenu />
       <FullscreenButton />

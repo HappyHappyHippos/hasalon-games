@@ -4,6 +4,7 @@ import { MAX_GUESS_LENGTH } from '@mg/shared/skribbl';
 import { socket } from '../../net/socket';
 import { useStore } from '../../store';
 import { useT } from '../../strings';
+import { registerGuessField } from './guessFocus';
 
 import { Button } from '../../ui/Button';
 
@@ -96,6 +97,9 @@ export function Chat({ room, canGuess, reason }: Props): JSX.Element {
       <form className="skribbl__guessbar" onSubmit={submit}>
         <input
           className="input skribbl__guess"
+          // Registered so the word banner can raise the keyboard — tapping the
+          // blanks is the most obvious "I want to type" gesture on the screen.
+          ref={registerGuessField}
           value={draft}
           onChange={(event) => setDraft(event.target.value)}
           placeholder={canGuess ? t.skribblGuessPlaceholder : reason}

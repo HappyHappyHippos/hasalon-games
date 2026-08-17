@@ -103,8 +103,16 @@ export const MAX_DAMAGE = 320;
 // Stocks, respawning, rounds
 // ---------------------------------------------------------------------------
 
-export const DEFAULT_STOCKS = 4;
-export const DEFAULT_TARGET_WINS = 3;
+/**
+ * Three lives, first to two round wins.
+ *
+ * The lobby's opening offer, not a rule — both are steppers in the settings
+ * panel. It is deliberately the shorter end: a first-to-three at four lives is
+ * a long sit for whoever goes out first, and a room that wants more says so in
+ * one tap.
+ */
+export const DEFAULT_STOCKS = 3;
+export const DEFAULT_TARGET_WINS = 2;
 
 export const RESPAWN_TICKS = seconds(1.2);
 export const RESPAWN_INVULN_TICKS = seconds(1.8);

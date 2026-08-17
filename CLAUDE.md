@@ -206,7 +206,15 @@ And the ones no compiler catches, which is why they are worth writing down:
   - `client/game/canvasDraw.ts` — `roundRect` and `shade`. Note Tank Trouble's
     local `darken(hex, factor)` is a *different* function with the opposite sign
     convention; that is why it has a different name.
+  - `client/game/canvasView.ts` — zoom/pan as pure arithmetic (`clampView`,
+    `zoomAbout`, `frameView`), applied by `CanvasStage.begin`. At `zoom: 1` the
+    stage computes exactly the letterbox it always did, so a game that never
+    touches `stage.view` cannot tell it exists.
   - `ui/motion.ts:prefersReducedMotion` gates shake, trails and parallax.
+  - `ui/mobileViewport.ts` — `--keyboard-inset` (how much of the *shell* the
+    soft keyboard covers, which is zero wherever the shell already shrank) and
+    `keepFocusedFieldVisible`. Anything with a text field reads these two;
+    neither needs a media query, and both do nothing on a desktop.
 - `shared/src/games/<id>/rng.ts` — **copy it, do not import another game's.**
   The duplication is the isolation: it is what makes "editing Achtung cannot
   change which template Meme Machine deals" true. Gun Mayhem used to import
@@ -518,5 +526,13 @@ canvas input, dispatch `PointerEvent`s at the element and stub
   `translateX`, the touch controls' physical left/right, and numeric readouts
   that pin `dir="ltr"` in JSX. Content whose direction is its own — a room code,
   a Skribbl word from the other language's list — gets an explicit `dir`.
+  **Never centre a floating element with `inset-inline-start: 50%` and a
+  `translateX(-50%)`**: one is logical and the other physical, so they agree in
+  English and cancel out wrong in Hebrew. `inset-inline: 0` with
+  `margin-inline: auto` centres in both.
+- **Room codes are four digits** (`roomTypes.ts:CODE_ALPHABET`), so the join
+  field can ask for the number pad with `inputMode="numeric"`. Keep `type`
+  as `text` — `number` strips a leading zero and hands back `""` for anything
+  half-typed.
 - The appearance picker is an inline carousel flanking the avatar with chevrons,
   not a grid of labelled buttons.

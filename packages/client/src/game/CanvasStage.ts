@@ -1,3 +1,5 @@
+import { IDENTITY_VIEW, type StageView } from './canvasView';
+
 /**
  * Canvas plumbing shared by every game: device pixel ratio, resizing, and the
  * transform that letterboxes a fixed logical arena into whatever shape the
@@ -12,6 +14,17 @@ export class CanvasStage {
 
   private observer: ResizeObserver | null = null;
   private dpr = 1;
+
+  /**
+   * How far in the stage is looking, and at what.
+   *
+   * The default is the identity view, which is the letterbox every game has
+   * always had — `begin` computes exactly the same numbers at `zoom: 1` as it
+   * did before this existed, so a game that never touches it cannot tell the
+   * difference. Only the drawing board uses it, to zoom in for fine detail and
+   * to crop a finished drawing to the ink in it.
+   */
+  view: StageView = IDENTITY_VIEW;
 
   /** Set by `begin`, so input handlers can map screen points back to the arena. */
   scale = 1;
@@ -59,9 +72,15 @@ export class CanvasStage {
     ctx.fillStyle = letterbox;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    this.scale = Math.min(canvas.width / this.arenaWidth, canvas.height / this.arenaHeight);
-    this.offsetX = (canvas.width - this.arenaWidth * this.scale) / 2;
-    this.offsetY = (canvas.height - this.arenaHeight * this.scale) / 2;
+    const fit = Math.min(canvas.width / this.arenaWidth, canvas.height / this.arenaHeight);
+    this.scale = fit * this.view.zoom;
+    // Put the arena point the view is centred on in the middle of the canvas.
+    // At the identity view that is the arena's own centre, which reduces to the
+    // plain letterbox: `(canvas.width - arenaWidth * scale) / 2`.
+    const centreX = this.arenaWidth / 2 + this.view.panX;
+    const centreY = this.arenaHeight / 2 + this.view.panY;
+    this.offsetX = canvas.width / 2 - centreX * this.scale;
+    this.offsetY = canvas.height / 2 - centreY * this.scale;
 
     ctx.setTransform(this.scale, 0, 0, this.scale, this.offsetX, this.offsetY);
   }

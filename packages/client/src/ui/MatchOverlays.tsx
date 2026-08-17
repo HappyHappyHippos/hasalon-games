@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties, type JSX } from 'react';
+import { useMemo, type CSSProperties, type JSX, type ReactNode } from 'react';
 import { colorFor, type RoomView } from '@mg/shared';
 import { useStore } from '../store';
 import { useT } from '../strings';
@@ -76,11 +76,13 @@ export function MatchOver({
   mySeat,
   winnerSeat,
   isHost,
+  extra,
 }: {
   room: RoomView;
   mySeat: number;
   winnerSeat: number | null;
   isHost: boolean;
+  extra?: ReactNode;
 }): JSX.Element {
   const t = useT();
   const standings = room.players
@@ -140,8 +142,13 @@ export function MatchOver({
               <span className="dot" style={{ background: colorFor(player.colorIndex) }} />
               <span className="standings__name">{player.name}</span>
               <span className="standings__score">{player.score}</span>
-              <span className="standings__total" dir="ltr" title={t.totalScoreTitle}>
-                {t.totalScoreLabel(Math.round(player.totalScore))}
+              <span
+                className="standings__total"
+                dir="ltr"
+                title={t.totalScoreTitle}
+                aria-label={t.totalScoreLabel(Math.round(player.totalScore))}
+              >
+                🏆 {Math.round(player.totalScore)} {t.totalScoreUnit}
               </span>
             </li>
           ))}
@@ -155,6 +162,7 @@ export function MatchOver({
           ) : (
             <p className="muted center">{t.waitingForHost}</p>
           )}
+          {extra}
           <Button variant="ghost" full onClick={() => socket.leave()}>
             {t.leaveRoom}
           </Button>
@@ -173,17 +181,25 @@ export function MatchOver({
  * three places that already watch for `phase === 'matchOver'` (`Screen`, and
  * Skribbl and Memes, which build their own layouts). Those sites stay a
  * one-liner and never learn what a series is.
+ *
+ * `extra` is for the games that leave something worth looking at *underneath*
+ * this card — the meme gallery, the telephone album. Both used to be drawn,
+ * complete, behind a solid overlay with no way to reach them. It goes on the
+ * ordinary card only: a series break is on a clock and its card is the thing
+ * standing between you and the next leg.
  */
 export function MatchEndOverlay({
   room,
   mySeat,
   winnerSeat,
   isHost,
+  extra,
 }: {
   room: RoomView;
   mySeat: number;
   winnerSeat: number | null;
   isHost: boolean;
+  extra?: ReactNode;
 }): JSX.Element {
   const series = room.series;
 
@@ -193,7 +209,9 @@ export function MatchEndOverlay({
   if (series?.phase === 'over') {
     return <SeriesOver room={room} series={series} mySeat={mySeat} isHost={isHost} />;
   }
-  return <MatchOver room={room} mySeat={mySeat} winnerSeat={winnerSeat} isHost={isHost} />;
+  return (
+    <MatchOver room={room} mySeat={mySeat} winnerSeat={winnerSeat} isHost={isHost} extra={extra} />
+  );
 }
 
 /** Reuses the room's own palette rather than inventing party colours from nothing. */

@@ -9,6 +9,8 @@ import {
   OP_TO,
 } from '@mg/shared/skribbl';
 import { CanvasStage } from '../../game/CanvasStage';
+import { IDENTITY_VIEW, frameView, type StageView } from '../../game/canvasView';
+import type { InkRect } from './inkBounds';
 
 /**
  * The drawing, and the canvas it lives on.
@@ -34,6 +36,7 @@ export class InkSurface {
   private ink: CanvasRenderingContext2D;
   private raf = 0;
   private running = false;
+  private framed = false;
 
   /** Where the stroke in progress last was, in canvas units. */
   private penX = 0;
@@ -55,6 +58,29 @@ export class InkSurface {
 
   get canvasStage(): CanvasStage {
     return this.stage;
+  }
+
+  /**
+   * Look at part of the sheet instead of all of it.
+   *
+   * Two callers, wanting the same thing for different reasons: the drawing
+   * board zooms in so a finger can place detail it could not otherwise hit, and
+   * a preview frames the ink so a finished drawing is not mostly white space.
+   * Both are pure view state — nothing here changes what was drawn.
+   */
+  setView(view: StageView): void {
+    this.stage.view = view;
+  }
+
+  /**
+   * Frame a rectangle of the sheet; `null` goes back to the whole thing.
+   *
+   * Framing also drops the sheet border, since the edge being shown is a crop
+   * and not the edge of the paper.
+   */
+  frame(rect: InkRect | null): void {
+    this.framed = rect !== null;
+    this.stage.view = rect ? frameView(rect, CANVAS_WIDTH, CANVAS_HEIGHT) : IDENTITY_VIEW;
   }
 
   start(): void {
@@ -147,8 +173,12 @@ export class InkSurface {
 
     // A hairline border, so the edge of the drawable area is obvious — on a
     // white-on-white surface it is otherwise invisible until you run off it.
+    // Scaled with the view so it stays a hairline when zoomed in, and skipped
+    // entirely for a framed preview, where the visible edge is a crop rather
+    // than the edge of the paper.
+    if (this.framed) return;
     ctx.strokeStyle = 'rgba(20, 17, 15, 0.18)';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2 / this.stage.view.zoom;
     ctx.strokeRect(1, 1, CANVAS_WIDTH - 2, CANVAS_HEIGHT - 2);
   }
 

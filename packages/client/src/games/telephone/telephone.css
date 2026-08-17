@@ -1,3 +1,32 @@
+/*
+ * Broken Telephone.
+ *
+ * Three screens in one game, and they want opposite things, which is why this
+ * file is organised by phase rather than by component:
+ *
+ * - **Writing** is a form. It centres, it is never taller than it needs to be,
+ *   and it has to survive a keyboard covering the bottom half of the phone.
+ * - **Drawing** is the sheet, edge to edge, with every control floating on top
+ *   of it. Nothing is stacked above or below the board — a bar at the top and a
+ *   bar at the bottom is how a phone ends up with a third of its screen to draw
+ *   on.
+ * - **The reveal** is a conversation. It stretches, it scrolls, and it stays on
+ *   the midline in both orientations.
+ *
+ * Two rules that were bugs first, and are load-bearing:
+ *
+ * - **Nothing centres with `place-items: center` in a scroller.** A centred
+ *   track that is shorter than its content overflows in *both* directions and
+ *   the half above the start edge cannot be scrolled to — it is simply clipped.
+ *   Everything here starts at the start edge and centres from the inside, with
+ *   `min-height: 100%` on the child.
+ * - **Landscape pads its two sides equally, to the larger of the two insets.** A
+ *   landscape cutout is on one side only; padding each side by its own inset
+ *   clears the notch and then leans everything centred inside it by half the
+ *   difference. That is why the reveal column read as off-centre in landscape
+ *   and fine in portrait.
+ */
+
 .telephone {
   height: 100%;
   min-height: 0;
@@ -5,13 +34,21 @@
   display: flex;
   flex-direction: column;
   color: var(--ink);
-  background: color-mix(in srgb, var(--violet) 13%, var(--paper));
+  background:
+    radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--violet) 22%, transparent), transparent 55%),
+    radial-gradient(circle at 88% 92%, color-mix(in srgb, var(--teal) 20%, transparent), transparent 52%),
+    color-mix(in srgb, var(--violet) 11%, var(--paper));
 }
 
+/* ---------------------------------------------------------------------------
+   The header: clock and step. Not drawn at all while drawing — see
+   `.telephone__float-clock`.
+   --------------------------------------------------------------------------- */
+
 .telephone__top {
-  min-height: 68px;
+  min-height: 64px;
   flex: none;
-  padding-block: 10px;
+  padding-block: 9px;
   padding-inline-start: max(12px, calc(12px + env(safe-area-inset-left)));
   padding-inline-end: calc(var(--chrome-gutter) + env(safe-area-inset-right));
   display: flex;
@@ -39,25 +76,69 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: var(--font-display);
 }
 
+/* The clock is a dial: the ring drains as the phase runs out, so time left is
+   readable without reading the number. `--progress` comes from the screen. */
 .telephone__clock {
-  width: 48px;
-  height: 48px;
+  position: relative;
+  z-index: 0;
+  width: 46px;
+  height: 46px;
   flex: none;
   display: grid;
   place-items: center;
   border: 3px solid var(--ink);
   border-radius: 50%;
-  background: var(--yellow);
+  background: conic-gradient(var(--yellow) var(--progress, 360deg), var(--paper-2) 0);
   box-shadow: 3px 3px 0 var(--ink);
-  font: 800 1.2rem/1 var(--font-display);
+  font: 800 1.15rem/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
+.telephone__clock::before {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  z-index: -1;
+  border-radius: inherit;
+  background: var(--surface);
 }
 
 .telephone__clock--low {
-  color: #fff;
-  background: var(--red);
+  color: var(--red);
+  background: conic-gradient(var(--red) var(--progress, 360deg), var(--paper-2) 0);
+  animation: telephone-tick 1s steps(1) infinite;
 }
+
+@keyframes telephone-tick {
+  50% { border-color: var(--red); }
+}
+
+/* Drawing gets the whole screen, so the clock comes off the header and floats
+   in the corner the fixed gear/pause/maximize buttons do not use. */
+.telephone__float-clock {
+  position: fixed;
+  z-index: 14;
+  top: calc(var(--chrome-top) + env(safe-area-inset-top));
+  inset-inline-start: calc(10px + env(safe-area-inset-left));
+  pointer-events: none;
+}
+
+[dir='rtl'] .telephone__float-clock {
+  inset-inline-start: calc(10px + env(safe-area-inset-right));
+}
+
+.telephone__float-clock .telephone__clock {
+  width: 40px;
+  height: 40px;
+  font-size: 1rem;
+}
+
+/* ---------------------------------------------------------------------------
+   The phase box
+   --------------------------------------------------------------------------- */
 
 .telephone__phase {
   width: 100%;
@@ -66,54 +147,62 @@
   overflow: auto;
   overscroll-behavior: contain;
   display: grid;
-  place-items: center;
-  padding-top: max(clamp(10px, 2.5vw, 26px), env(safe-area-inset-top));
-  padding-right: max(clamp(10px, 2.5vw, 26px), env(safe-area-inset-right));
+  /*
+   * One row, `1fr`, and that is doing two jobs at once — see the note at the
+   * top of the file about why nothing here uses `place-items: center`.
+   *
+   * `1fr` is `minmax(auto, 1fr)`: the row is the full height of the box when
+   * the content fits, which gives the composer a *definite* height to centre
+   * itself inside; and it grows to the content when it does not, which leaves
+   * the overflow below the start edge where the scroller can reach it. A
+   * content-sized row (`align-content: start` alone) makes the child's
+   * `min-height: 100%` circular and it silently collapses to `auto`, which is
+   * why the write phase sat pinned to the top of the screen.
+   */
+  grid-template-rows: 1fr;
+  justify-items: center;
+  padding-top: max(clamp(10px, 2.5vw, 24px), env(safe-area-inset-top));
+  padding-right: max(clamp(10px, 2.5vw, 24px), env(safe-area-inset-right));
   padding-bottom: calc(
-    max(clamp(10px, 2.5vw, 26px), env(safe-area-inset-bottom)) + var(--keyboard-inset)
+    max(clamp(10px, 2.5vw, 24px), env(safe-area-inset-bottom)) + var(--keyboard-inset)
   );
-  padding-left: max(clamp(10px, 2.5vw, 26px), env(safe-area-inset-left));
+  padding-left: max(clamp(10px, 2.5vw, 24px), env(safe-area-inset-left));
   box-sizing: border-box;
 }
 
-.telephone__phase--draw,
+/* The board is the screen. Only the safe area is kept clear; everything else
+   floats over the sheet.
+   Written with the phase class *and* the game class so it outranks the phone
+   and landscape blocks below, which re-pad `.telephone__phase` at the same
+   specificity and would otherwise win on source order alone — that is how the
+   full-bleed board ended up with an 8px frame around it. */
+.telephone--draw .telephone__phase--draw {
+  overflow: hidden;
+  justify-items: stretch;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+/* The album divides up a fixed height rather than growing — the conversation
+   scrolls inside it. */
 .telephone__phase--reveal {
   overflow: hidden;
 }
 
-/*
- * The reveal stretches; every other phase centres.
- *
- * `.telephone__phase` is a centred grid, which sizes its row to its content —
- * so `.telephone__album`'s `height: 100%` resolved against its own content
- * height rather than the screen's. `.telephone__chat`'s `flex: 1; min-height: 0`
- * then had nothing to shrink against, the chat grew to the full height of the
- * chain, and the phase's `overflow: hidden` simply cut it off: the finished
- * conversation could not be scrolled back through at all, worst in landscape
- * where the least of it fits. Stretching the row gives the album a real height
- * to divide up. `justify-items` stays centred, which is what holds the column
- * on the midline.
- */
-.telephone__phase--reveal {
-  align-items: stretch;
-  justify-items: center;
-}
-
-.telephone__composer,
-.telephone__draw {
-  width: min(100%, 900px);
-  min-height: 0;
-  padding-right: calc(var(--lift-lg) + 2px);
-  padding-bottom: calc(var(--lift-lg) + 2px);
-  box-sizing: border-box;
-}
+/* ---------------------------------------------------------------------------
+   Writing and guessing
+   --------------------------------------------------------------------------- */
 
 .telephone__composer {
+  width: min(100%, 780px);
   min-height: 100%;
+  padding-right: calc(var(--lift-lg) + 2px);
+  padding-bottom: calc(var(--lift-lg) + 2px);
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: clamp(10px, 2vh, 16px);
+  gap: clamp(10px, 2vh, 18px);
+  box-sizing: border-box;
 }
 
 .telephone__composer h1,
@@ -121,6 +210,7 @@
   margin: 0;
   text-align: center;
   font-family: var(--font-display);
+  font-size: clamp(1.25rem, 4.5vw, 2rem);
 }
 
 .telephone__composer textarea {
@@ -133,8 +223,13 @@
   border-radius: var(--radius);
   background: #fffdf7;
   box-shadow: 6px 6px 0 var(--ink);
-  font: 700 clamp(1.15rem, 4vw, 2rem)/1.35 var(--font-display);
+  font: 700 clamp(1.15rem, 4vw, 1.9rem)/1.35 var(--font-display);
   box-sizing: border-box;
+}
+
+.telephone__composer textarea:focus-visible {
+  outline: 3px solid var(--violet);
+  outline-offset: 2px;
 }
 
 .telephone__composer-foot {
@@ -144,104 +239,242 @@
   gap: 16px;
 }
 
+.telephone__count {
+  color: var(--ink-soft);
+  font: 700 0.85rem/1 var(--font-display);
+  font-variant-numeric: tabular-nums;
+}
+
 .telephone__previous-text {
   width: min(100%, 720px);
   margin: 0 auto;
   padding: clamp(12px, 2vh, 18px) clamp(14px, 3vw, 22px);
   text-align: center;
-  font: 800 clamp(1.05rem, 3vw, 1.65rem)/1.3 var(--font-display);
+  font: 800 clamp(1.05rem, 3vw, 1.6rem)/1.3 var(--font-display);
   box-sizing: border-box;
 }
 
-.telephone__previous,
-.telephone__paper {
+/* The drawing you are guessing at. It takes the shape of the ink in it (the
+   canvas carries its own `aspect-ratio`), so a wide doodle gets a wide frame
+   instead of a 4:3 box with white bands. */
+.telephone__previous {
+  width: min(100%, 640px);
+  margin-inline: auto;
+  flex: 0 1 auto;
+  min-height: 0;
   overflow: hidden;
+  display: flex;
   border: 3px solid var(--ink);
+  border-radius: var(--radius-sm);
   background: #fff;
   box-shadow: 6px 6px 0 var(--ink);
-  touch-action: none;
 }
 
-.telephone__previous {
-  width: min(100%, 720px);
-  max-height: min(36dvh, 340px);
-  aspect-ratio: 4 / 3;
+.telephone__previous .telephone__preview-canvas {
+  max-height: min(38dvh, 360px);
+}
+
+.telephone__preview-canvas {
+  display: block;
+  width: 100%;
+  height: auto;
   margin-inline: auto;
-  flex: 1 1 auto;
+  object-fit: contain;
 }
 
-.telephone__preview-canvas,
-.telephone__paper canvas {
+/* ---------------------------------------------------------------------------
+   The drawing board
+   --------------------------------------------------------------------------- */
+
+.telephone__draw {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+}
+
+.telephone__board {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 3px solid var(--ink);
+  border-radius: var(--radius);
+  background: #fffdf7;
+  /* Every pointer on this surface belongs to the drawing: the browser must not
+     scroll, pinch-zoom the page, or start a text selection with it. */
+  touch-action: none;
+  user-select: none;
+}
+
+.telephone__board > canvas {
   display: block;
   width: 100%;
   height: 100%;
 }
 
-.telephone__draw {
-  width: min(100%, 1100px);
-  height: 100%;
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
-  justify-items: stretch;
-  gap: clamp(9px, 1.5vh, 15px);
+/* The prompt, floating over the top of the sheet.
+   Pointer-transparent so a stroke can start underneath it — it is something to
+   read, not something to hit. Its toggle takes pointers back. */
+.telephone__banner {
+  position: absolute;
+  z-index: 2;
+  top: 8px;
+  /* Centred with auto margins rather than `inset-inline-start: 50%` and a
+     `translateX(-50%)`: the inset is logical and the transform is physical, so
+     in Hebrew the two disagreed and put the prompt half off the screen. */
+  inset-inline: 0;
+  width: fit-content;
+  margin-inline: auto;
+  max-width: min(78%, 620px);
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 2px solid var(--ink);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--yellow) 88%, #fff);
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
 }
 
-.telephone__draw > .eyebrow {
+.telephone__banner p {
   margin: 0;
+  max-height: 3.4em;
+  overflow: hidden;
   text-align: center;
+  font: 800 clamp(0.9rem, 3vw, 1.15rem)/1.25 var(--font-display);
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
 }
 
-.telephone__draw .telephone__previous-text {
-  max-height: 16dvh;
-  overflow: auto;
+.telephone__banner-art {
+  width: min(38vw, 180px);
 }
 
-.telephone__draw-stage {
-  width: 100%;
-  min-height: 0;
+.telephone__banner--closed {
+  padding: 3px;
+  border-radius: 999px;
+}
+
+.telephone__banner-toggle {
+  width: 26px;
+  height: 26px;
+  flex: none;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+/* Zoom, floating clear of both the prompt and the dock. */
+.telephone__zoom {
+  position: absolute;
+  z-index: 3;
+  inset-inline-end: 8px;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
-  gap: clamp(9px, 1.5vh, 15px);
+  gap: 6px;
 }
 
-.telephone__draw-controls {
-  width: 100%;
-  flex: none;
+.telephone__zoom button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 2px solid var(--ink);
+  border-radius: 50%;
+  background: rgba(253, 246, 232, 0.92);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink);
+  font: 800 20px/1 var(--font-display);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.telephone__zoom button:active {
+  transform: translate(var(--lift-sm), var(--lift-sm));
+  box-shadow: none;
+}
+
+.telephone__zoom-level {
+  font-size: 12px !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.telephone__zoom-level:disabled {
+  opacity: 0.45;
+  box-shadow: none;
+  cursor: default;
+}
+
+.telephone__zoom-level--on {
+  background: var(--yellow);
+}
+
+/* Tools and the done button, floating along the bottom of the sheet. */
+.telephone__dock {
+  position: absolute;
+  z-index: 4;
+  inset-inline: 8px;
+  bottom: 8px;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  flex-wrap: wrap;
-  gap: clamp(9px, 1.5vh, 15px);
+  gap: 8px;
+  pointer-events: none;
 }
 
-.telephone__paper {
-  width: 100%;
-  max-width: 100%;
-  height: auto;
-  max-height: calc(100% - 70px);
-  aspect-ratio: 4 / 3;
-  flex: none;
-  box-sizing: border-box;
+.telephone__dock > * {
+  pointer-events: auto;
 }
 
-.telephone__draw .skribbl__tools {
+.telephone__dock .skribbl__tools {
   min-width: 0;
-  max-width: 100%;
-  flex: none;
-  padding: 6px 8px;
-  box-sizing: border-box;
+  flex: 0 1 auto;
+  padding: 5px 7px;
+  gap: 7px;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  backdrop-filter: blur(2px);
 }
 
-.telephone__draw-controls > .btn {
-  min-width: 190px;
+.telephone__dock .skribbl__acts {
+  flex-wrap: nowrap;
+  gap: 5px;
 }
+
+.telephone__dock .skribbl__act {
+  min-height: 40px;
+  padding-inline: 9px;
+}
+
+.telephone__done {
+  flex: none;
+  min-height: 46px;
+}
+
+/* ---------------------------------------------------------------------------
+   Waiting, and the opening card
+   --------------------------------------------------------------------------- */
 
 .telephone__waiting,
 .telephone__intro {
+  min-height: 100%;
   display: grid;
-  place-items: center;
+  place-content: center;
+  justify-items: center;
   gap: 10px;
   text-align: center;
 }
@@ -251,14 +484,56 @@
   font-size: clamp(4rem, 15vw, 8rem);
 }
 
+.telephone__waiting-mark {
+  width: clamp(72px, 18vw, 108px);
+  height: clamp(72px, 18vw, 108px);
+  display: grid;
+  place-items: center;
+  border: 3px solid var(--ink);
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 5px 5px 0 var(--ink);
+  color: #fff;
+  font-size: clamp(2.4rem, 9vw, 3.6rem) !important;
+  animation: winner-pop 320ms both;
+}
+
 .telephone__waiting h2,
 .telephone__waiting p,
 .telephone__intro h1 {
   margin: 0;
 }
 
-/* The reveal reads as a conversation: each contribution is a new message,
-   alternating sides as the chain passes from one player to the next. */
+.telephone__waiting p {
+  color: var(--ink-soft);
+}
+
+.telephone__dots {
+  display: flex;
+  gap: 7px;
+  margin-block-start: 4px;
+}
+
+.telephone__dots i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--violet);
+  animation: telephone-dot 1.1s ease-in-out infinite;
+}
+
+.telephone__dots i:nth-child(2) { animation-delay: 0.15s; }
+.telephone__dots i:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes telephone-dot {
+  0%, 100% { opacity: 0.25; transform: translateY(0); }
+  50% { opacity: 1; transform: translateY(-5px); }
+}
+
+/* ---------------------------------------------------------------------------
+   The album: the reveal, as a conversation
+   --------------------------------------------------------------------------- */
+
 .telephone__album {
   height: 100%;
   width: min(100%, 920px);
@@ -278,16 +553,19 @@
   margin-block-end: 3px;
 }
 
+/* The scroller. `min-height: 0` is what lets it shrink inside the column above
+   instead of growing to the height of the whole chain and being clipped. */
 .telephone__chat {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  scroll-behavior: smooth;
+  overflow-y: auto;
   overscroll-behavior: contain;
   padding: 4px 10px 18px;
   display: flex;
   flex-direction: column;
   gap: clamp(14px, 2.4vh, 24px);
+  /* Reserved on both sides so a scrollbar appearing cannot shove the column
+     off the midline. */
   scrollbar-gutter: stable both-edges;
   box-sizing: border-box;
   direction: ltr;
@@ -370,17 +648,18 @@
   border-radius: 5px 22px 22px 22px;
 }
 
+/* A drawing bubble is the drawing. Its width is capped and its *height* comes
+   from the ink's own shape, so there are no white bands above and below a wide
+   doodle and no sliver of a tall one. */
 .telephone__message-bubble--drawing {
-  width: min(62vw, 560px);
+  width: min(62vw, 520px);
+  min-width: 0;
   padding: 6px;
   background: #fff;
 }
 
 .telephone__message-bubble .telephone__preview-canvas {
-  display: block;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  border-radius: 13px;
+  border-radius: 11px;
 }
 
 .telephone__message-text {
@@ -450,16 +729,14 @@
   animation: winner-pop 320ms both;
 }
 
-.telephone__chat-end {
-  width: 1px;
-  height: 1px;
-  flex: none;
-}
-
 @keyframes telephone-message-in {
   from { opacity: 0; transform: translateY(18px) scale(0.96); }
   to { opacity: 1; transform: none; }
 }
+
+/* ---------------------------------------------------------------------------
+   Box art
+   --------------------------------------------------------------------------- */
 
 .telephone-art {
   position: relative;
@@ -495,10 +772,14 @@
   font-size: 2rem;
 }
 
+/* ---------------------------------------------------------------------------
+   Phones
+   --------------------------------------------------------------------------- */
+
 @media (max-width: 700px) {
   .telephone__top {
-    min-height: 62px;
-    padding-block: 7px;
+    min-height: 58px;
+    padding-block: 6px;
     padding-inline-start: max(8px, calc(8px + env(safe-area-inset-left)));
     padding-inline-end: calc(var(--chrome-gutter) + env(safe-area-inset-right));
   }
@@ -508,95 +789,77 @@
     padding-inline-end: calc(var(--chrome-gutter) + env(safe-area-inset-left));
   }
 
-  .telephone__top > div { gap: 7px; }
+  .telephone__top > div { gap: 9px; }
   .telephone__top strong { font-size: 0.82rem; }
   .telephone__clock { width: 40px; height: 40px; border-width: 2px; font-size: 1rem; }
   .telephone__phase {
-    padding-top: max(7px, env(safe-area-inset-top));
-    padding-right: max(7px, env(safe-area-inset-right));
-    padding-bottom: calc(max(7px, env(safe-area-inset-bottom)) + var(--keyboard-inset));
-    padding-left: max(7px, env(safe-area-inset-left));
+    padding-top: max(8px, env(safe-area-inset-top));
+    padding-right: max(8px, env(safe-area-inset-right));
+    padding-bottom: calc(max(8px, env(safe-area-inset-bottom)) + var(--keyboard-inset));
+    padding-left: max(8px, env(safe-area-inset-left));
   }
   .telephone__composer { gap: 12px; }
   .telephone__composer textarea { min-height: 100px; padding: 12px; }
-  .telephone__composer-foot .btn { min-height: 44px; }
-  .telephone__draw { gap: 9px; }
-  .telephone__draw .skribbl__tools { padding: 4px; }
-  .telephone__draw .skribbl__acts { flex-wrap: nowrap; gap: 3px; }
-  .telephone__draw .skribbl__act { min-height: 40px; padding-inline: 7px; }
-  .telephone__draw-controls > .btn { min-height: 42px; padding-block: 7px; }
+  .telephone__composer-foot .btn { min-height: 46px; }
+  .telephone__board { border-width: 2px; border-radius: var(--radius-sm); }
+  .telephone__dock { inset-inline: 6px; bottom: 6px; gap: 6px; }
+  .telephone__dock .skribbl__tools { padding: 4px; gap: 5px; }
+  .telephone__dock .skribbl__act { min-height: 38px; padding-inline: 7px; font-size: 11px; }
+  .telephone__done { min-height: 42px; padding-inline: 12px; font-size: 0.85rem; }
+  .telephone__zoom { inset-inline-end: 6px; gap: 5px; }
+  .telephone__zoom button { width: 36px; height: 36px; font-size: 18px; }
   .telephone__album { gap: 9px; }
   .telephone__album-head h1 { font-size: clamp(1.25rem, 6vw, 1.65rem); }
   .telephone__chat { padding-inline: 8px; gap: 16px; }
   .telephone__message { width: 91%; }
-  .telephone__message-bubble--drawing { width: min(74vw, 520px); }
+  .telephone__message-bubble--drawing { width: min(76vw, 460px); }
   .telephone__message-heart { width: 38px; height: 38px; font-size: 1.55rem; }
   .telephone__complete { padding: 6px 12px; }
 }
 
+/* ---------------------------------------------------------------------------
+   Landscape, where height is the scarce thing
+   --------------------------------------------------------------------------- */
+
 @media (max-height: 560px) and (orientation: landscape) {
-  .telephone__top { min-height: 52px; padding-block: 4px; }
+  .telephone__top { min-height: 50px; padding-block: 4px; }
   .telephone__clock { width: 36px; height: 36px; }
-  /*
-   * Landscape pads the two sides *equally*, to the larger of the two insets.
-   *
-   * A landscape cutout is on one side only. Padding each side by its own inset
-   * clears the notch correctly and then shifts everything centred inside by half
-   * the difference — which on a phone with a camera in the long edge is a
-   * visible, wrong-looking lean, and is why the reveal column read as off-centre
-   * in landscape while looking fine in portrait. Matching the two keeps the
-   * column on the screen's midline and still clears whichever side the cutout is
-   * on. Top and bottom stay independent; nothing is centred against them.
-   */
+
+  /* Both sides to the larger inset — see the note at the top of the file. */
   .telephone__phase {
-    padding-top: max(3px, env(safe-area-inset-top));
-    padding-bottom: calc(max(3px, env(safe-area-inset-bottom)) + var(--keyboard-inset));
-    padding-inline: max(3px, env(safe-area-inset-left), env(safe-area-inset-right));
+    padding-top: max(4px, env(safe-area-inset-top));
+    padding-bottom: calc(max(4px, env(safe-area-inset-bottom)) + var(--keyboard-inset));
+    padding-inline: max(4px, env(safe-area-inset-left), env(safe-area-inset-right));
+  }
+
+  .telephone--draw .telephone__phase--draw {
+    padding: env(safe-area-inset-top) max(0px, env(safe-area-inset-left), env(safe-area-inset-right))
+      env(safe-area-inset-bottom);
   }
 
   /*
-   * The gear/pause/maximize buttons are fixed to the viewport at the top and
-   * span `--chrome-gutter` in from the inline end. In landscape the header is
-   * only 52px tall and disappears completely once the match is over, so they
-   * come down over the album's own heading. Reserving the gutter on *both*
-   * sides keeps that heading clear of them and still centred; the chat below is
+   * The fixed gear/pause/maximize buttons are anchored to the viewport near the
+   * top and span `--chrome-gutter` in from the inline end. In landscape the
+   * header is only 50px tall and is removed entirely once the match is over, so
+   * they come down over the album's own heading. Reserving the gutter on *both*
+   * sides keeps the heading clear of them and still centred; the chat below is
    * left full width, since it starts under the buttons rather than beside them.
    */
   .telephone__album-head {
     padding-inline: var(--chrome-gutter);
   }
-  .telephone__draw { width: 100%; grid-template-rows: auto minmax(0, 1fr); gap: 3px; padding-right: 7px; padding-bottom: 7px; }
-  .telephone__draw > .eyebrow { display: none; }
-  .telephone__draw > .telephone__previous-text { grid-row: 1; max-height: 10dvh; padding: 3px 10px; font-size: 0.9rem; }
-  .telephone__draw-stage {
-    grid-row: 2;
-    min-width: 0;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(178px, 0.34fr);
-    align-items: stretch;
-    gap: 6px;
-  }
-  .telephone__paper { width: auto; height: 100%; max-height: 100%; justify-self: center; }
-  .telephone__draw-controls { min-width: 0; width: 100%; flex-direction: column; flex-wrap: nowrap; gap: 5px; overflow: hidden; }
-  .telephone__draw .skribbl__tools { position: relative; z-index: auto; grid-area: auto; width: 100%; min-width: 0; margin: 0; align-self: auto; padding: 3px; overflow: visible; }
-  .telephone__draw .skribbl__acts { width: 100%; flex-wrap: wrap; justify-content: center; }
-  .telephone__draw .skribbl__act { min-height: 38px; justify-content: center; padding-inline: 5px; }
-  .telephone__draw-controls > .btn { width: 100%; min-width: 0; min-height: 40px; padding-inline: 8px; font-size: 0.9rem; }
   .telephone__album-head h1 { display: none; }
   .telephone__album-head .eyebrow { margin: 0; }
   .telephone__chat { gap: 12px; padding-block-end: 8px; }
   .telephone__message { width: 76%; }
-  .telephone__message-bubble--drawing { width: min(46vw, 430px); }
-}
-
-/* Wide viewports are height-bound. Size the 4:3 sheet from the available
-   drawing row there; portrait screens size it from their full width instead. */
-@media (min-aspect-ratio: 4 / 3) and (min-height: 561px) {
-  .telephone__paper {
-    width: auto;
-    height: calc(100% - 70px);
-    max-height: none;
-  }
+  .telephone__message-bubble--drawing { width: min(46vw, 400px); }
+  .telephone__composer { gap: 8px; }
+  .telephone__composer textarea { min-height: 74px; max-height: 26dvh; }
+  .telephone__previous .telephone__preview-canvas { max-height: 30dvh; }
+  .telephone__banner { top: 6px; max-width: min(62%, 520px); padding: 5px 8px; }
+  .telephone__banner p { max-height: 2.6em; font-size: 0.85rem; }
+  .telephone__zoom { top: auto; bottom: 8px; inset-inline-end: 8px; transform: none; flex-direction: row; }
+  .telephone__dock { inset-inline-start: 6px; inset-inline-end: 148px; bottom: 6px; justify-content: flex-start; }
 }
 
 @media (prefers-reduced-motion: reduce) {

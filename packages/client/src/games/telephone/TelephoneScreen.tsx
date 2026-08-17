@@ -1,23 +1,39 @@
-import { useEffect, useRef, useState, type JSX } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type JSX } from 'react';
 import { TICK_RATE, colorFor, type RoomView } from '@mg/shared';
 import { DEFAULT_COLOR, DEFAULT_SIZE, OP_CLEAR } from '@mg/shared/skribbl';
 import type { TelephonePrevious, TelephoneRevealStep } from '@mg/shared/telephone';
 import { useStore } from '../../store';
 import { useT } from '../../strings';
 import { socket } from '../../net/socket';
+import { sfx } from '../../audio';
+import { IDENTITY_VIEW, MIN_ZOOM, type StageView } from '../../game/canvasView';
 import { Button } from '../../ui/Button';
 import { Avatar } from '../../ui/Avatar';
 import { MatchEndOverlay, Paused } from '../../ui/MatchOverlays';
 import { InkSurface } from '../skribbl/InkSurface';
 import { attachDrawInput, type DrawInput } from '../skribbl/input';
+import { inkAspect, inkBounds } from '../skribbl/inkBounds';
+import { attachViewInput, stepZoom } from '../skribbl/viewInput';
 import { Toolbar } from '../skribbl/Toolbar';
 import { connectTelephoneDraftInk } from './draftBus';
 import { LocalInkHistory } from './localInk';
 import './telephone.css';
 
+/**
+ * A finished drawing, cropped to the ink in it.
+ *
+ * Every drawing in this game is looked at second-hand — in the album, or as the
+ * thing the next player has to guess — and almost none of them fill the sheet.
+ * Framing the ink rather than the paper is what makes a drawing readable in a
+ * chat bubble on a phone: the box takes the shape of what was actually drawn
+ * (`inkAspect`) and the canvas inside it shows exactly that rectangle, so there
+ * is no dead white space on any side. See `inkBounds`.
+ */
 function DrawingPreview({ ink, className = '' }: { ink: readonly number[]; className?: string }): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const surfaceRef = useRef<InkSurface | null>(null);
+  const bounds = useMemo(() => inkBounds(ink), [ink]);
+
   useEffect(() => {
     if (!canvasRef.current) return;
     const surface = new InkSurface(canvasRef.current);
@@ -26,7 +42,15 @@ function DrawingPreview({ ink, className = '' }: { ink: readonly number[]; class
     return () => { surface.stop(); surfaceRef.current = null; };
   }, []);
   useEffect(() => { surfaceRef.current?.apply([OP_CLEAR, ...ink]); }, [ink]);
-  return <canvas ref={canvasRef} className={`telephone__preview-canvas ${className}`} />;
+  useEffect(() => { surfaceRef.current?.frame(bounds); }, [bounds]);
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className={`telephone__preview-canvas ${className}`}
+      style={{ aspectRatio: inkAspect(bounds) }}
+    />
+  );
 }
 
 function Previous({ value }: { value: TelephonePrevious | null }): JSX.Element | null {
@@ -41,9 +65,10 @@ function TextComposer({ task, previous, initial, submitted }: { task: 'prompt' |
   const [text, setText] = useState(initial);
   const timer = useRef<number | null>(null);
   useEffect(() => () => { if (timer.current !== null) window.clearTimeout(timer.current); }, []);
-  if (submitted) return <div className="telephone__waiting"><span>✓</span><h2>{t.telephoneSubmitted}</h2><p>{t.telephoneWaiting}</p></div>;
+  if (submitted) return <Waiting />;
   const title = task === 'prompt' ? t.telephonePromptTitle : t.telephoneGuessTitle;
   const placeholder = task === 'prompt' ? t.telephonePromptPlaceholder : t.telephoneGuessPlaceholder;
+  const submit = (): void => { sfx.click(); socket.sendInputReliable({ k: 'submitText', text }); };
   return (
     <section className="telephone__composer">
       <Previous value={previous} />
@@ -54,23 +79,56 @@ function TextComposer({ task, previous, initial, submitted }: { task: 'prompt' |
         if (timer.current !== null) window.clearTimeout(timer.current);
         timer.current = window.setTimeout(() => socket.sendInput({ k: 'draft', text: next }), 400);
       }} />
-      <div className="telephone__composer-foot"><span dir="ltr">{text.length}/80</span><Button size="lg" tone="var(--violet)" disabled={!text.trim()} onClick={() => socket.sendInputReliable({ k: 'submitText', text })}>{t.telephoneSubmit}</Button></div>
+      <div className="telephone__composer-foot">
+        <span className="telephone__count" dir="ltr">{text.length}/80</span>
+        <Button size="lg" tone="var(--violet)" disabled={!text.trim()} onClick={submit}>{t.telephoneSubmit}</Button>
+      </div>
     </section>
   );
 }
 
+function Waiting(): JSX.Element {
+  const t = useT();
+  return (
+    <div className="telephone__waiting">
+      <span className="telephone__waiting-mark" aria-hidden="true">✓</span>
+      <h2>{t.telephoneSubmitted}</h2>
+      <p>{t.telephoneWaiting}</p>
+      <div className="telephone__dots" aria-hidden="true"><i /><i /><i /></div>
+    </div>
+  );
+}
+
+/**
+ * The drawing board: the sheet is the screen.
+ *
+ * Everything else floats on top of it — the prompt, the clock, the tools, the
+ * done button — because the alternative is a stack of bars that leaves a phone
+ * about a third of its own screen to draw on. The sheet keeps the shared 4:3
+ * document (every player has to be looking at the same coordinates), and the
+ * paper colour is also the letterbox, so it reads as edge-to-edge paper rather
+ * than a postcard on a table. Zooming in is how you get at detail smaller than
+ * a fingertip; see `viewInput.ts` for why the second finger cancels a stroke.
+ */
 function DrawingComposer({ previous, submitted }: { previous: TelephonePrevious | null; submitted: boolean }): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const hitRef = useRef<HTMLDivElement>(null);
+  const boardRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<InkSurface | null>(null);
   const inputRef = useRef<DrawInput | null>(null);
   const historyRef = useRef(new LocalInkHistory());
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [size, setSize] = useState(DEFAULT_SIZE);
   const [mode, setMode] = useState<'pen' | 'fill'>('pen');
+  const [view, setView] = useState<StageView>(IDENTITY_VIEW);
+  const [promptOpen, setPromptOpen] = useState(true);
   const t = useT();
+
+  const undo = (): void => {
+    surfaceRef.current?.apply(historyRef.current.undo());
+  };
+
   useEffect(() => {
-    if (!canvasRef.current || !hitRef.current) return;
+    if (!canvasRef.current || !boardRef.current) return;
     const ink = new InkSurface(canvasRef.current);
     surfaceRef.current = ink;
     ink.start();
@@ -78,27 +136,96 @@ function DrawingComposer({ previous, submitted }: { previous: TelephonePrevious 
       historyRef.current.replace(restored);
       ink.apply([OP_CLEAR, ...restored]);
     });
-    const input = attachDrawInput(hitRef.current, ink, (ops) => historyRef.current.append(ops));
+    const input = attachDrawInput(boardRef.current, ink, (ops) => historyRef.current.append(ops));
     input.enabled = true;
     inputRef.current = input;
-    return () => { disconnectDraft(); input.destroy(); ink.stop(); surfaceRef.current = null; inputRef.current = null; };
+    const gestures = attachViewInput(boardRef.current, ink, {
+      draw: input,
+      onView: setView,
+      // A pinch always starts as a stroke, because the first finger down is
+      // indistinguishable from someone starting to draw. Take it back rather
+      // than leave a dash across the drawing every time somebody zooms.
+      onCancelStroke: () => {
+        socket.sendInputReliable({ k: 'undo' });
+        undo();
+      },
+    });
+    return () => {
+      disconnectDraft();
+      gestures.destroy();
+      input.destroy();
+      ink.stop();
+      surfaceRef.current = null;
+      inputRef.current = null;
+    };
   }, []);
+
   useEffect(() => {
     if (!inputRef.current) return;
     inputRef.current.tool = { color, size, mode };
   }, [color, size, mode]);
-  if (submitted) return <div className="telephone__waiting"><span>✓</span><h2>{t.telephoneSubmitted}</h2><p>{t.telephoneWaiting}</p></div>;
+
+  const zoom = (factor: number): void => {
+    const surface = surfaceRef.current;
+    if (!surface) return;
+    sfx.click();
+    const next = factor === 0 ? IDENTITY_VIEW : stepZoom(surface.canvasStage.view, factor);
+    surface.setView(next);
+    setView(next);
+  };
+
+  if (submitted) return <Waiting />;
+
+  const zoomed = view.zoom > MIN_ZOOM + 0.001;
   return (
     <section className="telephone__draw">
-      <p className="eyebrow">{t.telephoneDrawTitle}</p>
-      <Previous value={previous} />
-      <div className="telephone__draw-stage">
-        <div className="telephone__paper" ref={hitRef}><canvas ref={canvasRef} /></div>
-        <div className="telephone__draw-controls">
+      <div className="telephone__board" ref={boardRef}>
+        <canvas ref={canvasRef} />
+
+        {/* Pointer-transparent so a stroke can start underneath it: the prompt
+            is something to read, not something to hit. Its toggle takes
+            pointers back, which is why that one is marked as a control. */}
+        {previous && (
+          <div className={`telephone__banner${promptOpen ? '' : ' telephone__banner--closed'}`}>
+            {promptOpen && (previous.kind === 'drawing'
+              ? <div className="telephone__banner-art"><DrawingPreview ink={previous.ink} /></div>
+              : <p dir="auto">{previous.text || t.telephoneNoText}</p>)}
+            <button
+              type="button"
+              className="telephone__banner-toggle"
+              data-draw-ignore=""
+              aria-label={promptOpen ? t.telephoneHidePrompt : t.telephoneShowPrompt}
+              aria-expanded={promptOpen}
+              onClick={() => { sfx.click(); setPromptOpen((open) => !open); }}
+            >
+              {promptOpen ? '▲' : '▼'}
+            </button>
+          </div>
+        )}
+
+        <div className="telephone__zoom" data-draw-ignore="">
+          <button type="button" aria-label={t.telephoneZoomIn} onClick={() => zoom(1.5)}>+</button>
+          <button type="button" aria-label={t.telephoneZoomOut} onClick={() => zoom(1 / 1.5)}>−</button>
+          <button
+            type="button"
+            className={`telephone__zoom-level${zoomed ? ' telephone__zoom-level--on' : ''}`}
+            aria-label={t.telephoneZoomReset}
+            onClick={() => zoom(0)}
+            disabled={!zoomed}
+            dir="ltr"
+          >
+            {t.telephoneZoomLevel(view.zoom.toFixed(view.zoom < 10 ? 1 : 0))}
+          </button>
+        </div>
+
+        <div className="telephone__dock" data-draw-ignore="">
           <Toolbar color={color} size={size} mode={mode} onColor={setColor} onSize={setSize} onMode={setMode}
-            onUndo={() => surfaceRef.current?.apply(historyRef.current.undo())}
+            onUndo={undo}
             onClear={() => surfaceRef.current?.apply(historyRef.current.clear())} />
-          <Button size="lg" tone="var(--violet)" onClick={() => socket.sendInputReliable({ k: 'submitDrawing' })}>{t.telephoneSubmitDrawing}</Button>
+          <Button size="lg" tone="var(--violet)" className="telephone__done"
+            onClick={() => { sfx.click(); socket.sendInputReliable({ k: 'submitDrawing' }); }}>
+            {t.telephoneSubmitDrawing}
+          </Button>
         </div>
       </div>
     </section>
@@ -159,26 +286,55 @@ function ChainMessage({ step, room, index, mySeat }: { step: TelephoneRevealStep
   );
 }
 
+/**
+ * The album.
+ *
+ * Two rules that were both bugs first. **It follows the tail only while the
+ * chain is still growing** — once the last message has landed the scroll
+ * belongs to whoever is reading, and yanking them back to the bottom every time
+ * a heart arrives made a finished chain impossible to look back through. And it
+ * **stops following the moment somebody scrolls up**, for the same reason a
+ * chat app does: the next message must not steal the thing you were reading.
+ */
 function Reveal({ room, mySeat }: { room: RoomView; mySeat: number }): JSX.Element {
   const t = useT();
   const view = useStore((state) => state.hud.telephone);
-  const endRef = useRef<HTMLDivElement>(null);
+  const chatRef = useRef<HTMLDivElement>(null);
+  const followRef = useRef(true);
+  const complete = view?.phase === 'chainComplete';
+  const revealed = view?.revealed.length ?? 0;
+  const chainIndex = view?.revealChainIndex ?? 0;
+
+  // A new chain starts at the top and follows again.
+  useEffect(() => { followRef.current = true; }, [chainIndex]);
+
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }));
+    const chat = chatRef.current;
+    if (!chat || !followRef.current || complete) return;
+    const frame = window.requestAnimationFrame(() => {
+      chat.scrollTo({ top: chat.scrollHeight, behavior: 'smooth' });
+    });
     return () => window.cancelAnimationFrame(frame);
-  }, [view?.revealChainIndex, view?.revealed.length]);
+  }, [chainIndex, revealed, complete]);
+
   if (!view) return <div className="telephone__waiting"><h2>{t.telephoneRevealTitle}</h2></div>;
-  const complete = view.phase === 'chainComplete';
+
   return (
     <section className="telephone__album" aria-live="polite">
-      <div className="telephone__album-head">
+      <header className="telephone__album-head">
         <p className="eyebrow">{t.telephoneChain(view.revealChainIndex + 1, view.revealChainCount)}</p>
         <h1>{complete ? t.telephoneFullLineage : t.telephoneRevealTitle}</h1>
-      </div>
-      <div className="telephone__chat">
+      </header>
+      <div
+        className="telephone__chat"
+        ref={chatRef}
+        onScroll={(event) => {
+          const chat = event.currentTarget;
+          followRef.current = chat.scrollHeight - chat.scrollTop - chat.clientHeight < 90;
+        }}
+      >
         {view.revealed.map((step, index) => <ChainMessage key={`${view.revealChainIndex}-${index}`} step={step} room={room} index={index} mySeat={mySeat} />)}
         {complete && <p className="telephone__complete">{t.telephoneChainComplete}</p>}
-        <div ref={endRef} className="telephone__chat-end" />
       </div>
     </section>
   );
@@ -190,17 +346,76 @@ export function TelephoneScreen({ room, mySeat }: { room: RoomView; mySeat: numb
   const playerId = useStore((state) => state.playerId);
   const winnerSeat = useStore((state) => state.matchWinnerSeat);
   const t = useT();
+  // The album is behind the champion card at the end of a match, and reading
+  // back through the chains is exactly what a room wants to do next — so the
+  // card steps aside rather than burying it.
+  const [browsing, setBrowsing] = useState(false);
+  const over = room.phase === 'matchOver';
+  useEffect(() => { if (!over) setBrowsing(false); }, [over]);
+
   const seconds = Math.ceil((view?.phaseTicks ?? 0) / TICK_RATE);
   const contributing = view?.phase === 'contributing';
-  const phaseClass = contributing && mine?.task === 'drawing' ? 'draw' : contributing ? 'write' : 'reveal';
+  const drawing = contributing && mySeat >= 0 && mine?.task === 'drawing' && !mine.submitted;
+  // Only an *unsubmitted* drawing is the full-bleed board. Once it is sent the
+  // screen is an ordinary waiting card, and it wants the ordinary padding and
+  // the header clock back.
+  const phaseClass = drawing ? 'draw' : contributing ? 'write' : 'reveal';
+  const total = view?.phaseTotal ?? 0;
+  const urgent = seconds <= 10 && contributing;
+
+  const clock = (
+    <span
+      className={`telephone__clock${urgent ? ' telephone__clock--low' : ''}`}
+      style={{ '--progress': `${total > 0 ? Math.max(0, (view?.phaseTicks ?? 0) / total) * 360 : 0}deg` } as CSSProperties}
+      dir="ltr"
+    >
+      {seconds}
+    </span>
+  );
+
   return (
-    <main className="telephone">
-      {room.phase !== 'matchOver' && <header className="telephone__top"><div><span className={`telephone__clock${seconds <= 10 && contributing ? ' telephone__clock--low' : ''}`} dir="ltr">{seconds}</span>{contributing && <strong>{t.telephoneStep((view?.contributionIndex ?? 0) + 1, view?.contributionCount ?? room.players.length)}</strong>}</div></header>}
+    <main className={`telephone telephone--${phaseClass}`}>
+      {!over && !drawing && (
+        <header className="telephone__top">
+          <div>
+            {clock}
+            {contributing && <strong>{t.telephoneStep((view?.contributionIndex ?? 0) + 1, view?.contributionCount ?? room.players.length)}</strong>}
+          </div>
+        </header>
+      )}
+
       <div key={view?.phaseSeq ?? 0} className={`telephone__phase telephone__phase--${phaseClass}`}>
-        {contributing && mySeat >= 0 && mine ? (mine.task === 'drawing' ? <DrawingComposer previous={mine.previous} submitted={mine.submitted} /> : <TextComposer task={mine.task} previous={mine.previous} initial={mine.draft} submitted={mine.submitted} />) : contributing ? <div className="telephone__waiting"><h2>{t.telephoneSpectating}</h2></div> : view?.phase === 'intro' ? <div className="telephone__intro"><span>☎</span><h1>{t.telephoneIntro}</h1></div> : <Reveal room={room} mySeat={mySeat} />}
+        {contributing && mySeat >= 0 && mine
+          ? (mine.task === 'drawing'
+            ? <DrawingComposer previous={mine.previous} submitted={mine.submitted} />
+            : <TextComposer task={mine.task} previous={mine.previous} initial={mine.draft} submitted={mine.submitted} />)
+          : contributing
+            ? <div className="telephone__waiting"><h2>{t.telephoneSpectating}</h2></div>
+            : view?.phase === 'intro'
+              ? <div className="telephone__intro"><span aria-hidden="true">☎</span><h1>{t.telephoneIntro}</h1></div>
+              : <Reveal room={room} mySeat={mySeat} />}
       </div>
+
+      {/* The clock floats over the sheet while drawing, so the board can have
+          the whole screen. Top-start: the fixed gear/pause/maximize buttons own
+          the other corner. */}
+      {drawing && <div className="telephone__float-clock">{clock}</div>}
+
       {room.paused && room.phase === 'playing' && <Paused room={room} spectating={mySeat < 0} />}
-      {room.phase === 'matchOver' && <MatchEndOverlay room={room} mySeat={mySeat} winnerSeat={winnerSeat} isHost={room.players.find((player) => player.id === playerId)?.isHost ?? false} />}
+      {over && !browsing && (
+        <MatchEndOverlay
+          room={room}
+          mySeat={mySeat}
+          winnerSeat={winnerSeat}
+          isHost={room.players.find((player) => player.id === playerId)?.isHost ?? false}
+          extra={<Button variant="ghost" full onClick={() => setBrowsing(true)}>{t.telephoneBrowseChains}</Button>}
+        />
+      )}
+      {over && browsing && (
+        <button type="button" className="telephone__back" onClick={() => setBrowsing(false)}>
+          {t.telephoneBackToResults}
+        </button>
+      )}
     </main>
   );
 }

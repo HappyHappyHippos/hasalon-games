@@ -239,7 +239,11 @@ export class Room {
     const player = createPlayer(client, identity, colorIndex);
     this.players.push(player);
     const isHost = !this.hostId;
-    if (isHost) this.hostId = player.id;
+    if (isHost) {
+      this.hostId = player.id;
+      // The host is in by construction — see `hostIsAlwaysReady`.
+      player.ready = true;
+    }
     this.emptySince = null;
 
     client.roomCode = this.code;
@@ -379,6 +383,31 @@ export class Room {
 
   private reassignHostIfNeeded(): void {
     this.hostId = nextHostId(this.players, this.hostId);
+    this.hostIsAlwaysReady();
+  }
+
+  /**
+   * The host is ready without ever pressing the button.
+   *
+   * They opened the room, they pick the game, and they are the only one who can
+   * start it — so "is the host in?" was never a real question, and the ready
+   * tick beside their own name was one they had to answer twice. Doing it on the
+   * server rather than in the lobby's rendering is what keeps every screen
+   * agreeing: the ready count, the tick, and the enabled Start button are all
+   * reading the same flag. They can still stand down with the ready button;
+   * pressing Start puts them back in (`Room.start`).
+   *
+   * Called wherever a host is chosen and wherever ready flags are cleared.
+   */
+  private hostIsAlwaysReady(): void {
+    const host = this.players.find((p) => p.id === this.hostId);
+    if (host) host.ready = true;
+  }
+
+  /** Everyone has to say they are in again — except the host, who never does. */
+  private clearReady(): void {
+    for (const p of this.players) p.ready = false;
+    this.hostIsAlwaysReady();
   }
 
   private updateEmptiness(): void {
@@ -411,6 +440,16 @@ export class Room {
   setReady(player: RoomPlayer, ready: boolean): void {
     player.ready = ready;
     this.broadcastRoom();
+  }
+
+  /**
+   * Mark a connected player ready without a broadcast, for the callers that are
+   * about to broadcast anyway. Returns whether it changed anything.
+   */
+  private readyUp(player: RoomPlayer | undefined): boolean {
+    if (!player || player.ready || player.client === null) return false;
+    player.ready = true;
+    return true;
   }
 
   /** Remind only the other connected, unready players; clients share the cooldown deadline. */
@@ -501,11 +540,26 @@ export class Room {
   // Match lifecycle
   // -------------------------------------------------------------------------
 
-  start(): boolean {
+  /**
+   * Start the match the lobby is looking at.
+   *
+   * `starter` is the host who pressed the button, and pressing it **is** their
+   * ready. They picked the game and told the room to play it; asking them to
+   * also tick a box beside their own name is a second answer to a question they
+   * have already answered, and forgetting it reads as the button being broken.
+   * Everyone else still readies up normally — that is how the host knows who is
+   * in. The flag is set either way, so a refused start still shows the host as
+   * in rather than silently half-committing them.
+   */
+  start(starter?: RoomPlayer): boolean {
     // The lineup decides what plays during a series; the plain start button is
     // not a way out of it.
     if (this.series.active) return false;
-    if (!this.canStart()) return false;
+    const readied = this.readyUp(starter);
+    if (!this.canStart()) {
+      if (readied) this.broadcastRoom();
+      return false;
+    }
 
     const seated = this.seatCandidates();
     for (const p of this.players) {
@@ -656,7 +710,8 @@ export class Room {
     for (const p of this.players) {
       p.seat = -1;
       p.score = 0;
-      p.ready = false;
+      // Same rule as `clearReady`, folded into the loop that is already here.
+      p.ready = p.id === this.hostId;
     }
     this.broadcastRoom();
   }
@@ -690,16 +745,24 @@ export class Room {
    * it that suits this many people — and when the hat holds a game this roster
    * cannot play. Ask `unfitPoolGames` which of the two it was.
    */
-  startSeries(): boolean {
+  startSeries(starter?: RoomPlayer): boolean {
     if (this.phase === 'playing') return false;
     if (this.series.active && this.series.phase !== 'over') return false;
 
+    // Same rule as `start`: the host pressing the button is the host saying
+    // they are in, and the draw counts the ready players.
+    const readied = this.readyUp(starter);
+
     const roster = this.seriesRoster();
-    if (unfitGames(this.series.setup.pool, roster.length).length > 0) return false;
+    const refuse = (): boolean => {
+      if (readied) this.broadcastRoom();
+      return false;
+    };
+    if (unfitGames(this.series.setup.pool, roster.length).length > 0) return refuse();
 
     const eligible = eligibleGames(this.series.setup.pool, roster.length);
     const lineup = drawLineup(eligible, this.series.setup.rounds);
-    if (lineup.length === 0) return false;
+    if (lineup.length === 0) return refuse();
 
     analytics.record('series_open', {
       room: this.code,
@@ -749,7 +812,7 @@ export class Room {
     this.phase = 'matchOver';
     this.series.legWinners.push(null);
     this.series.skippedLegs.push(this.series.index);
-    for (const p of this.players) p.ready = false;
+    this.clearReady();
 
     if (this.series.index + 1 >= this.series.lineup.length) this.series.finish(false);
     else this.series.armBreak(SERIES_BREAK_MS);
@@ -881,7 +944,7 @@ export class Room {
     }
 
     this.phase = 'matchOver';
-    for (const p of this.players) p.ready = false;
+    this.clearReady();
 
     // Before the broadcast, not after: `matchEnded` carries a room view, and
     // the view has to already say what happens next — that there is a break

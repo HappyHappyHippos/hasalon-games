@@ -17,6 +17,7 @@ import {
   SPAWN_PLACEMENT_ATTEMPTS,
   SPEED_DOWN_MUL,
   SPEED_UP_MUL,
+  TARGET_SCORE_PER_PLAYER,
   THICK_MUL,
   THIN_MUL,
 } from './constants';
@@ -88,9 +89,14 @@ export function defaultConfig(playerCount: number): AchtungConfig {
     game: 'achtung',
     powerupsEnabled: true,
     speedScale: 1,
-    targetScore: Math.max(1, playerCount - 1) * 10,
+    targetScore: suggestedTargetScore(playerCount),
     winByTwo: true,
   };
+}
+
+/** The lobby's suggestion, and the default — see `TARGET_SCORE_PER_PLAYER`. */
+export function suggestedTargetScore(playerCount: number): number {
+  return Math.max(1, playerCount) * TARGET_SCORE_PER_PLAYER;
 }
 
 // ---------------------------------------------------------------------------
