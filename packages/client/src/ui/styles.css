@@ -3122,6 +3122,15 @@ strong,
 
   .rail__head {
     flex: none;
+    /* No gutter here. The desktop rail is a sidebar and its head reserves
+       `--chrome-gutter` so the round label clears the fixed buttons. On a phone
+       the rail is a floating row that *already* stops short of them, via its own
+       `inset-inline-end` above — so keeping the padding reserved the same
+       184px twice. The head became 247px of mostly-nothing inside a 183px rail
+       and, being `flex: none`, refused to give any of it back: every score card
+       after it was pushed out of the rail and off the left edge of the screen,
+       the local player's own card ending up underneath the button row. */
+    padding-inline-end: 0;
   }
 
   .rail__round {
