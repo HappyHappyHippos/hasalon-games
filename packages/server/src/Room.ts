@@ -152,7 +152,7 @@ export class Room {
       return this.instance?.status() !== 'over';
     },
     snapshot: (final) => this.broadcastSnapshot(final),
-    finished: () => this.endMatch(this.instance?.winnerSeat() ?? null),
+    finished: () => this.endMatch(this.instance?.winnerSeat() ?? null, 'finished'),
     pauseLapsed: () => this.broadcastRoom(),
   });
 
@@ -381,7 +381,7 @@ export class Room {
     // Dropping below the minimum mid-match ends it rather than leaving one
     // person alone in the arena.
     if (this.phase === 'playing' && this.seatedCount() < this.module.meta.minPlayers) {
-      this.endMatch(null);
+      this.endMatch(null, 'short');
     } else {
       this.broadcastRoom();
     }
@@ -939,15 +939,24 @@ export class Room {
     this.lastPrivate.delete(playerId);
   }
 
-  private endMatch(winnerSeat: number | null): void {
+  /**
+   * `why` comes from the caller, not from whether there is a winner.
+   *
+   * It used to be inferred — a null winner meant the room had dropped below the
+   * minimum — and that reads three games backwards. Skribbl, Meme Machine and
+   * Broken Telephone all crown nobody on a draw, so every tied match was
+   * written down as one that never went the distance. The dashboard turns that
+   * column into "the share that ran to a real conclusion", which meant the
+   * games most likely to end level were the ones reported as most often
+   * abandoned. Only two callers can reach here and each of them knows which it
+   * is, so neither has to guess.
+   */
+  private endMatch(winnerSeat: number | null, why: 'finished' | 'short'): void {
     this.clock.stop();
     this.clock.clearPause();
 
-    // A winner means it ran to a real conclusion; a null one here means the room
-    // dropped below the minimum and the match was ended for it. Distinguishing
-    // the two is what turns the games table into a verdict rather than a count.
     const winner = this.players.find((p) => p.seat === winnerSeat) ?? null;
-    this.closeMatch(winnerSeat === null ? 'short' : 'finished', winner);
+    this.closeMatch(why, winner);
 
     if (this.instance) {
       const scores = this.instance.scores();

@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GAMES, SERIES_BREAK_MS, TICK_MS } from '@mg/shared';
 import type {
+  AnalyticsEvent,
   GameConfig,
   GameInstance,
   GameSnapshot,
@@ -11,6 +12,7 @@ import type {
 import { COUNTDOWN_TICKS, IN_RIGHT } from '@mg/shared/gunmayhem';
 import { Room, type RoomPlayer } from './Room';
 import { Client } from './Client';
+import { analytics } from './Analytics';
 
 /** Nobody here is testing hats, so they stay at the default. */
 function identity(name: string, colorIndex: number): Identity {
@@ -1280,6 +1282,57 @@ describe('Room input handover', () => {
 
       room.dispose();
     } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('how a match is written down', () => {
+  /**
+   * A match that ran its whole length and ended level is still a match that
+   * ran its whole length.
+   *
+   * `endMatch` used to infer the reason from the winner, so a null one meant
+   * "the room dropped below the minimum". Three of the nine games crown nobody
+   * on a draw — Skribbl, Meme Machine and this one — so every tied match was
+   * filed as abandoned, and the dashboard renders that column as "the share
+   * that ran to a real conclusion". The games most likely to end level were
+   * reported as the ones most often given up on.
+   *
+   * Broken Telephone with nobody hearting anything is the shortest route to a
+   * genuine draw: everyone finishes on zero.
+   */
+  it('records a drawn match as finished, not as one cut short', () => {
+    vi.useFakeTimers();
+    const seen: AnalyticsEvent[] = [];
+    const stop = analytics.subscribe((event) => seen.push(event));
+    try {
+      const room = new Room('TEST');
+      const host = room.addPlayer(fakeClient(), identity('Ohad', 0))!;
+      const guest = room.addPlayer(fakeClient(), identity('Yoni', 1))!;
+      room.setGame('telephone');
+      room.setReady(host, true);
+      room.setReady(guest, true);
+      expect(room.start()).toBe(true);
+
+      // Both players answer every contribution immediately, so the phase ends
+      // on the last submission rather than on its clock.
+      for (const kind of ['submitText', 'submitDrawing'] as const) {
+        vi.advanceTimersByTime(TICK_MS * 200);
+        for (const player of [host, guest]) room.input(player, { k: kind, text: 'x' });
+      }
+
+      // Then the reveal, which is on a clock and which nobody votes in.
+      vi.advanceTimersByTime(TICK_MS * 60 * 90);
+
+      expect(room.phase).toBe('matchOver');
+      const close = seen.find((event) => event.e === 'match_close')!;
+      expect(close).toMatchObject({ game: 'telephone', why: 'finished' });
+      expect(close.winner).toBeUndefined();
+
+      room.dispose();
+    } finally {
+      stop();
       vi.useRealTimers();
     }
   });

@@ -62,6 +62,33 @@ describe('Analytics', () => {
     expect(log.all()[0]!.t).not.toBe('not-a-time');
   });
 
+  it('starts recording again after the clock steps backwards', () => {
+    // The rate limiter rolls its window on `Date.now()`, which is not
+    // monotonic — an NTP correction stepping it back is the whole reason
+    // `serverClock.ts` exists. Rolling only on `>= 1000` left the difference
+    // permanently negative after such a step, so the window never rolled, the
+    // count stayed above the cap, and the usage log went quiet for good.
+    const log = new Analytics();
+    log.configure({ file: null });
+
+    const start = Date.now();
+    const now = vi.spyOn(Date, 'now');
+    try {
+      // Fill the window, then step the clock back a minute.
+      now.mockReturnValue(start);
+      for (let i = 0; i < 60; i += 1) log.record('ui', { what: 'tap' });
+      const filled = log.all().length;
+
+      now.mockReturnValue(start - 60_000);
+      log.record('join', { room: 'ABCD', name: 'Ohad' });
+
+      expect(log.all().length).toBe(filled + 1);
+      expect(log.all().at(-1)).toMatchObject({ e: 'join' });
+    } finally {
+      now.mockRestore();
+    }
+  });
+
   it('survives a file it cannot write to', () => {
     // It complains on the way past, which is the point — but the complaint is
     // the assertion here, not test output.
