@@ -3148,11 +3148,18 @@ strong,
   .netbadge {
     position: fixed;
     z-index: 3;
-    inset-inline-start: 50%;
+    /* Auto margins, not `inset-inline-start: 50%` with a `translateX(-50%)`:
+       one is logical and the other physical, so they agree in English and
+       cancel out wrong in Hebrew — which is the language this site opens in.
+       Same fix as `.memes__back`. */
+    inset-inline: 0;
+    width: fit-content;
     bottom: calc(4px + env(safe-area-inset-bottom));
-    transform: translateX(-50%);
     display: flex;
-    margin: 0;
+    /* Longhand, because the base rule sets `margin-top: auto` and a plain
+       `margin: 0` shorthand here would take the centring back out again. */
+    margin-block: 0;
+    margin-inline: auto;
     padding: 2px 6px;
     gap: 4px;
     background: rgba(253, 246, 232, 0.68);
