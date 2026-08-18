@@ -5,6 +5,7 @@ import { useT } from '../strings';
 import { socket } from '../net/socket';
 import { Button } from './Button';
 import { Avatar } from './Avatar';
+import { TrophyIcon } from './Icons';
 import { SeriesInterstitial, SeriesOver } from './SeriesOverlays';
 
 /**
@@ -148,7 +149,8 @@ export function MatchOver({
                 title={t.totalScoreTitle}
                 aria-label={t.totalScoreLabel(Math.round(player.totalScore))}
               >
-                🏆 {Math.round(player.totalScore)} {t.totalScoreUnit}
+                <TrophyIcon className="standings__trophy" />
+                {Math.round(player.totalScore)} {t.totalScoreUnit}
               </span>
             </li>
           ))}

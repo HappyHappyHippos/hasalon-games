@@ -6,6 +6,7 @@ import { useT } from '../../strings';
 import { Avatar } from '../../ui/Avatar';
 import { Button } from '../../ui/Button';
 import { MemeCard } from './MemeCard';
+import { MemeViewer } from './MemeViewer';
 
 /**
  * Everything the room made, once the match is over.
@@ -19,6 +20,10 @@ export function MemesGallery({ room, mySeat }: { room: RoomView; mySeat: number 
   const t = useT();
   const gallery = useStore((state) => state.hud.memes?.gallery ?? null);
   const [minePlusOnly, setMinePlusOnly] = useState(false);
+  // Which meme is open full-size, by identity rather than index: the filter
+  // above reorders and re-filters the list, and an index would then point at a
+  // different meme than the one that was tapped.
+  const [opened, setOpened] = useState<MemesGalleryEntry | null>(null);
 
   const shown = useMemo(() => {
     if (!gallery) return [];
@@ -55,49 +60,80 @@ export function MemesGallery({ room, mySeat }: { room: RoomView; mySeat: number 
             key={`${entry.round}-${entry.authorSeat}-${entry.templateId}-${index}`}
             entry={entry}
             room={room}
+            onOpen={() => setOpened(entry)}
           />
         ))}
       </div>
+
+      {opened && (
+        <MemeViewer
+          meme={opened}
+          caption={<GalleryCredit entry={opened} room={room} />}
+          onClose={() => setOpened(null)}
+        />
+      )}
     </section>
   );
 }
 
-function GalleryItem({ entry, room }: { entry: MemesGalleryEntry; room: RoomView }): JSX.Element {
+function GalleryItem({ entry, room, onOpen }: { entry: MemesGalleryEntry; room: RoomView; onOpen: () => void }): JSX.Element {
+  const t = useT();
+  return (
+    <figure className={`memes__gallery-item${entry.top ? ' memes__gallery-item--top' : ''}`}>
+      {/* A real button, not a click handler on the figure: this is the only way
+          to read a caption that was fitted to a 240px thumbnail, so it has to be
+          reachable from a keyboard too. */}
+      <button
+        type="button"
+        className="memes__gallery-open"
+        title={t.memesViewerOpen}
+        aria-label={t.memesViewerOpen}
+        onClick={onOpen}
+      >
+        <MemeCard
+          templateId={entry.templateId}
+          texts={entry.texts}
+          positions={entry.positions}
+          size="thumb"
+        />
+      </button>
+      <figcaption>
+        <GalleryCredit entry={entry} room={room} />
+      </figcaption>
+    </figure>
+  );
+}
+
+/** Who made it, in which round, and what it scored. Shared by the card and the
+    enlarged view, so the two cannot describe the same meme differently. */
+function GalleryCredit({ entry, room }: { entry: MemesGalleryEntry; room: RoomView }): JSX.Element {
   const t = useT();
   const author = room.players.find((player) => player.seat === entry.authorSeat);
   return (
-    <figure className={`memes__gallery-item${entry.top ? ' memes__gallery-item--top' : ''}`}>
-      <MemeCard
-        templateId={entry.templateId}
-        texts={entry.texts}
-        positions={entry.positions}
-        size="thumb"
-      />
-      <figcaption>
-        {author ? (
-          <>
-            <Avatar
-              colorIndex={author.colorIndex}
-              hat={author.hat}
-              face={author.face}
-              name={author.name}
-              size={28}
-            />
-            <strong style={{ color: colorFor(author.colorIndex) }}>{author.name}</strong>
-          </>
-        ) : (
-          <strong>{t.memesGalleryUnknownAuthor}</strong>
-        )}
-        <span className="memes__gallery-round">{t.memesGalleryRound(entry.round)}</span>
-        <span className="memes__gallery-award" dir="ltr">
-          {entry.award}
+    <>
+      {author ? (
+        <>
+          <Avatar
+            colorIndex={author.colorIndex}
+            hat={author.hat}
+            face={author.face}
+            name={author.name}
+            size={28}
+          />
+          <strong style={{ color: colorFor(author.colorIndex) }}>{author.name}</strong>
+        </>
+      ) : (
+        <strong>{t.memesGalleryUnknownAuthor}</strong>
+      )}
+      <span className="memes__gallery-round">{t.memesGalleryRound(entry.round)}</span>
+      <span className="memes__gallery-award" dir="ltr">
+        {entry.award}
+      </span>
+      {entry.top === 1 && (
+        <span className="memes__gallery-crown" title={t.memesGalleryTopMeme} aria-label={t.memesGalleryTopMeme}>
+          👑
         </span>
-        {entry.top === 1 && (
-          <span className="memes__gallery-crown" title={t.memesGalleryTopMeme} aria-label={t.memesGalleryTopMeme}>
-            👑
-          </span>
-        )}
-      </figcaption>
-    </figure>
+      )}
+    </>
   );
 }

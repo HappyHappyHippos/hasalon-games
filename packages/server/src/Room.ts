@@ -125,6 +125,16 @@ export class Room {
   private lastPrivate = new Map<string, string>();
   /** When that snapshot was authored. Replayed with it, so it stays honest about its age. */
   private lastSnapshotAt = 0;
+  /**
+   * Who won the match that just finished, kept for `sendCatchUp`.
+   *
+   * `matchEnded` is a broadcast, so it only ever reaches sockets that were
+   * connected at the moment it went out. Somebody who reloads on the end screen
+   * gets `welcome` — which clears the winner — and nothing to put back, so the
+   * champion card said nobody won. Meaningless outside `matchOver`, and reset
+   * whenever a match begins.
+   */
+  private lastWinnerSeat: number | null = null;
   private readyNudgeUntil = 0;
 
   /**
@@ -635,6 +645,7 @@ export class Room {
     this.closeMatch('restart');
 
     this.lastSnapshot = null;
+    this.lastWinnerSeat = null;
     this.legConfig = config;
     this.instance = this.module.create(
       seated.map((p) => ({ id: p.id, name: p.name, colorIndex: p.colorIndex })),
@@ -810,6 +821,7 @@ export class Room {
     this.clock.stop();
     this.clock.clearPause();
     this.phase = 'matchOver';
+    this.lastWinnerSeat = null;
     this.series.legWinners.push(null);
     this.series.skippedLegs.push(this.series.index);
     this.clearReady();
@@ -944,6 +956,7 @@ export class Room {
     }
 
     this.phase = 'matchOver';
+    this.lastWinnerSeat = winnerSeat;
     this.clearReady();
 
     // Before the broadcast, not after: `matchEnded` carries a room view, and
@@ -1041,7 +1054,33 @@ export class Room {
    * one person reconnecting would eat another person's kill effects.
    */
   sendCatchUp(player: RoomPlayer): void {
-    if (this.phase !== 'playing' || !this.instance) return;
+    if (!this.instance) return;
+
+    // A finished match is worth replaying too, and used to be replayed to
+    // nobody. Everything the end screen shows lives in two messages that were
+    // both broadcasts — the winner in `matchEnded`, and for Meme Machine the
+    // entire gallery in the final snapshot, which is the only snapshot that
+    // ever carries it. Reload on that screen and you got `welcome`, which
+    // clears the winner, and then silence: no champion, no gallery, no way to
+    // look back through the match you just played.
+    //
+    // Deliberately not the `matchStarted` path below. That message means a
+    // match is running, and the client resets its HUD to a countdown on it.
+    if (this.phase === 'matchOver') {
+      player.client?.send({
+        t: 'matchEnded',
+        room: this.view(),
+        winnerSeat: this.lastWinnerSeat,
+        resumed: true,
+      });
+      if (this.lastSnapshot) {
+        player.client?.send({ t: 'snapshot', snap: this.lastSnapshot, st: this.lastSnapshotAt });
+      }
+      this.sendPrivate(player);
+      return;
+    }
+
+    if (this.phase !== 'playing') return;
     // `resumed` so the client can tell this from the broadcast that goes out
     // when a match really starts — see the note on the message in protocol.ts.
     player.client?.send({ t: 'matchStarted', room: this.view(), resumed: true });

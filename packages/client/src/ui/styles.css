@@ -2223,19 +2223,39 @@ strong,
   }
 }
 
+/*
+ * One grid for the whole table, and each row a `subgrid` of it — so the two
+ * numbers line up into columns down the card.
+ *
+ * It used to be a flex row per `li` with `flex: 1` on the name, which packed
+ * the score and the total tight against the end of whatever the name happened
+ * to be. Every row then put its numbers somewhere slightly different: on a
+ * phone with real Hebrew names the totals wandered by 20-40px row to row, and
+ * the only one that looked deliberate was your own, because that row is the
+ * highlighted one. Columns declared once up here cannot do that.
+ */
 .standings {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+  display: grid;
+  /* rank | dot | name | score | total */
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  row-gap: 5px;
+  column-gap: 10px;
+}
+
+/* The roulette table has no running total — four cells, four columns, and no
+   empty fifth track leaving a gap hanging off the end of every row. */
+.standings--series {
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
 }
 
 .standings li {
-  display: flex;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 10px;
   padding: 8px 10px;
   border-radius: 10px;
   border: 2.5px solid var(--ink);
@@ -2262,15 +2282,32 @@ strong,
   font-weight: 600;
 }
 
+/* Both numbers align on their end edge with tabular figures, so a 4 and a 1450
+   sit in the same column rather than shoving the row around. */
 .standings__score {
   font-family: var(--font-display);
   font-weight: 800;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
 }
 
 .standings__total {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   color: var(--ink-soft);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Sized from the text it sits beside rather than a fixed px, so it keeps its
+   proportions if that ever changes. */
+.standings__trophy {
+  flex: none;
+  width: 1.35em;
+  height: 1.35em;
 }
 
 /* Sitting out is the one state people mistake for the game being broken, so it
@@ -2826,7 +2863,11 @@ strong,
     grid-column: 2;
     grid-row: 1 / span 12;
     align-self: stretch;
-    justify-content: center;
+    /* `align-content`, not `justify-content`: the table is a grid now, and its
+       rows run down the block axis. `justify-content` centred nothing (the
+       columns already fill the width) while the rows stretched to fill the
+       card's height instead of sitting together in the middle of it. */
+    align-content: center;
     overflow: hidden;
   }
   .matchover .standings li,
@@ -4342,7 +4383,11 @@ strong,
    mismatch by cutting off the photo's edges. */
 .meme-card--composer { width: min(100%, calc((var(--app-visible-height, 100dvh) - 150px) * var(--meme-aspect))); }
 .meme-card--stage { width: min(620px, 100%, calc(58dvh * var(--meme-aspect)), calc(560px * var(--meme-aspect))); animation: meme-card-deal 320ms cubic-bezier(0.22, 1.35, 0.4, 1) both; }
-.meme-card--thumb { width: 120px; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
+/* Fills its gallery cell rather than sitting at a fixed 120px. The grid column
+   is already `minmax(240px, 1fr)`, and captions are fitted to the box they are
+   drawn in — so a thumbnail half the width of its own card is one nobody can
+   read the joke on. Tapping it opens `.memes__viewer` for the full size. */
+.meme-card--thumb { width: 100%; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
 .meme-card--broken { display: grid; place-items: center; }
 .meme-card__fallback { color: var(--ink-soft); font: 800 18px/1.2 var(--font-display); }
 .meme-card__caption {
@@ -4508,9 +4553,19 @@ strong,
    End-of-match gallery
    ---------------------------------------------------------------------------
    Sits behind the champion card, which is a centred overlay — so the gallery
-   reserves `--chrome-gutter` at the top for the fixed gear/pause/maximize
-   buttons and simply scrolls under everything else. */
-.memes__phase--gallery {
+   reserves `--chrome-gutter` for the fixed gear/pause/maximize buttons and
+   simply scrolls under everything else.
+
+   The reservation belongs on the head row, not on the phase. Those buttons are
+   anchored near the *top* of the viewport, so the only thing they can collide
+   with is the first row — but reserving it on `.memes__phase--gallery` charged
+   `--chrome-gutter` to the full height of the scroller. On a 375px phone that
+   is 184px of the 375: the memes were squeezed into a 190px column down the
+   whole screen, and the filter button still ended up jammed against the very
+   buttons the padding was making room for. It was also silently lost in
+   landscape, where `.memes__phase` re-pads at equal specificity further down
+   this file and wins on source order. */
+.memes__gallery-head {
   padding-inline-end: calc(var(--chrome-gutter) + env(safe-area-inset-right));
 }
 
@@ -4557,14 +4612,29 @@ strong,
 .memes__gallery-head {
   flex: none;
   display: flex;
+  /* Wraps rather than squeezes. Once `--chrome-gutter` is reserved above, a
+     375px phone has ~180px left for a title and a control, and the two of them
+     do not both fit. Wrapping drops the filter onto its own line — still well
+     clear of the fixed buttons, which are only ever on the first one. */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 6px 12px;
 }
 
+/* The title gives way, not the button: the count is nice to have and the filter
+   is the only control on this screen. */
 .memes__gallery-head h2 {
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-display);
+}
+
+.memes__gallery-head .btn {
+  flex: none;
 }
 
 /* The scroller, and the only thing on this screen that scrolls. `min-height: 0`
@@ -4593,6 +4663,34 @@ strong,
   border: var(--outline);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
+}
+
+/* The whole thumbnail is the "look at it properly" target. A bare button so the
+   meme inside is unchanged — no padding, no border, no background of its own. */
+.memes__gallery-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: zoom-in;
+  touch-action: manipulation;
+}
+.memes__gallery-open:focus-visible {
+  outline: 3px solid var(--violet);
+  outline-offset: 3px;
+}
+@media (hover: hover) {
+  .memes__gallery-open:hover .meme-card {
+    transform: translateY(-2px);
+  }
+}
+.memes__gallery-open .meme-card {
+  transition: transform 120ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .memes__gallery-open .meme-card { transition: none; }
 }
 
 .memes__gallery-item--top {
@@ -4624,6 +4722,129 @@ strong,
 .memes__gallery-award {
   margin-inline-start: auto;
   font-weight: 900;
+}
+
+/* ---------------------------------------------------------------------------
+   One meme, full size
+   ---------------------------------------------------------------------------
+   `position: fixed`, unlike `.overlay`, which is `absolute` and needs a
+   positioned ancestor — `.memes` is not one. Fixed also means the page behind
+   it cannot scroll this off the screen. */
+.memes__viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+    max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  background: rgba(12, 10, 9, 0.82);
+  animation: meme-viewer-in 140ms ease-out both;
+}
+
+.memes__viewer-card {
+  position: relative;
+  width: min(760px, 100%);
+  /* A *definite* height, and a percentage of the flex container's content box
+     — which already has the safe area subtracted. Never `dvh`, which knows
+     nothing about the padding above and would let the card grow taller than
+     the box that centres it.
+     `height` rather than `max-height` because `.memes__viewer-art` below is a
+     size container: it can only report a `cqh` for the meme to size itself
+     from if it has a height handed to it from out here. With a content-sized
+     card the two were circular and the art box resolved to zero — the meme
+     vanished and the viewer opened as a bare strip of caption. */
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--surface);
+  border: var(--outline);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+/* The art takes the leftover height and the meme is sized to fit inside it,
+   rather than the card growing to whatever the template's aspect wants.
+   `container-type: size` so the card below can measure *this* box (`cqh`)
+   instead of guessing from the viewport — the same trick `.memes__preview`
+   uses, and for the same reason: this height depends on the footer's content,
+   which a `dvh` knows nothing about. */
+.memes__viewer-art {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  container-type: size;
+}
+
+/* "Largest box that fits, aspect preserved" spelled out, because `.meme-card`
+   is not a replaced element and `object-fit` cannot do it for us. Height then
+   follows from the inline `aspect-ratio`. */
+.memes__viewer-art .meme-card {
+  width: min(100%, calc(100cqh * var(--meme-aspect)));
+  height: auto;
+  max-height: 100%;
+}
+
+.memes__viewer-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  font-family: var(--font-display);
+  font-size: 13px;
+}
+
+/* Same shape as the thumbnail's caption, so a meme reads the same in both. */
+.memes__viewer-credit {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.memes__viewer-credit strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The inline *start* corner, which is the one the fixed gear/pause/maximize
+   buttons never use — they are anchored to `inset-inline-end` and paint above
+   every overlay in the app, so a close button in that corner is one the app's
+   own chrome sits on top of. */
+.memes__viewer-close {
+  position: absolute;
+  z-index: 1;
+  top: 6px;
+  inset-inline-start: 6px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: var(--outline);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink);
+  font: 900 17px/1 var(--font-display);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.memes__viewer-close:active {
+  transform: translateY(var(--lift-sm));
+  box-shadow: none;
+}
+
+@keyframes meme-viewer-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .memes__viewer { animation: none; }
 }
 
 @keyframes meme-deal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -4716,6 +4937,11 @@ strong,
   .memes__fields h2 { font-size: 18px; }
   .memes__field textarea { min-height: 58px; font-size: 16px; }
   .meme-card--stage { width: min(100%, calc(50dvh * var(--meme-aspect))); }
+  /* Small enough that the title and the filter usually still share one line
+     inside what `--chrome-gutter` leaves; the wrap above covers when they
+     don't. */
+  .memes__gallery-head h2 { font-size: 17px; }
+  .memes__gallery-scroll { gap: 9px; }
   .memes__vote-button { min-height: 48px; padding: 5px; flex-direction: column; gap: 2px; }
   .memes__vote-button b { font-size: 12px; }
   .memes__result { grid-template-columns: auto 1fr; }

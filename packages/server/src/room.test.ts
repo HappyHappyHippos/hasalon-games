@@ -1243,4 +1243,44 @@ describe('Room input handover', () => {
       vi.useRealTimers();
     }
   });
+
+  it('replays the winner and the final snapshot to a reload on the end screen', () => {
+    vi.useFakeTimers();
+    try {
+      const { room } = match();
+      skipCountdown(room);
+      vi.advanceTimersByTime(200);
+
+      // End it the way the clock's `finished` hook does, with a real winner.
+      (room as unknown as { endMatch(seat: number | null): void }).endMatch(1);
+      expect(room.phase).toBe('matchOver');
+      const final = (room as unknown as { lastSnapshot: GameSnapshot }).lastSnapshot;
+
+      const reloaded = fakeClient();
+      const rejoiner = room.addPlayer(reloaded, identity('D', 3))!;
+      reloaded.sent.length = 0;
+      room.sendCatchUp(rejoiner);
+
+      // `matchEnded` is otherwise a broadcast, so it only ever reached sockets
+      // that were connected at the instant it went out. Without this a reload
+      // on the end screen showed a champion card that said nobody won.
+      const ended = reloaded.sent.filter((m) => m.t === 'matchEnded');
+      expect(ended).toHaveLength(1);
+      expect(ended[0]).toMatchObject({ winnerSeat: 1, resumed: true });
+
+      // And the final snapshot — the only one that ever carries Meme Machine's
+      // whole gallery, which is the end screen's entire point.
+      const snapshots = reloaded.sent.filter((m) => m.t === 'snapshot');
+      expect(snapshots).toHaveLength(1);
+      expect(snapshots[0]).toMatchObject({ snap: { tick: final.tick } });
+
+      // Never `matchStarted`: that message means a match is running, and the
+      // client resets its HUD to a countdown on it.
+      expect(reloaded.sent.some((m) => m.t === 'matchStarted')).toBe(false);
+
+      room.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
