@@ -551,6 +551,9 @@ const he = {
   memesDownload: 'הורדת המם',
   memesDownloading: 'מכינים תמונה…',
   memesDownloadFailed: 'לא הצלחנו להוריד את המם',
+  memesViewerOpen: 'להגדיל את המם',
+  memesViewerTitle: 'המם בגדול',
+  memesViewerClose: 'סגירה',
 
   telephoneWriteTime: 'זמן לכתיבה ולניחוש',
   telephoneDrawTime: 'זמן לציור',
@@ -1123,6 +1126,9 @@ const en: Dict = {
   memesDownload: 'Download meme',
   memesDownloading: 'Preparing image…',
   memesDownloadFailed: 'Could not download this meme',
+  memesViewerOpen: 'Open this meme bigger',
+  memesViewerTitle: 'Meme, full size',
+  memesViewerClose: 'Close',
 
   telephoneWriteTime: 'Writing and guessing time',
   telephoneDrawTime: 'Drawing time',

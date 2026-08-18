@@ -120,8 +120,17 @@ function drawCaption(
   ctx.restore();
 }
 
-/** Render the revealed meme to a real image and download it locally. */
-export async function downloadMeme(stage: MemesStageEntry): Promise<void> {
+/**
+ * The three fields the renderer below actually reads.
+ *
+ * Structural rather than `MemesStageEntry`, so the end-of-match gallery — whose
+ * entries carry a round and an author instead of a live tally — can be saved by
+ * the same code that saves the one currently on stage.
+ */
+export type DownloadableMeme = Pick<MemesStageEntry, 'templateId' | 'texts' | 'positions'>;
+
+/** Render the meme to a real image and download it locally. */
+export async function downloadMeme(stage: DownloadableMeme): Promise<void> {
   const template = templateById(stage.templateId);
   if (!template) throw new Error('Unknown meme template');
   await document.fonts?.ready;

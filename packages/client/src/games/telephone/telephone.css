@@ -184,9 +184,20 @@
 }
 
 /* The album divides up a fixed height rather than growing — the conversation
-   scrolls inside it. */
+   scrolls inside it.
+   `minmax(0, 1fr)`, deliberately *not* the plain `1fr` the write phase above
+   needs. `1fr` is `minmax(auto, 1fr)`, and that auto minimum is the whole point
+   there and fatal here: the row grew to the album's content — a chain is easily
+   two thousand pixels — so `.telephone__album`'s `height: 100%` resolved to
+   that rather than to the screen, `.telephone__chat` was handed the same height
+   and so was never taller than its own box, and nothing ever scrolled. What
+   overflowed was the phase, and the phase is `overflow: hidden`, so the second
+   half of every chain was simply clipped and unreachable. Capping the minimum
+   at 0 hands the overflow back to the chat, which is the box that knows how to
+   scroll it. */
 .telephone__phase--reveal {
   overflow: hidden;
+  grid-template-rows: minmax(0, 1fr);
 }
 
 /* ---------------------------------------------------------------------------
@@ -200,10 +211,25 @@
   padding-bottom: calc(var(--lift-lg) + 2px);
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  /*
+   * Centred by auto margins, not by `justify-content: center` — the same rule
+   * as the note at the top of this file, one level further in.
+   *
+   * `justify-content: center` splits any overflow evenly above and below, and
+   * the half above the start edge cannot be scrolled to. This box is stretched
+   * to its grid track, so with a keyboard up in landscape its content is taller
+   * than it is and that is not hypothetical: the prompt disappeared upward and
+   * the send button went off the bottom. Auto margins centre exactly the same
+   * way when there is room and collapse to zero when there is not, leaving all
+   * the overflow below the start edge where the scroller can reach it.
+   */
+  justify-content: flex-start;
   gap: clamp(10px, 2vh, 18px);
   box-sizing: border-box;
 }
+
+.telephone__composer > :first-child { margin-block-start: auto; }
+.telephone__composer > :last-child { margin-block-end: auto; }
 
 .telephone__composer h1,
 .telephone__album h1 {
@@ -832,8 +858,15 @@
     padding-inline: max(4px, env(safe-area-inset-left), env(safe-area-inset-right));
   }
 
+  /* A real gap above the sheet, which `env(safe-area-inset-top)` alone does not
+     give: in landscape that inset is 0 on most phones, so the board's top
+     border sat flush against the edge of the screen while its dock already had
+     6px at the bottom. Top only — the sheet is still meant to run edge to edge
+     sideways, and this is the one side the fixed chrome and the floating clock
+     also live on. */
   .telephone--draw .telephone__phase--draw {
-    padding: env(safe-area-inset-top) max(0px, env(safe-area-inset-left), env(safe-area-inset-right))
+    padding: max(8px, env(safe-area-inset-top))
+      max(0px, env(safe-area-inset-left), env(safe-area-inset-right))
       env(safe-area-inset-bottom);
   }
 
@@ -850,12 +883,100 @@
   }
   .telephone__album-head h1 { display: none; }
   .telephone__album-head .eyebrow { margin: 0; }
+  /*
+   * One centred column, rather than a chat spread across the whole width.
+   *
+   * The alternating left/right bubbles are the right shape in portrait, where
+   * the column is a phone wide. In landscape the album is ~800px and a message
+   * is ~570 of it, so consecutive steps swung between the two edges and the
+   * whole chain read as pinned to one side of the screen with a wide empty gutter
+   * on the other. A capped column keeps the conversation on the midline the way
+   * the note at the top of this file says the reveal is supposed to sit.
+   */
+  .telephone__album { width: min(100%, 560px); }
   .telephone__chat { gap: 12px; padding-block-end: 8px; }
-  .telephone__message { width: 76%; }
-  .telephone__message-bubble--drawing { width: min(46vw, 400px); }
-  .telephone__composer { gap: 8px; }
-  .telephone__composer textarea { min-height: 74px; max-height: 26dvh; }
-  .telephone__previous .telephone__preview-canvas { max-height: 30dvh; }
+  .telephone__message,
+  .telephone__message--right,
+  .telephone__message--left {
+    width: min(100%, 500px);
+    align-self: center;
+    align-items: center;
+    margin-inline: auto;
+  }
+  /* Centred with everything else, and `dir="auto"` in the JSX still decides
+     which way the sentence itself runs. */
+  .telephone__message-text { text-align: center; }
+  .telephone__message-bubble--drawing { width: min(72vw, 400px); }
+  /*
+   * Two columns, the way `.memes__composer` already solves this.
+   *
+   * One column cannot be made to fit. With a keyboard up in landscape the
+   * composer has ~130px to work with, and the thing you are guessing at, a
+   * heading, a field and a send button need well over 200 however hard each one
+   * is squeezed — so the button went off the bottom of the screen and the only
+   * way back to it was a scroll inside a box that gave no sign it had one.
+   * Landscape has width instead: the prompt takes one column and the field and
+   * its button take the other, and the button is simply on screen.
+   */
+  .telephone__composer {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(250px, 0.9fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    align-content: center;
+    column-gap: 14px;
+    row-gap: 6px;
+  }
+  /* The auto margins that centre the flex column above are meaningless here and
+     actively fight `align-content` — the grid does its own centring. */
+  .telephone__composer > :first-child,
+  .telephone__composer > :last-child {
+    margin-block: 0;
+  }
+  .telephone__previous,
+  .telephone__previous-text {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    align-self: center;
+  }
+  .telephone__composer h1 { grid-column: 2; grid-row: 1; }
+  /* `stretch` into the `1fr` row so the field uses the slack instead of leaving
+     it as a gap between itself and the send button; `max-height` still caps it.
+     The row is the shock absorber — it is what shrinks first when a keyboard
+     arrives, which is what keeps the button on screen. */
+  .telephone__composer textarea { grid-column: 2; grid-row: 2; align-self: stretch; }
+  .telephone__composer-foot { grid-column: 2; grid-row: 3; }
+  /* The very first step has nothing to show yet — one column rather than a
+     wide empty gutter beside the field. */
+  .telephone__composer:not(:has(.telephone__previous, .telephone__previous-text)) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .telephone__composer:not(:has(.telephone__previous, .telephone__previous-text)) h1,
+  .telephone__composer:not(:has(.telephone__previous, .telephone__previous-text)) textarea,
+  .telephone__composer:not(:has(.telephone__previous, .telephone__previous-text)) .telephone__composer-foot {
+    grid-column: 1;
+  }
+  /*
+   * Sized from the shell, not from `dvh`.
+   *
+   * `dvh` tracks browser chrome and knows nothing about a keyboard, so a
+   * `26dvh` field stayed ~98px tall in a composer that a landscape keyboard had
+   * just squeezed to ~120px — and the send button below it went off the bottom
+   * of the screen. Worse, `keepFocusedFieldVisible` then centred the field you
+   * had just tapped, pushing the button further out on every geometry change.
+   *
+   * `--app-visible-height` is the shell, which already shrank on iOS; on
+   * Android the shell stays full height and `--keyboard-inset` is what grew.
+   * Subtracting both covers the two behaviours with one expression, and with no
+   * keyboard up it is the plain 26%/30% of the screen it has always been.
+   */
+  .telephone__composer {
+    --telephone-room: calc(var(--app-visible-height, 100dvh) - var(--keyboard-inset));
+  }
+  .telephone__composer textarea {
+    min-height: min(74px, calc(var(--telephone-room) * 0.26));
+    max-height: calc(var(--telephone-room) * 0.45);
+  }
+  .telephone__previous .telephone__preview-canvas { max-height: calc(var(--telephone-room) * 0.3); }
   .telephone__banner { top: 6px; max-width: min(62%, 520px); padding: 5px 8px; }
   .telephone__banner p { max-height: 2.6em; font-size: 0.85rem; }
   .telephone__zoom { top: auto; bottom: 8px; inset-inline-end: 8px; transform: none; flex-direction: row; }
