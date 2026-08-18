@@ -130,11 +130,26 @@ The dashboard is `noindex`, `no-store`, and 404s without the token.
 
 ### Making it survive a redeploy
 
-The default path is inside the container and therefore ephemeral, which matches
-the rest of this server — rooms are in memory too. stdout still has everything,
-but the dashboard restarts empty. To keep it:
+Without a mounted volume the default path is inside the container and therefore
+ephemeral, which matches the rest of this server — rooms are in memory too.
+stdout still has everything, but the dashboard restarts empty. To keep it:
 
-- **Railway** — add a volume mounted at `/app/data`. Nothing else changes.
+- **Railway** — a volume mounted at `/app/data`. **Both environments already
+  have one**, so there is nothing to do; this is how to recreate it:
+
+  ```bash
+  railway environment production && railway service hasalon-games
+  railway volume add -m /app/data
+  ```
+
+  Two things about that command. It must be run from PowerShell rather than Git
+  Bash — MSYS rewrites `/app/data` into a Windows path before the CLI sees it,
+  and the error you get is the baffling `Mount path must start with a "/"`. And
+  there is no size flag: 5 GB is the Hobby plan's ceiling, applied
+  automatically. It is a cap, not a reservation — Railway bills storage actually
+  used, and a fresh ext4 volume reports ~82 MB of journal and metadata before
+  anything is written, which is the real floor at roughly a penny a month. The
+  log itself is about 24 KB per evening, so it never becomes the cost.
 - **AWS** (ECS/Fargate) — an EFS access point at `/app/data`, or set
   `ANALYTICS_FILE` to a path on an EBS-backed instance.
 - **Google Cloud Run** — the filesystem is in-memory, so set `ANALYTICS_FILE=off`

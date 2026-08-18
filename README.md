@@ -235,11 +235,11 @@ dashboard reads back after a restart).
 railway variables --set ADMIN_TOKEN="$(openssl rand -hex 16)"
 ```
 
-The default log path is inside the container and therefore ephemeral, like the
-rooms themselves. To keep history across deploys, mount a Railway volume at
-`/app/data`. [`docs/analytics.md`](docs/analytics.md) is the field reference and
-covers what moving to AWS or Google Cloud would change (one environment
-variable, at most).
+Both environments have `ADMIN_TOKEN` set and a volume mounted at `/app/data`, so
+the history survives a redeploy — without that volume the log would be as
+ephemeral as the rooms. [`docs/analytics.md`](docs/analytics.md) is the field
+reference; it covers recreating the volume and what moving to AWS or Google
+Cloud would change (one environment variable, at most).
 
 > **Moving to Israel.** Every player is in Israel and Railway has no Middle East
 > region — EU West measures ~114 ms median round trip, against ~10–20 ms for a
