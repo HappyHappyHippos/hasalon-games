@@ -452,12 +452,20 @@ describe('calculateKnockback', () => {
     expect(calculateKnockback(0, 2)).toBe(KB_BASE * 2);
   });
 
-  it('grows extra pushback per damage % at 50% of the previous rate', () => {
+  it('applies KB_PER_DAMAGE per point of damage, whole and unscaled', () => {
     // Derived rather than written out, because `KB_PER_DAMAGE` is a tuning
     // value — it moved for issue #32 and this test went stale with it.
-    const perDamage = KB_PER_DAMAGE * 0.5;
-    expect(calculateKnockback(100)).toBe(KB_BASE + 100 * perDamage);
-    expect(calculateKnockback(50, 1.5)).toBe((KB_BASE + 50 * perDamage) * 1.5);
+    expect(calculateKnockback(100)).toBe(KB_BASE + 100 * KB_PER_DAMAGE);
+    expect(calculateKnockback(50, 1.5)).toBe((KB_BASE + 50 * KB_PER_DAMAGE) * 1.5);
+  });
+
+  it('has no constant factor hiding between the tuning value and the result', () => {
+    // The regression this exists for: an extra `* 0.5` folded into the
+    // formula. The ratio test in `sim.test.ts` cannot catch that — it patches
+    // `KB_PER_DAMAGE` on both sides of its comparison, so any constant factor
+    // divides out. Reading the slope back off the function does catch it.
+    const slope = (calculateKnockback(80) - calculateKnockback(0)) / 80;
+    expect(slope).toBeCloseTo(KB_PER_DAMAGE, 10);
   });
 });
 

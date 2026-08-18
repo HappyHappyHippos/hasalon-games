@@ -10,6 +10,7 @@ import {
   BOMB_SIZE,
   CRATE_SIZE,
   GM_POWERUPS,
+  KO_DAMAGE,
   PISTOL_RELOAD_TICKS,
   PLAYER_HALF_H,
   PLAYER_HALF_W,
@@ -1008,7 +1009,11 @@ export class GunMayhemRenderer {
     const { ctx } = this.stage;
     const damage = player.d;
     // Damage colours from white through yellow to red as you get launchier.
-    const heat = Math.min(1, damage / 160);
+    // Against `KO_DAMAGE`, because that is where a life actually ends: ramping
+    // to a hard-coded 160 meant the reddest anyone ever got was the 0.625 of
+    // the way up that 99% reached, so "one more hit" and "halfway there" were
+    // painted nearly the same colour.
+    const heat = Math.min(1, damage / KO_DAMAGE);
     const color = `rgb(255, ${Math.round(255 - heat * 190)}, ${Math.round(255 - heat * 225)})`;
 
     // Above the head, and above the hat: below the feet it would sit inside

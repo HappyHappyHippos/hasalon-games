@@ -29,7 +29,7 @@ import {
   DEFAULT_STOCKS,
   DEFAULT_TARGET_WINS,
   KB_UP_BIAS,
-  MAX_DAMAGE,
+  KO_DAMAGE,
   PISTOL_RELOAD_TICKS,
   PLAYER_HALF_H,
   PLAYER_HALF_W,
@@ -740,14 +740,11 @@ function explode(
 // ---------------------------------------------------------------------------
 
 /**
- * Knockback *replaces* velocity instead of adding to it, so every hit reads
- * the same way regardless of what the victim was doing. It scales with the
- * damage they have already taken, which is the whole tension of the game.
+ * Take a stock off a player and put them out until they respawn.
  *
- * This is also the single chokepoint where shields are checked, which is why
- * bullets, explosions and knives all get shield behaviour for free. Returns
- * true when a shield ate the hit, so callers can report it as a pop instead of
- * a hit.
+ * Two things end a life and both come through here: leaving the blast zone,
+ * and damage reaching `KO_DAMAGE`. Sharing the path is what keeps the `died`
+ * event, the kill credit and the respawn timer identical either way.
  */
 function killPlayer(state: GunMayhemState, player: GmPlayer): void {
   player.active = false;
@@ -768,6 +765,16 @@ function killPlayer(state: GunMayhemState, player: GmPlayer): void {
   if (player.stocks > 0) player.respawnTimer = RESPAWN_TICKS;
 }
 
+/**
+ * Knockback *replaces* velocity instead of adding to it, so every hit reads
+ * the same way regardless of what the victim was doing. It scales with the
+ * damage they have already taken, which is the whole tension of the game.
+ *
+ * This is also the single chokepoint where shields are checked, which is why
+ * bullets, explosions and knives all get shield behaviour for free. Returns
+ * true when a shield ate the hit, so callers can report it as a pop instead of
+ * a hit.
+ */
 function damageAndLaunch(
   state: GunMayhemState,
   target: GmPlayer,
@@ -790,14 +797,14 @@ function damageAndLaunch(
     return true;
   }
 
-  target.damage = Math.min(MAX_DAMAGE, target.damage + damage);
+  target.damage = Math.min(KO_DAMAGE, target.damage + damage);
 
   if (bySeat !== target.seat) {
     target.lastHitBy = bySeat;
     target.lastHitAt = state.tick;
   }
 
-  if (target.damage >= 100) {
+  if (target.damage >= KO_DAMAGE) {
     killPlayer(state, target);
     return false;
   }
@@ -949,7 +956,7 @@ function stepBlastZones(state: GunMayhemState): void {
       player.x > BLAST_RIGHT ||
       player.y > BLAST_BOTTOM ||
       player.y < BLAST_TOP ||
-      player.damage >= 100;
+      player.damage >= KO_DAMAGE;
     if (!out) continue;
 
     killPlayer(state, player);

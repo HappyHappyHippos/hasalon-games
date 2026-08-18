@@ -96,8 +96,20 @@ export const KB_PER_DAMAGE = 13.6;
 /** Fraction of the knockback applied upwards, so hits pop people into the air. */
 export const KB_UP_BIAS = 0.42;
 
-/** Damage is capped so a camper can't become literally unkillable-adjacent. */
-export const MAX_DAMAGE = 320;
+/**
+ * Damage at which a player is knocked out outright, without having to be thrown
+ * off the stage first.
+ *
+ * Also the cap, because nothing can carry more: `damageAndLaunch` kills on the
+ * hit that reaches it. It replaced a `MAX_DAMAGE` of 320, which the KO rule had
+ * made unreachable — damage could never climb past 100, so the "cap" bounded
+ * nothing and the comment describing it was describing a rule that no longer
+ * existed.
+ *
+ * Anything drawing a damage ramp scales against this, or the colour tops out
+ * somewhere no player ever reaches. See `Renderer.drawNameplate`.
+ */
+export const KO_DAMAGE = 100;
 
 // ---------------------------------------------------------------------------
 // Stocks, respawning, rounds
