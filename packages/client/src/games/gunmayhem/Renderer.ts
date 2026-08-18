@@ -573,7 +573,16 @@ export class GunMayhemRenderer {
       // Out of the game, or waiting to drop back in.
       const gone = player.rt > 0 || player.k <= 0;
       if (gone) {
+        // Whichever body it is, let go of it. A death and the respawn that
+        // follows are the server placing someone outright, and a smoother still
+        // holding where they died spends the first frames of the next life
+        // sliding out of the grave — with a velocity from the moment of death
+        // deciding whether it even counts as an event. Tank Trouble and Gravity
+        // Guy both forget the seat here; this was the one that did not, so it
+        // was the one where dying on the spot (a 100% KO, rather than being
+        // thrown off the stage) respawned you with a slide across the arena.
         if (isLocal) this.releaseLocalBody();
+        else this.remotes.forget(player.s);
         continue;
       }
 
@@ -617,6 +626,7 @@ export class GunMayhemRenderer {
       }
       if (!body) {
         if (isLocal) this.releaseLocalBody();
+        else this.remotes.forget(player.s);
         continue;
       }
 
