@@ -56,7 +56,7 @@ export function Toolbar({ color, size, mode, onColor, onSize, onMode, onUndo, on
             <button
               type="button"
               className="skribbl__picker-close"
-              aria-label="Close"
+              aria-label={t.close}
               onClick={() => {
                 sfx.click();
                 setPickerOpen(false);

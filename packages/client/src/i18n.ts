@@ -248,6 +248,10 @@ const he = {
   playingThis: 'משחקים את זה',
   prevGame: 'המשחק הקודם',
   nextGame: 'המשחק הבא',
+  // The stage carousels inside a game's settings, which are a different
+  // carousel from the game picker above.
+  prevStage: 'הזירה הקודמת',
+  nextStage: 'הזירה הבאה',
 
   // Game names stay as they are — they are proper nouns in both languages.
   games: {
@@ -447,6 +451,7 @@ const he = {
   wormsPickTarget: 'בחרו יעד על המפה',
   wormsSelectWeapon: 'בחירת נשק',
   wormsUnlimited: 'ללא הגבלה',
+  wormsAmmoLeft: (n: number) => `נשארו ${n}`,
   wormsWeaponNames: {
     bazooka: 'בזוקה',
     grenade: 'רימון יד',
@@ -830,6 +835,8 @@ const en: Dict = {
   playingThis: 'Playing this',
   prevGame: 'Previous game',
   nextGame: 'Next game',
+  prevStage: 'Previous stage',
+  nextStage: 'Next stage',
 
   games: {
     achtung: {
@@ -1025,6 +1032,7 @@ const en: Dict = {
   wormsPickTarget: 'Pick a spot on the map',
   wormsSelectWeapon: 'Select Weapon',
   wormsUnlimited: 'Unlimited',
+  wormsAmmoLeft: (n: number) => `${n} left`,
   wormsWeaponNames: {
     bazooka: 'Bazooka',
     grenade: 'Grenade',

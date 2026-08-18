@@ -12,14 +12,20 @@ export function Logo({ size = 'lg' }: Props): JSX.Element {
   return <img className={`logo logo--${size}`} src="/logo.png" alt="הסלון — hasalon" />;
 }
 
-/** The house mark: a fat two-seater, drawn in the same ink as everything else. */
+/**
+ * The house mark: a fat two-seater, drawn in the same ink as everything else.
+ *
+ * Hidden from assistive tech rather than labelled. It is decoration on the
+ * intro splash, sitting beside the הסלון wordmark that already says what this
+ * is — and the label it used to carry was "A couch", in English, in a
+ * Hebrew-first UI.
+ */
 export function Couch({ className }: { className?: string }): JSX.Element {
   return (
     <svg
       className={`couch${className ? ` ${className}` : ''}`}
       viewBox="0 0 64 48"
-      role="img"
-      aria-label="A couch"
+      aria-hidden="true"
     >
       <g
         fill="none"
