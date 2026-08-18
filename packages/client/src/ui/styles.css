@@ -463,6 +463,15 @@ strong,
   overflow: hidden;
   box-shadow: var(--shadow-sm);
   background: var(--surface);
+  /* `flex: none` because of the `overflow: hidden` two lines up.
+     A flex item's automatic minimum size — the thing that normally stops it
+     being squeezed below its own content — only applies while `overflow` is
+     `visible`. The hidden overflow is here to clip the buttons to the rounded
+     corners, and the side effect is that this box will shrink to nothing and
+     clip a 44px button in half instead. In a narrow `.setting` row (a phone in
+     landscape puts three of them across) the plus button lost 11px.
+     The label beside it wraps instead, which is the right thing to give up. */
+  flex: none;
 }
 
 .number-stepper__button {
