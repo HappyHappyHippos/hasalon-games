@@ -105,8 +105,18 @@ export interface RoomView {
 export const NAME_MAX_LENGTH = 14;
 export const ROOM_CODE_LENGTH = 4;
 
-/** No I/O/0/1 — they get misread when someone reads a code out loud. */
-const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+/**
+ * Digits only.
+ *
+ * It used to be 24 letters plus 8 digits, with I/O/0/1 held back because they
+ * get misread when a code is read out loud. Digits alone drop that whole
+ * problem and buy something the letters could not: a phone shows the *number*
+ * keypad for a field that can only hold numbers, which is the difference
+ * between four taps and hunting across a full keyboard. Ten thousand codes is
+ * far more than a living room ever holds at once, and `RoomManager.create`
+ * retries on a collision anyway.
+ */
+const CODE_ALPHABET = '0123456789';
 
 export function generateRoomCode(random: () => number = Math.random): string {
   let out = '';

@@ -24,6 +24,23 @@ import type { InkSurface } from './InkSurface';
 /** Roughly one snapshot. Batching finer costs messages and buys nothing. */
 const FLUSH_MS = 33;
 
+/**
+ * Marks a control that happens to live *inside* the drawing surface.
+ *
+ * Telephone floats its toolbar, its zoom buttons and the prompt over the sheet
+ * so the sheet can have the whole screen, which puts them inside the element
+ * the pen listens on — and a pointerdown on Undo would otherwise leave a dot
+ * under the button that undid it. React's `stopPropagation` is no help: React
+ * delegates at the root, so the native listener here has already run by the
+ * time a synthetic handler could stop anything. Asking the target what it is
+ * works regardless of who attached what.
+ */
+export const DRAW_IGNORE_ATTRIBUTE = 'data-draw-ignore';
+
+export function isDrawIgnored(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(`[${DRAW_IGNORE_ATTRIBUTE}]`) !== null;
+}
+
 export interface DrawTool {
   /** Index into `INK_COLORS`. */
   color: number;
@@ -39,13 +56,38 @@ export interface DrawInput {
   tool: DrawTool;
   /** Whether strokes are accepted at all — false for everyone but the drawer. */
   enabled: boolean;
+  /**
+   * Temporarily not accepting strokes, while the drawer is doing something else
+   * with their fingers. Separate from `enabled` because they have different
+   * owners and different lifetimes: `enabled` is the game's rule about who may
+   * draw, this is a gesture in progress (see `viewInput.ts`), and a pinch must
+   * not be able to leave a spectator holding the pen.
+   */
+  suspended: boolean;
+  /**
+   * Stop the stroke in progress, if there is one. Returns whether there was.
+   *
+   * The ops already sent are already on the wire — ink is cumulative and
+   * nothing can un-send them — so this ends the stroke cleanly and leaves
+   * taking the mark back to the caller, which is the only one that knows
+   * whether it wants an undo. The return value is what stops that caller from
+   * undoing a stroke it never started: two fingers landing together cancel
+   * nothing, and an undo there would rub out the *previous* stroke.
+   */
+  cancelStroke(): boolean;
 }
 
-export function attachDrawInput(surface: HTMLElement, ink: InkSurface): DrawInput {
+export function attachDrawInput(
+  surface: HTMLElement,
+  ink: InkSurface,
+  onLocalOps?: (ops: readonly number[]) => void,
+): DrawInput {
   const state: DrawInput = {
     tool: { color: 0, size: 1, mode: 'pen' },
     enabled: false,
+    suspended: false,
     destroy,
+    cancelStroke,
   };
 
   let drawing = false;
@@ -65,10 +107,11 @@ export function attachDrawInput(surface: HTMLElement, ink: InkSurface): DrawInpu
   const timer = window.setInterval(flush, FLUSH_MS);
 
   const onDown = (event: PointerEvent): void => {
-    if (!state.enabled || drawing) return;
+    if (!state.enabled || state.suspended || drawing) return;
     // Ignore the right button and any secondary pointer; a second finger on a
     // phone is a pinch attempt, not a second stroke.
     if (event.button !== 0) return;
+    if (isDrawIgnored(event.target)) return;
     event.preventDefault();
 
     const { x, y } = ink.toCanvas(event.clientX, event.clientY);
@@ -76,7 +119,9 @@ export function attachDrawInput(surface: HTMLElement, ink: InkSurface): DrawInpu
     lastY = Math.round(y);
 
     if (state.tool.mode === 'fill') {
-      ink.apply([OP_FILL, state.tool.color, lastX, lastY]);
+      const ops = [OP_FILL, state.tool.color, lastX, lastY];
+      ink.apply(ops);
+      onLocalOps?.(ops);
       socket.sendInputReliable({ k: 'fill', c: state.tool.color, x: lastX, y: lastY });
       return;
     }
@@ -85,7 +130,9 @@ export function attachDrawInput(surface: HTMLElement, ink: InkSurface): DrawInpu
     pointerId = event.pointerId;
     surface.setPointerCapture?.(event.pointerId);
 
-    ink.apply([OP_BEGIN, state.tool.color, state.tool.size, lastX, lastY]);
+    const ops = [OP_BEGIN, state.tool.color, state.tool.size, lastX, lastY];
+    ink.apply(ops);
+    onLocalOps?.(ops);
     socket.sendInput({ k: 'begin', c: state.tool.color, s: state.tool.size, x: lastX, y: lastY });
   };
 
@@ -105,7 +152,9 @@ export function attachDrawInput(surface: HTMLElement, ink: InkSurface): DrawInpu
       if (px === lastX && py === lastY) continue;
       lastX = px;
       lastY = py;
-      ink.apply([OP_TO, px, py]);
+      const ops = [OP_TO, px, py];
+      ink.apply(ops);
+      onLocalOps?.(ops);
       if (queued.length < MAX_POINTS_PER_MESSAGE * 2) queued.push(px, py);
     }
 
@@ -116,12 +165,18 @@ export function attachDrawInput(surface: HTMLElement, ink: InkSurface): DrawInpu
 
   const onUp = (event: PointerEvent): void => {
     if (!drawing || event.pointerId !== pointerId) return;
+    cancelStroke();
+  };
+
+  function cancelStroke(): boolean {
+    if (!drawing) return false;
     drawing = false;
     pointerId = null;
     // Flush immediately: the end of a stroke is exactly when the rest of the
     // room is waiting to see it.
     flush();
-  };
+    return true;
+  }
 
   surface.addEventListener('pointerdown', onDown);
   surface.addEventListener('pointermove', onMove);

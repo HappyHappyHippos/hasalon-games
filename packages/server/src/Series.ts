@@ -44,6 +44,7 @@ export class Series {
   index = 0;
   until: number | null = null;
   legWinners: (string | null)[] = [];
+  skippedLegs: number[] = [];
   aborted = false;
 
   private timer: NodeJS.Timeout | null = null;
@@ -67,6 +68,7 @@ export class Series {
     this.lineup = lineup;
     this.index = 0;
     this.legWinners = [];
+    this.skippedLegs = [];
     this.aborted = false;
     this.phase = 'reveal';
     this.arm(revealMs);
@@ -122,6 +124,7 @@ export class Series {
     this.lineup = [];
     this.index = 0;
     this.legWinners = [];
+    this.skippedLegs = [];
     this.aborted = false;
   }
 
@@ -134,6 +137,7 @@ export class Series {
       pace: this.setup.pace,
       until: this.until,
       legWinners: [...this.legWinners],
+      skippedLegs: [...this.skippedLegs],
       aborted: this.aborted,
     };
   }

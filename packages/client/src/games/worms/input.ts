@@ -2,7 +2,7 @@
  * The Worms controller.
  *
  * Two halves, for the two rates the game runs at. The buttons go through the
- * shared 60 Hz sampler like every other game; weapon, fuse and target are sent
+ * shared 60 Hz sampler like every other game; weapon, fuse, target and fire are sent
  * as one-off commands, because there is no next sample to supersede a dropped
  * weapon switch and re-sending a weapon choice sixty times a second to say
  * nothing changed would be absurd.
@@ -11,7 +11,6 @@
 import {
   IN_AIM_DOWN,
   IN_AIM_UP,
-  IN_FIRE,
   IN_JUMP,
   IN_LEFT,
   IN_RIGHT,
@@ -46,19 +45,19 @@ const KEY_BITS: Record<string, number> = {
   KeyS: IN_AIM_DOWN,
   Enter: IN_JUMP,
   ShiftLeft: IN_JUMP,
-  Space: IN_FIRE,
-  KeyJ: IN_FIRE,
 };
 
 export interface WormsInputHandlers {
   onBits: OnInput;
   onCommand: (command: WormsCommand) => void;
+  getPower: () => number;
 }
 
 export interface WormsInputController extends InputController {
   selectWeapon(weapon: WormsWeaponId): void;
   cycleFuse(): void;
   setTarget(x: number, y: number): void;
+  fire(): void;
 }
 
 /** Number keys pick a weapon; `1` is the first in the picker's order. */
@@ -75,7 +74,7 @@ const WEAPON_KEYS = [
   'Digit0',
 ];
 
-export function attachWormsInput({ onBits, onCommand }: WormsInputHandlers): WormsInputController {
+export function attachWormsInput({ onBits, onCommand, getPower }: WormsInputHandlers): WormsInputController {
   const bits = attachBitInput({
     buffer: wormsInput,
     keyBits: KEY_BITS,
@@ -102,6 +101,12 @@ export function attachWormsInput({ onBits, onCommand }: WormsInputHandlers): Wor
       event.preventDefault();
       fuseStep += 1;
       onCommand({ k: 'fuse', s: (fuseStep % 5) + 1 });
+      return;
+    }
+
+    if (event.code === 'Space' || event.code === 'KeyJ') {
+      event.preventDefault();
+      onCommand({ k: 'fire', p: getPower() });
     }
   };
 
@@ -118,6 +123,9 @@ export function attachWormsInput({ onBits, onCommand }: WormsInputHandlers): Wor
     },
     setTarget(x, y) {
       onCommand({ k: 'target', x: Math.round(x), y: Math.round(y) });
+    },
+    fire() {
+      onCommand({ k: 'fire', p: getPower() });
     },
     destroy() {
       window.removeEventListener('keydown', onKeyDown);

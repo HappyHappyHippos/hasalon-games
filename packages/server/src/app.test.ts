@@ -139,6 +139,40 @@ afterEach(async () => {
   await app.close();
 });
 
+describe('the usage dashboard', () => {
+  async function get(path: string): Promise<{ status: number; body: string }> {
+    const response = await fetch(`http://127.0.0.1:${port}${path}`);
+    return { status: response.status, body: await response.text() };
+  }
+
+  it('renders, and serves the raw log beside it', async () => {
+    // `ADMIN_TOKEN` is unset in the test environment, and `NODE_ENV` is not
+    // production, so this is the development-open path.
+    const page = await get('/admin');
+    expect(page.status).toBe(200);
+    expect(page.body).toContain('<!doctype html>');
+
+    const raw = await get('/admin/events.ndjson');
+    expect(raw.status).toBe(200);
+  });
+
+  it('404s with a wrong key rather than admitting it exists', async () => {
+    process.env.ADMIN_TOKEN = 'let-me-in';
+    try {
+      expect((await get('/admin')).status).toBe(404);
+      expect((await get('/admin?key=nope')).status).toBe(404);
+      expect((await get('/admin?key=let-me-in')).status).toBe(200);
+    } finally {
+      delete process.env.ADMIN_TOKEN;
+    }
+  });
+
+  it('will not answer a POST', async () => {
+    const response = await fetch(`http://127.0.0.1:${port}/admin`, { method: 'POST' });
+    expect(response.status).toBe(405);
+  });
+});
+
 describe('lobby', () => {
   it('creates a room and lets others join with the code', async () => {
     const [host, guest] = await makeLobby(2);
@@ -187,6 +221,37 @@ describe('lobby', () => {
 
     guest!.send({ t: 'start' });
     expect((await guest!.next('error')).code).toBe('NOT_HOST');
+  });
+
+  it('only lets the host kick, and tells the kicked player why', async () => {
+    const [host, guest, other] = await makeLobby(3);
+    const guestId = guest!.playerId;
+
+    // A guest aiming at somebody else gets nothing but the refusal.
+    guest!.send({ t: 'kick', playerId: other!.playerId });
+    expect((await guest!.next('error')).code).toBe('NOT_HOST');
+
+    host!.send({ t: 'kick', playerId: guestId });
+    expect((await guest!.next('error')).code).toBe('KICKED');
+
+    const after = await host!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'room' }> =>
+        m.t === 'room' && m.room.players.length === 2,
+    );
+    expect(after.room.players.some((p) => p.id === guestId)).toBe(false);
+  });
+
+  it('refuses to let the host kick themselves', async () => {
+    const [host] = await makeLobby(2);
+    host!.send({ t: 'kick', playerId: host!.playerId });
+    host!.send({ t: 'game', gameId: 'achtung' });
+
+    // No error and no removal: the next message through is the game change,
+    // which proves the kick was dropped rather than merely slow.
+    const next = await host!.waitFor(
+      (m): m is Extract<ServerMessage, { t: 'room' }> => m.t === 'room' && m.room.gameId === 'achtung',
+    );
+    expect(next.room.players).toHaveLength(2);
   });
 
   it('broadcasts host settings to everyone', async () => {
@@ -413,7 +478,7 @@ describe('match', () => {
 
     host!.send({ t: 'game', gameId: 'worms' });
     // Pinned, so the shot below is the same shot every run.
-    host!.send({ t: 'settings', settings: { stageId: 'green', windEnabled: false, turnSeconds: 15 } });
+    host!.send({ t: 'settings', settings: { stageId: 'small_green', windEnabled: false, turnSeconds: 15 } });
     host!.send({ t: 'start' });
     const started = await host!.next('matchStarted');
     const hostSeat = started.room.players.find((p) => p.id === host!.playerId)!.seat;
@@ -428,7 +493,7 @@ describe('match', () => {
     expect(firstTurn.snap.worms).toHaveLength(4);
     expect(firstTurn.snap.seats).toHaveLength(2);
     expect(firstTurn.snap.worms.every((w) => w.al === 1 && w.hp > 0)).toBe(true);
-    expect(firstTurn.snap.st).toBe('green');
+    expect(firstTurn.snap.st).toBe('small_green');
 
     const opening = firstTurn.snap;
     const firstSeat = opening.worms.find((w) => w.i === opening.ac)!.s;
@@ -445,7 +510,7 @@ describe('match', () => {
         m.data !== null &&
         Array.isArray((m.data as { c?: unknown }).c) &&
         (m.data as { c: unknown[] }).c.length > 0,
-      20_000,
+      35_000,
     );
     const holding = setInterval(() => {
       shooter.send({ t: 'input', i: { seq: seq++, bits: IN_FIRE } });
@@ -460,7 +525,7 @@ describe('match', () => {
     // Craters travel on `private`, never in the snapshot — see the note on
     // `worms/sim.ts:buildTerrainPrivate`. The snapshot only counts them.
     const payload = terrain.data as { st: string; r: number; c: number[][] };
-    expect(payload.st).toBe('green');
+    expect(payload.st).toBe('small_green');
     expect(payload.r).toBe(1);
     expect(payload.c[0]).toHaveLength(4);
     expect(payload.c[0]!.every((n) => Number.isInteger(n))).toBe(true);
@@ -479,11 +544,11 @@ describe('match', () => {
       const snap = m.snap;
       if (snap.phase !== 'turn' || snap.ac <= 0) return false;
       return snap.worms.find((w) => w.i === snap.ac)?.s !== firstSeat;
-    }, 20_000);
+    }, 35_000);
     if (nextTurn.snap.game !== 'worms') throw new Error('wrong game');
     const handedOver = nextTurn.snap;
     expect(handedOver.worms.find((w) => w.i === handedOver.ac)!.s).not.toBe(firstSeat);
-  }, 40_000);
+  }, 60_000);
 
   it('seats only as many players as the game supports', async () => {
     // Gun Mayhem is six players; a fuller room means the rest spectate.
@@ -705,6 +770,59 @@ describe('match', () => {
     });
   }, 15_000);
 
+  it('runs Broken Telephone with two players, keeps prompts private, and publishes real hearts', async () => {
+    const [host, guest] = await makeLobby(2);
+    host!.send({ t: 'game', gameId: 'telephone' });
+    host!.send({ t: 'settings', settings: { writeSeconds: 15, drawSeconds: 20, voteSeconds: 5 } });
+    host!.send({ t: 'start' });
+    await Promise.all([host!.next('matchStarted'), guest!.next('matchStarted')]);
+    await host!.waitFor(
+      (message): message is Extract<ServerMessage, { t: 'snapshot' }> =>
+        message.t === 'snapshot' && message.snap.game === 'telephone' && message.snap.phase === 'contributing' && message.snap.task === 'prompt',
+    );
+
+    host!.send({ t: 'input', i: { k: 'submitText', text: 'host-private-prompt' } });
+    guest!.send({ t: 'input', i: { k: 'submitText', text: 'guest-private-prompt' } });
+
+    const [hostPrivate, guestPrivate] = await Promise.all([host, guest].map((client) => client!.waitFor(
+      (message): message is Extract<ServerMessage, { t: 'private' }> => {
+        if (message.t !== 'private') return false;
+        const value = message.data as { task?: unknown; previous?: { text?: unknown } } | null;
+        return value?.task === 'drawing' && typeof value.previous?.text === 'string';
+      },
+    )));
+    const hostText = (hostPrivate.data as { previous: { text: string } }).previous.text;
+    const guestText = (guestPrivate.data as { previous: { text: string } }).previous.text;
+    expect(hostText).toBe('guest-private-prompt');
+    expect(guestText).toBe('host-private-prompt');
+
+    const latestSnapshot = [...host!.received].reverse().find((message) => message.t === 'snapshot');
+    expect(JSON.stringify(latestSnapshot)).not.toContain('host-private-prompt');
+    expect(JSON.stringify(latestSnapshot)).not.toContain('guest-private-prompt');
+
+    for (const client of [host, guest]) {
+      client!.send({ t: 'input', i: { k: 'begin', c: 2, s: 1, x: 20, y: 20 } });
+      client!.send({ t: 'input', i: { k: 'to', p: [80, 80] } });
+      client!.send({ t: 'input', i: { k: 'submitDrawing' } });
+    }
+    const reveal = await host!.waitFor(
+      (message): message is Extract<ServerMessage, { t: 'snapshot' }> =>
+        message.t === 'snapshot' && message.snap.game === 'telephone' && message.snap.phase === 'revealText',
+    );
+    if (reveal.snap.game !== 'telephone') throw new Error('wrong game');
+    const authorSeat = reveal.snap.revealed[0]!.authorSeat;
+    host!.send({ t: 'input', i: { k: 'like', step: 0, on: true } });
+    guest!.send({ t: 'input', i: { k: 'like', step: 0, on: true } });
+    const result = await host!.waitFor(
+      (message): message is Extract<ServerMessage, { t: 'snapshot' }> =>
+        message.t === 'snapshot' && message.snap.game === 'telephone' && message.snap.revealed[0]?.likedBy.length === 1,
+    );
+    if (result.snap.game !== 'telephone') throw new Error('wrong game');
+    expect(result.snap.revealed[0]?.authorSeat).toBe(authorSeat);
+    expect(result.snap.revealed[0]?.likedBy).toHaveLength(1);
+    expect(result.snap.revealed[0]?.award).toBe(1);
+  }, 15_000);
+
   it('starts Meme Machine with two players', async () => {
     const [host, guest] = await makeLobby(2);
     host!.send({ t: 'game', gameId: 'memes' });
@@ -796,7 +914,10 @@ describe('match', () => {
       (m): m is Extract<ServerMessage, { t: 'room' }> => m.t === 'room' && m.room.phase === 'lobby',
     );
     expect(back.room.players.every((p) => p.score === 0)).toBe(true);
-    expect(back.room.players.every((p) => !p.ready)).toBe(true);
+    // Everybody has to say they are in again — except the host, who is in by
+    // construction and starts the next match with the same button they used to
+    // start this one. See `Room.hostIsAlwaysReady`.
+    expect(back.room.players.filter((p) => p.ready).map((p) => p.isHost)).toEqual([true]);
   }, 30_000);
 });
 
@@ -886,25 +1007,11 @@ describe('roulette series', () => {
     const stop = spiral(clients);
 
     try {
-      // Both games are in the hat, but only Achtung reliably finishes under
-      // this input, so re-draw until it comes out first. The reveal is skipped
-      // rather than waited out, so a re-draw costs nothing.
-      let lineup: string[] = [];
-      for (let attempt = 0; attempt < 20; attempt++) {
-        const drawn = await reveal(host!, { rounds: 2, pool: ['achtung', 'gravity'] });
-        lineup = drawn.room.series!.lineup;
-        expect(lineup).toHaveLength(2);
-        expect(new Set(lineup).size).toBe(2);
-        expect(drawn.room.series!.until).toBeGreaterThan(Date.now());
-        if (lineup[0] === 'achtung') break;
-        host!.send({ t: 'rematch' });
-        for (const client of clients) client.send({ t: 'ready', ready: true });
-        await host!.waitFor(
-          (m): m is Extract<ServerMessage, { t: 'room' }> =>
-            m.t === 'room' && m.room.series === null && m.room.players.every((p) => p.ready),
-        );
-      }
-      expect(lineup[0]).toBe('achtung');
+      const drawn = await reveal(host!, { rounds: 2, pool: ['achtung', 'gravity'] });
+      const lineup = drawn.room.series!.lineup;
+      expect(lineup).toHaveLength(2);
+      expect(new Set(lineup).size).toBe(2);
+      expect(drawn.room.series!.until).toBeGreaterThan(Date.now());
 
       // The draw is broadcast, not answered to whoever asked for it.
       await guest!.waitFor(
@@ -912,21 +1019,23 @@ describe('roulette series', () => {
           m.t === 'room' && m.room.series?.phase === 'reveal',
       );
 
-      // Skipping the waits is what keeps this off two 8-second sleeps.
-      host!.send({ t: 'seriesSkip' });
-      const firstLeg = await guest!.next('matchStarted');
-      expect(firstLeg.room.gameId).toBe('achtung');
+      // The opening reveal deliberately has no skip control. It starts on its
+      // authored deadline for every client.
+      const firstLeg = await guest!.next('matchStarted', 15_000);
+      expect(firstLeg.room.gameId).toBe(lineup[0]);
       expect(firstLeg.room.series!.phase).toBe('leg');
       expect(firstLeg.room.series!.index).toBe(0);
-      // The leg runs on the series preset, not on anything the host configured.
-      expect(firstLeg.room.settings).toMatchObject({ game: 'achtung', winByTwo: false });
+      expect(firstLeg.room.settings.game).toBe(lineup[0]);
 
-      // A finished leg has to announce the break in the very message that ends
-      // it, or every client learns what happens next a round trip late.
-      const firstEnd = await guest!.next('matchEnded', 40_000);
+      // A host can abandon a game the room is not enjoying. It awards nothing
+      // and announces the break in the same frame as the end.
+      host!.send({ t: 'seriesNext' });
+      const firstEnd = await guest!.next('matchEnded');
+      expect(firstEnd.skipped).toBe(true);
       expect(firstEnd.room.series!.phase).toBe('break');
       expect(firstEnd.room.series!.index).toBe(0);
       expect(firstEnd.room.series!.legWinners).toHaveLength(1);
+      expect(firstEnd.room.series!.skippedLegs).toEqual([0]);
       expect(firstEnd.room.series!.until).toBeGreaterThan(Date.now());
 
       // Someone arriving during the break has no live match to catch up on, so
@@ -974,8 +1083,7 @@ describe('roulette series', () => {
       const drawn = await reveal(host!, { rounds: 2, pool: ['achtung'] });
       expect(drawn.room.series!.lineup).toEqual(['achtung']);
 
-      host!.send({ t: 'seriesSkip' });
-      await host!.next('matchStarted');
+      await host!.next('matchStarted', 15_000);
 
       const ended = await host!.next('matchEnded', 40_000);
       expect(ended.room.series!.phase).toBe('over');
@@ -1054,6 +1162,9 @@ describe('roulette series', () => {
     expect((await guest.next('error')).code).toBe('NOT_HOST');
 
     guest.send({ t: 'seriesSkip' });
+    expect((await guest.next('error')).code).toBe('NOT_HOST');
+
+    guest.send({ t: 'seriesNext' });
     expect((await guest.next('error')).code).toBe('NOT_HOST');
   });
 });

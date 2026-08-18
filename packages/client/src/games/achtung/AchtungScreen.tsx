@@ -4,7 +4,7 @@ import { defaultConfig, type AchtungConfig } from '@mg/shared/achtung';
 import { useStore } from '../../store';
 import { socket } from '../../net/socket';
 import { AchtungRenderer } from './Renderer';
-import { attachInput } from './input';
+import { attachInput, resetAchtungInput } from './input';
 import { Screen } from '../../ui/Screen';
 import { useShowTouchControls } from '../../ui/useTouchControls';
 import { useVoice } from '../../ui/useVoice';
@@ -29,6 +29,7 @@ export function AchtungScreen({ room, mySeat }: Props): JSX.Element {
   const surfaceRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<AchtungRenderer | null>(null);
   const showTouch = useShowTouchControls();
+  const matchNonce = useStore((state) => state.matchNonce);
 
   const settings: AchtungConfig =
     room.settings.game === 'achtung' ? room.settings : defaultConfig(room.players.length);
@@ -59,6 +60,12 @@ export function AchtungScreen({ room, mySeat }: Props): JSX.Element {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    resetAchtungInput();
+    rendererRef.current?.reset();
+    socket.sendInput(0);
+  }, [matchNonce]);
 
   useEffect(() => {
     const colorBySeat: Record<number, number> = {};

@@ -7,6 +7,7 @@ import { sfx } from '../../audio';
 import { InkSurface } from './InkSurface';
 import { attachDrawInput, type DrawInput } from './input';
 import { drainInk, resetInk } from './inkBus';
+import { focusGuessField } from './guessFocus';
 import { shouldApplyInkEcho } from './inkEcho';
 import { Chat } from './Chat';
 import { Scoreboard } from './Scoreboard';
@@ -14,7 +15,6 @@ import { Toolbar } from './Toolbar';
 import { WordBanner } from './WordBanner';
 import { WordPicker } from './WordPicker';
 import { MatchEndOverlay, Paused } from '../../ui/MatchOverlays';
-import { VoiceBar } from '../../ui/VoiceBar';
 
 interface Props {
   room: RoomView;
@@ -150,6 +150,7 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
     : guessed
       ? t.skribblAlreadyGot
       : t.skribblWaitToGuess;
+  const canGuess = !isDrawer && !guessed && phase === 'drawing';
 
   return (
     <main className={`skribbl${isDrawer ? ' skribbl--drawing' : ''}`}>
@@ -164,10 +165,6 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
           <span className="skribbl__round">{t.skribblRound(round || 1, total)}</span>
         </div>
 
-        {/* Memes and Skribbl build their own chrome rather than using `Screen`,
-            which is the only reason they were the two games with no microphone
-            toggle on the surface. */}
-        <VoiceBar compact />
       </header>
 
       <div className="skribbl__wordwrap">
@@ -177,6 +174,9 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
             dir={dir}
             word={isDrawer && phase === 'drawing' ? secret?.word : undefined}
             revealed={phase === 'reveal'}
+            // The blanks are how long the word is, which is the moment you want
+            // to type — so they are also the button that lets you.
+            onActivate={canGuess ? focusGuessField : undefined}
           />
         ) : (
           <p className="sticker skribbl__hint">
@@ -245,7 +245,7 @@ export function SkribblScreen({ room, mySeat }: Props): JSX.Element {
           )}
         </div>
 
-        <Chat room={room} canGuess={!isDrawer && !guessed && phase === 'drawing'} reason={guessReason} />
+        <Chat room={room} canGuess={canGuess} reason={guessReason} />
       </div>
 
 

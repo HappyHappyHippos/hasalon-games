@@ -13,6 +13,9 @@
 import type { ComponentType, JSX } from 'react';
 import { GAMES, type GameConfig, type GameId, type GameMeta, type RoomView } from '@mg/shared';
 import { AchtungBoxArt } from './achtung/BoxArt';
+import { BombitBoxArt } from './bombit/BoxArt';
+import { BombitScreen } from './bombit/BombitScreen';
+import { BombitSettings } from './bombit/Settings';
 import { SkribblBoxArt } from './skribbl/BoxArt';
 import { SkribblScreen } from './skribbl/SkribblScreen';
 import { SkribblSettings } from './skribbl/Settings';
@@ -33,6 +36,9 @@ import { WormsSettings } from './worms/Settings';
 import { GravityBoxArt } from './gravity/BoxArt';
 import { GravityScreen } from './gravity/GravityScreen';
 import { GravitySettings } from './gravity/Settings';
+import { TelephoneBoxArt } from './telephone/BoxArt';
+import { TelephoneScreen } from './telephone/TelephoneScreen';
+import { TelephoneSettings } from './telephone/Settings';
 
 export interface SettingsProps {
   settings: GameConfig;
@@ -94,12 +100,26 @@ export const CLIENT_GAMES: Record<GameId, ClientGame> = {
     Settings: TanksSettings,
     accent: 'var(--green)',
   },
+  bombit: {
+    meta: GAMES.bombit.meta,
+    BoxArt: BombitBoxArt,
+    Screen: BombitScreen,
+    Settings: BombitSettings,
+    accent: 'var(--orange)',
+  },
   gravity: {
     meta: GAMES.gravity.meta,
     BoxArt: GravityBoxArt,
     Screen: GravityScreen,
     Settings: GravitySettings,
     accent: 'var(--yellow)',
+  },
+  telephone: {
+    meta: GAMES.telephone.meta,
+    BoxArt: TelephoneBoxArt,
+    Screen: TelephoneScreen,
+    Settings: TelephoneSettings,
+    accent: 'var(--violet)',
   },
   worms: {
     meta: GAMES.worms.meta,
@@ -116,11 +136,13 @@ export const CLIENT_GAMES: Record<GameId, ClientGame> = {
  */
 export const CLIENT_GAME_IDS: GameId[] = [
   'gunmayhem',
+  'bombit',
   'worms',
   'tanks',
   'achtung',
   'gravity',
   'skribbl',
+  'telephone',
   'memes',
 ];
 

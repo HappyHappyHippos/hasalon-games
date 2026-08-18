@@ -8,11 +8,13 @@
   "exports": {
     ".": "./src/index.ts",
     "./achtung": "./src/games/achtung/index.ts",
+    "./bombit": "./src/games/bombit/index.ts",
     "./gravity": "./src/games/gravity/index.ts",
     "./gunmayhem": "./src/games/gunmayhem/index.ts",
     "./memes": "./src/games/memes/index.ts",
     "./skribbl": "./src/games/skribbl/index.ts",
     "./tanks": "./src/games/tanks/index.ts",
+    "./telephone": "./src/games/telephone/index.ts",
     "./worms": "./src/games/worms/index.ts"
   },
   "scripts": {

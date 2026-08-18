@@ -17,10 +17,10 @@ describe('the weapon table', () => {
     expect(WEAPONS[id].id).toBe(id);
   });
 
-  it('offers exactly the ten selectable weapons', () => {
+  it('offers exactly the seven selectable weapons', () => {
     const selectable = ids.filter((id) => WEAPONS[id].selectable);
     expect([...SELECTABLE_WEAPONS].sort()).toEqual([...selectable].sort());
-    expect(SELECTABLE_WEAPONS).toHaveLength(10);
+    expect(SELECTABLE_WEAPONS).toHaveLength(7);
     // The picker's order is the display order, so it must have no duplicates.
     expect(new Set(SELECTABLE_WEAPONS).size).toBe(SELECTABLE_WEAPONS.length);
   });
@@ -30,9 +30,6 @@ describe('the weapon table', () => {
     switch (spec.kind) {
       case 'projectile':
         expect(spec.projectile).toBeDefined();
-        break;
-      case 'melee':
-        expect(spec.melee).toBeDefined();
         break;
       case 'airstrike':
         expect(spec.strike).toBeDefined();
@@ -69,7 +66,7 @@ describe('the weapon table', () => {
     }
     expect(spec.blast.damage).toBeGreaterThan(0);
     // A single shot must not be able to blank the stage. The worst case here is
-    // dynamite at 72, which is a twentieth of the map's shortest side.
+    // the bazooka at 65, which is a twentieth of the map's shortest side.
     expect(spec.blast.radius).toBeLessThan(Math.min(WORLD_W, WORLD_H) / 8);
   });
 
@@ -83,7 +80,6 @@ describe('the weapon table', () => {
         // `resolve` would sit on it until the hard cap every single time.
         expect(p.fuseTicks !== undefined || WEAPONS[id].fuse !== undefined).toBe(true);
       }
-      if (p.detonate === 'proximity') expect(p.proximityR).toBeGreaterThan(0);
     }
   });
 
@@ -103,17 +99,10 @@ describe('the weapon table', () => {
     }
   });
 
-  it('makes only the teleport a non-attack', () => {
-    const utilities = SELECTABLE_WEAPONS.filter((id) => !WEAPONS[id].isAttack);
-    expect(utilities).toEqual(['teleport']);
-    // ...and it must therefore not end the turn, or it is an attack that does
-    // no damage.
-    expect(WEAPONS.teleport.endsTurn).toBe(false);
-  });
-
-  it('ends the turn on every attack', () => {
+  it('makes every selectable weapon an attack that ends the turn', () => {
     for (const id of SELECTABLE_WEAPONS) {
-      if (WEAPONS[id].isAttack) expect(WEAPONS[id].endsTurn).toBe(true);
+      expect(WEAPONS[id].isAttack).toBe(true);
+      expect(WEAPONS[id].endsTurn).toBe(true);
     }
   });
 });
@@ -141,7 +130,7 @@ describe('startingAmmo', () => {
     const ammo = startingAmmo(true);
     expect(ammo.bazooka).toBeUndefined();
     expect(ammo.grenade).toBeUndefined();
-    expect(ammo.dynamite).toBe(2);
+    expect(ammo.cluster).toBe(2);
     expect(ammo.airstrike).toBe(1);
   });
 

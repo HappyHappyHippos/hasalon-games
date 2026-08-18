@@ -26,7 +26,7 @@ export function HomeScreen(): JSX.Element {
   const effectiveMode = mode ?? (pendingCode ? 'join' : 'idle');
 
   const name = identity.name.trim();
-  const codeReady = isValidRoomCode(pendingCode.toUpperCase());
+  const codeReady = isValidRoomCode(pendingCode);
 
   const create = (): void => {
     if (!name) return;
@@ -100,16 +100,22 @@ export function HomeScreen(): JSX.Element {
                 <span className="field__label">{t.roomCode}</span>
                 <input
                   className="input input--code"
-                  // Room codes are latin letters wherever the UI points, so the
-                  // field keeps its own direction rather than inheriting.
+                  // Room codes are digits wherever the UI points, so the field
+                  // keeps its own direction rather than inheriting.
                   dir="ltr"
+                  // `inputMode` is what actually raises the number pad; `type`
+                  // stays `text` because `number` would strip a leading zero,
+                  // spin the value on scroll, and hand back "" for anything
+                  // half-typed. `pattern` is the iOS half of the same request.
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={pendingCode}
                   onChange={(event) =>
-                    setPendingCode(event.target.value.toUpperCase().slice(0, ROOM_CODE_LENGTH))
+                    setPendingCode(event.target.value.replace(/\D/gu, '').slice(0, ROOM_CODE_LENGTH))
                   }
-                  placeholder="ABCD"
+                  placeholder="1234"
                   maxLength={ROOM_CODE_LENGTH}
-                  autoCapitalize="characters"
+                  autoComplete="one-time-code"
                   autoCorrect="off"
                   spellCheck={false}
                   enterKeyHint="go"

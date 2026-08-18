@@ -12,7 +12,17 @@ import {
   revealDurationMs,
 } from './series';
 
-const ALL: GameId[] = ['achtung', 'gravity', 'gunmayhem', 'memes', 'skribbl', 'tanks', 'worms'];
+const ALL: GameId[] = [
+  'achtung',
+  'bombit',
+  'gravity',
+  'gunmayhem',
+  'memes',
+  'skribbl',
+  'tanks',
+  'telephone',
+  'worms',
+];
 
 /**
  * A `random` that walks a fixed list, so a shuffle becomes an exact,

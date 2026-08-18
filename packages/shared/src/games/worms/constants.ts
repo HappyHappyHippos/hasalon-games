@@ -43,7 +43,7 @@ export const OUT_OF_BOUNDS_X = 260;
 export const WORM_HALF_W = 8;
 export const WORM_HALF_H = 12;
 /** Blast and projectile hit tests treat a worm as this circle, not as its box. */
-export const WORM_HIT_R = 13;
+export const WORM_HIT_R = 16;
 
 export const WALK_SPEED = 82;
 export const JUMP_VY = -350;

@@ -69,6 +69,12 @@ export function resetTurnHistory(): void {
   history.push({ at: 0, turn: 0 });
 }
 
+/** Clear steering as well as its prediction history between matches. */
+export function resetAchtungInput(): void {
+  localInput.turn = 0;
+  resetTurnHistory();
+}
+
 const LEFT_KEYS = new Set(['ArrowLeft', 'KeyA']);
 const RIGHT_KEYS = new Set(['ArrowRight', 'KeyD']);
 
@@ -203,8 +209,7 @@ export function attachInput(
       surface.removeEventListener('pointermove', onPointerMove);
       surface.removeEventListener('pointerup', onPointerUp);
       surface.removeEventListener('pointercancel', onPointerUp);
-      localInput.turn = 0;
-      resetTurnHistory();
+      resetAchtungInput();
     },
   };
 }

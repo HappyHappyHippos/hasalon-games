@@ -13,14 +13,20 @@ import { InstallPrompt } from './ui/InstallPrompt';
 import { OptionsMenu } from './ui/OptionsMenu';
 import { FullscreenButton } from './ui/FullscreenButton';
 import { PauseButton } from './ui/PauseButton';
+import { MicButton } from './ui/VoiceBar';
 import { Toast } from './ui/Toast';
 import { useVoiceMesh } from './ui/useVoice';
-import { enableKeyboardOverlay } from './ui/mobileViewport';
+import {
+  enableKeyboardInsetTracking,
+  enableKeyboardOverlay,
+  enableVisibleViewportSizing,
+  keepFocusedFieldVisible,
+} from './ui/mobileViewport';
+import { isStandalone } from './ui/useFullscreen';
 
 export function App(): JSX.Element {
   const room = useStore((s) => s.room);
   const mySeat = useStore(selectMySeat);
-  const playerId = useStore((s) => s.playerId);
   const lang = useStore((s) => s.lang);
 
   // Keeps a prompt-free audio path between willing listeners. Pure listeners
@@ -29,6 +35,14 @@ export function App(): JSX.Element {
   useVoiceMesh();
 
   useEffect(() => enableKeyboardOverlay(), []);
+  useEffect(() => enableVisibleViewportSizing(), []);
+  // Must come after the overlay call: with the keyboard overlaying content,
+  // nothing reflows on its own and `--keyboard-inset` is what everything that
+  // could end up underneath it reads to get out of the way.
+  useEffect(() => enableKeyboardInsetTracking(), []);
+  // And the other half — reserving space only helps if the field you are typing
+  // into then scrolls into it.
+  useEffect(() => keepFocusedFieldVisible(), []);
 
   // The document element, not a wrapper div: `dir` has to be on an ancestor of
   // everything, and that includes the portal-free overlays and the browser's own
@@ -80,12 +94,19 @@ export function App(): JSX.Element {
   const endIntro = useCallback(() => setSeenNonce(matchNonce), [matchNonce]);
   const showIntro = matchNonce > seenNonce;
 
+  // `FullscreenButton` renders nothing in a standalone app — there is no browser
+  // chrome left to reclaim — which used to leave a 44px hole in the fixed button
+  // row and strand the microphone out on its own. The slot is only ever gained
+  // or lost by installing to the home screen, i.e. never within a session.
+  const noMaximize = isStandalone();
+
   return (
-    <div className={`app${inMatch ? ' app--playing' : ''}`}>
+    <div className={`app${inMatch ? ' app--playing' : ''}${noMaximize ? ' app--nomaximize' : ''}`}>
       <Toast />
       <OptionsMenu />
       <FullscreenButton />
       <PauseButton />
+      <MicButton />
       <InstallPrompt />
 
       {!room ? <HomeScreen /> : room.phase === 'lobby' ? <LobbyScreen /> : renderGameScreen(room, mySeat)}
@@ -93,10 +114,7 @@ export function App(): JSX.Element {
       {/* The lineup draw. Sits over the lobby, which is where everyone already
           is — a reveal is a `lobby` phase with a series attached. */}
       {room?.series?.phase === 'reveal' && (
-        <RouletteReveal
-          series={room.series}
-          isHost={room.players.find((p) => p.id === playerId)?.isHost ?? false}
-        />
+        <RouletteReveal series={room.series} />
       )}
 
       {showIntro && inMatch && <Intro key={matchNonce} onDone={endIntro} />}

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "הסלון — a small site for playing multiplayer games with friends: Gun Mayhem, Tank Trouble, Achtung die Kurve, Gravity Guy, Skribbl and Meme Machine.",
+  "description": "הסלון — multiplayer games for friends: Gun Mayhem, Tank Trouble, Achtung die Kurve, Gravity Guy, Worms, Skribbl, Broken Telephone and Meme Machine.",
   "workspaces": [
     "packages/shared",
     "packages/server",

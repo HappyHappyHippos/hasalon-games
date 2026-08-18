@@ -5,6 +5,7 @@ import '@fontsource-variable/inter';
 import { App } from './App';
 import { dirFor } from './i18n';
 import { useStore } from './store';
+import { installCrashReporting } from './analytics';
 import './ui/tokens.css';
 import './ui/styles.css';
 
@@ -19,6 +20,10 @@ import './ui/styles.css';
 const lang = useStore.getState().lang;
 document.documentElement.lang = lang;
 document.documentElement.dir = dirFor(lang);
+
+// Before the first render, so an error thrown while mounting is still caught.
+// The reports queue until the socket opens, which it does moments later.
+installCrashReporting();
 
 const container = document.getElementById('root');
 if (!container) throw new Error('Missing #root element');

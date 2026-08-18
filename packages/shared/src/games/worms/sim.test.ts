@@ -55,13 +55,19 @@ function digest(state: WormsState): string {
     round: state.round,
     rng: state.rng.s,
     active: state.activeWorm,
-    cursor: state.turnCursor,
+    cursor: state.seatCursor,
     wind: state.wind,
     craters: state.craters,
     mask,
     worms: state.worms.map((w) => [w.id, w.seat, w.x, w.y, w.vx, w.vy, w.hp, w.alive, w.aim]),
     proj: state.projectiles.map((p) => [p.id, p.kind, p.x, p.y, p.vx, p.vy, p.fuse]),
-    seats: state.seats.map((s) => [s.seat, s.roundWins, s.weapon, JSON.stringify(s.ammo)]),
+    seats: state.seats.map((s) => [
+      s.seat,
+      s.roundWins,
+      s.weapon,
+      s.lastWorm,
+      JSON.stringify(s.ammo),
+    ]),
   });
 }
 
@@ -94,6 +100,27 @@ describe('setup', () => {
 });
 
 describe('the turn machine', () => {
+  it('fires at the exact slider power sent by the active player', () => {
+    const state = makeState(2);
+    runUntil(state, (candidate) => candidate.phase === 'turn');
+    const worm = state.worms.find((candidate) => candidate.id === state.activeWorm)!;
+    const seat = state.seats[worm.seat]!;
+
+    applyInput(state, seat.id, { k: 'fire', p: 63 });
+    expect(state.events.some((event) => event.t === 'fire')).toBe(false);
+    stepTick(state);
+
+    expect(state.events).toContainEqual({
+      t: 'fire',
+      seat: worm.seat,
+      w: 'bazooka',
+      x: worm.x,
+      y: worm.y,
+      power: 0.63,
+    });
+    expect(state.phase).toBe('retreat');
+  });
+
   it('runs a countdown, then hands the first worm a full clock', () => {
     const state = makeState(2, { turnSeconds: 20 });
     expect(state.phase).toBe('countdown');
@@ -114,6 +141,55 @@ describe('the turn machine', () => {
     expect(seen[0]).not.toBe(seen[1]);
     expect(seen[1]).not.toBe(seen[2]);
     expect(seen[2]).not.toBe(seen[3]);
+  });
+
+  /**
+   * The regression the seat-major rotation exists for. Two players, two worms
+   * each; one of seat 0's worms dies. A flat cursor over the worm list closed
+   * the gap the corpse left and handed seat 1 two turns in a row from then on.
+   */
+  it('keeps alternating seats after one player loses a worm', () => {
+    const state = makeState(2);
+    runUntil(state, (s) => s.phase === 'turn' && s.activeWorm > 0);
+
+    const doomed = state.worms.find((w) => w.seat === 0 && w.id !== state.activeWorm)!;
+    doomed.alive = false;
+
+    const seen: number[] = [];
+    for (let turn = 0; turn < 6; turn += 1) {
+      seen.push(state.worms.find((w) => w.id === state.activeWorm)!.seat);
+      const worm = state.activeWorm;
+      runUntil(state, (s) => s.phase === 'turn' && s.activeWorm > 0 && s.activeWorm !== worm);
+    }
+
+    for (let i = 1; i < seen.length; i += 1) {
+      expect(seen[i]).not.toBe(seen[i - 1]);
+    }
+    // And the survivor's two worms still take it in turns between themselves.
+    expect(new Set(seen.filter((s) => s === 1))).toEqual(new Set([1]));
+    expect(seen.filter((s) => s === 0)).toHaveLength(3);
+  });
+
+  it('drops a wiped-out seat from the rotation without disturbing the rest', () => {
+    const state = makeState(3);
+    runUntil(state, (s) => s.phase === 'turn' && s.activeWorm > 0);
+
+    for (const worm of state.worms) {
+      if (worm.seat === 1) worm.alive = false;
+    }
+
+    const seen: number[] = [];
+    for (let turn = 0; turn < 4; turn += 1) {
+      const seat = state.worms.find((w) => w.id === state.activeWorm)!.seat;
+      if (seat !== 1) seen.push(seat);
+      const worm = state.activeWorm;
+      runUntil(state, (s) => s.phase === 'turn' && s.activeWorm > 0 && s.activeWorm !== worm);
+    }
+
+    expect(seen).not.toContain(1);
+    for (let i = 1; i < seen.length; i += 1) {
+      expect(seen[i]).not.toBe(seen[i - 1]);
+    }
   });
 
   /**
@@ -219,9 +295,9 @@ describe('input', () => {
     applyInput(state, seat.id, { k: 'weapon', w: 'airstrike' });
     expect(seat.weapon).not.toBe('airstrike');
 
-    seat.ammo.dynamite = 0;
-    applyInput(state, seat.id, { k: 'weapon', w: 'dynamite' });
-    expect(seat.weapon).not.toBe('dynamite');
+    seat.ammo.cluster = 0;
+    applyInput(state, seat.id, { k: 'weapon', w: 'cluster' });
+    expect(seat.weapon).not.toBe('cluster');
   });
 
   it('drops a stale sequence and forgets the counter on reconnect', () => {
@@ -362,20 +438,13 @@ describe('every weapon', () => {
     const worm = state.worms.find((w) => w.id === state.activeWorm)!;
     const seat = state.seats[worm.seat]!;
 
-    const before = seat.ammo.dynamite;
-    expect(before).toBe(WEAPONS.dynamite.ammo);
-    applyInput(state, seat.id, { k: 'weapon', w: 'dynamite' });
+    const before = seat.ammo.cluster;
+    expect(before).toBe(WEAPONS.cluster.ammo);
+    applyInput(state, seat.id, { k: 'weapon', w: 'cluster' });
+    applyInput(state, seat.id, { k: 'fire', p: 70 });
+    stepTick(state);
 
-    let seq = 1;
-    runUntil(
-      state,
-      (s) => {
-        applyInput(s, seat.id, { seq: seq++, bits: IN_FIRE });
-        return s.seats[worm.seat]!.ammo.dynamite !== before;
-      },
-      60 * 20,
-    );
-    expect(seat.ammo.dynamite).toBe(before! - 1);
+    expect(seat.ammo.cluster).toBe(before! - 1);
   });
 
   it('gives the teleport back when the destination is inside a wall', () => {
@@ -401,6 +470,7 @@ describe('every weapon', () => {
     expect(worm.x).toBe(startX);
     expect(seat.ammo.teleport).toBe(before);
   });
+
 });
 
 describe('privateFor', () => {

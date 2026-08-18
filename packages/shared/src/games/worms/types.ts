@@ -1,6 +1,6 @@
 import type { RngState } from './rng';
 
-export type WormsStageId = 'green' | 'arctic' | 'living_room';
+export type WormsStageId = 'small_green' | 'arctic' | 'volcano';
 
 // ---------------------------------------------------------------------------
 // Weapons
@@ -10,22 +10,20 @@ export type WormsWeaponId =
   | 'bazooka'
   | 'grenade'
   | 'shotgun'
-  | 'dynamite'
   | 'airstrike'
   | 'homing'
   | 'cluster'
-  | 'mine'
-  | 'bat'
   | 'teleport'
-  // Children. Spawned by other weapons, never selectable.
+  // Children. Spawned by other weapons or by a worm dying, never selectable.
   | 'clusterlet'
-  | 'strikeBomb';
+  | 'strikeBomb'
+  | 'death';
 
 /** What the *client* has to collect from the player before a shot can be taken. */
-export type WormsAim = 'directional' | 'melee' | 'drop' | 'target';
+export type WormsAim = 'directional' | 'drop' | 'target';
 
 /** What the *sim* switches on when the shot is actually taken. */
-export type WormsKind = 'projectile' | 'melee' | 'airstrike' | 'teleport';
+export type WormsKind = 'projectile' | 'airstrike' | 'teleport';
 
 /**
  * One weapon, declared rather than coded.
@@ -73,28 +71,21 @@ export interface WeaponSpec {
     bounce: number;
     /** Tangential damping per bounce, so a grenade does not skate forever. */
     friction: number;
-    detonate: 'impact' | 'fuse' | 'proximity';
+    detonate: 'impact' | 'fuse';
     fuseTicks?: number;
-    proximityR?: number;
     /** Ticks before it can hit anything, including the worm that fired it. */
     armTicks?: number;
-    /** Survives into later turns. Mines do; nothing else does. */
-    persist?: boolean;
     homing?: { turnRate: number; armTicks: number };
     cluster?: { child: WormsWeaponId; count: number; speed: number; spread: number };
+    burst?: { count: number; spacing: number };
   };
-
-  /** How far in front, and how far off level, a swing connects. */
-  melee?: { reach: number; arc: number };
 
   /** Air strike only: a flight of `count` children, `spacing` apart. */
   strike?: { child: WormsWeaponId; count: number; spacing: number; speed: number };
 
   /**
-   * What happens where it lands. A melee weapon uses `damage` and `knockback`
-   * with a zero `radius`, so a bat hits hard and leaves the ground intact.
-   * Ignored entirely by `airstrike` and `teleport`, which never go off
-   * themselves — their children do.
+   * What happens where it lands. Ignored entirely by `airstrike` and `teleport`,
+   * which never go off themselves — their children do.
    */
   blast: { radius: number; damage: number; knockback: number };
 }
@@ -115,9 +106,9 @@ export const IN_MASK = 0b111111;
  * The 60 Hz half of the controller.
  *
  * `seq` lets the client replay its own inputs after a correction and lets the
- * server say which one it had already applied. Power lives on the held `IN_FIRE`
- * bit rather than in a message, so charging is deterministic and the client can
- * predict its own meter without asking.
+ * server say which one it had already applied. `IN_FIRE` remains in this mask
+ * for old deterministic input replays; current clients fire reliably with the
+ * explicit slider-power command below.
  */
 export interface WormsBitInput {
   seq: number;
@@ -128,13 +119,15 @@ export interface WormsBitInput {
  * The rare half: things that happen once a turn, not sixty times a second.
  *
  * Sent reliably, because there is no next sample to supersede a dropped weapon
- * switch. All three are rejected unless they come from the active seat during
+ * switch or shot. All are rejected unless they come from the active seat during
  * its own turn.
  */
 export type WormsCommand =
   | { k: 'weapon'; w: WormsWeaponId }
   | { k: 'fuse'; s: number }
-  | { k: 'target'; x: number; y: number };
+  | { k: 'target'; x: number; y: number }
+  /** Fire immediately at an explicit, visible slider power (15..100). */
+  | { k: 'fire'; p: number };
 
 // ---------------------------------------------------------------------------
 // Config
@@ -181,14 +174,7 @@ export interface Worm {
   charge: number;
 }
 
-/**
- * Anything in flight — and mines, which are the same thing standing still.
- *
- * A mine is a projectile whose spec says `persist`, not a separate entity type.
- * Keeping one list means one integrator, one collision path and one set of
- * bugs; the two places the difference matters (a resting mine does not hold up
- * the turn, and it is drawn differently) each read the flag.
- */
+/** Anything in flight. One list means one integrator and one collision path. */
 export interface Projectile {
   id: number;
   kind: WormsWeaponId;
@@ -205,15 +191,6 @@ export interface Projectile {
   /** Where a homing missile is going. */
   tx: number;
   ty: number;
-  /**
-   * Come to rest and no longer simulated.
-   *
-   * Only persistent weapons ever set it. It is what stops a dropped mine from
-   * jittering on the spot forever, and — more importantly — what stops
-   * `resolve` from waiting on it, which would hang every turn after the first
-   * mine was laid.
-   */
-  resting: boolean;
 }
 
 /** A hole in the world. The whole of terrain destruction is a list of these. */
@@ -260,7 +237,11 @@ export interface WormsSeatState {
   connected: boolean;
   /** Remaining shots per weapon this round. Unlimited weapons are absent. */
   ammo: Partial<Record<WormsWeaponId, number>>;
+  /** Worm id this seat played last, so its own worms rotate. -1 before its first turn. */
+  lastWorm: number;
   weapon: WormsWeaponId;
+  /** Slider fire command waiting for the next deterministic tick. */
+  pendingFirePower: number | null;
   fuse: number;
   /** Highest input sequence applied, echoed back for prediction. */
   ackSeq: number;
@@ -298,9 +279,12 @@ export interface WormsState {
   /** In flight and at rest both; a resting mine is still in here. */
   projectiles: Projectile[];
 
-  /** Worm ids, in the order they take turns. */
+  /** Worm ids, in the order they were dealt. Also each seat's internal order. */
   order: number[];
-  turnCursor: number;
+  /** Seat numbers, in the order they take turns. Rotation is by seat, not worm. */
+  seatOrder: number[];
+  /** Index into `seatOrder` of the seat that just played, or -1 at round start. */
+  seatCursor: number;
   /** Worm id whose turn it is, or -1 outside a turn. */
   activeWorm: number;
   turnTicks: number;
@@ -413,7 +397,6 @@ export interface WormsSnapshot {
   worms: WormSnapWorm[];
   seats: WormSnapSeat[];
   proj: WormSnapProjectile[];
-  mines: Array<{ i: number; x: number; y: number; a: 0 | 1 }>;
   events: WormsEvent[];
 }
 

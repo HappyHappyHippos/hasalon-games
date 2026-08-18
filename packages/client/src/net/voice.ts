@@ -112,6 +112,7 @@ interface Peer {
   remote: MediaStream;
   remoteTrack: MediaStreamTrack | null;
   audio: HTMLAudioElement;
+  outputSource: MediaStreamAudioSourceNode | null;
   status: PeerStatus;
   polite: boolean;
   makingOffer: boolean;
@@ -132,6 +133,10 @@ type Listener = (snapshot: VoiceSnapshot) => void;
 
 type WindowWithWebkitAudio = Window & { webkitAudioContext?: typeof AudioContext };
 
+type NavigatorWithAudioSession = Navigator & {
+  audioSession?: { type: 'auto' | 'playback' | 'transient' | 'transient-solo' | 'ambient' | 'play-and-record' };
+};
+
 function audioContextCtor(): typeof AudioContext | null {
   if (typeof window === 'undefined') return null;
   return window.AudioContext ?? (window as WindowWithWebkitAudio).webkitAudioContext ?? null;
@@ -143,6 +148,15 @@ function canReceive(): boolean {
 
 function canSpeak(): boolean {
   return canReceive() && !!navigator.mediaDevices?.getUserMedia;
+}
+
+function setAudioSession(type: 'playback' | 'play-and-record'): void {
+  try {
+    const session = (navigator as NavigatorWithAudioSession).audioSession;
+    if (session) session.type = type;
+  } catch {
+    // Experimental WebKit API: routing still works through the normal element.
+  }
 }
 
 async function loadIceConfig(
@@ -324,21 +338,16 @@ export class Voice {
     // Optional and local-only. Creating it before the permission await keeps the
     // iOS analyser inside the user-activation window; voice itself does not
     // depend on the context succeeding.
-    const Ctor = audioContextCtor();
-    try {
-      this.ctx = Ctor ? new Ctor() : null;
-    } catch {
-      this.ctx = null;
-    }
+    this.ensureOutputContext();
+    setAudioSession('play-and-record');
 
     let stream: MediaStream;
     try {
       stream = await navigator.mediaDevices.getUserMedia(microphoneConstraints());
     } catch (error) {
       const name = (error as DOMException | undefined)?.name;
+      setAudioSession('playback');
       this.emit({ error: name === 'NotFoundError' ? 'nodevice' : 'denied' });
-      void this.ctx?.close().catch(() => undefined);
-      this.ctx = null;
       return;
     }
 
@@ -353,6 +362,7 @@ export class Voice {
     if (!track) {
       stream.getTracks().forEach((item) => item.stop());
       this.stream = null;
+      setAudioSession('playback');
       this.emit({ error: 'nodevice' });
       return;
     }
@@ -425,9 +435,7 @@ export class Voice {
     this.stream?.getTracks().forEach((track) => track.stop());
     this.stream = null;
     this.localAnalyser = null;
-    this.unwatchContext();
-    void this.ctx?.close().catch(() => undefined);
-    this.ctx = null;
+    setAudioSession('playback');
     this.emit({ active: false, muted: false });
     this.publishPeers();
   }
@@ -462,6 +470,9 @@ export class Voice {
     this.meshSynced = false;
     this.orphanCandidates.clear();
     this.teardownPeers();
+    this.unwatchContext();
+    void this.ctx?.close().catch(() => undefined);
+    this.ctx = null;
     this.unwatchLifecycle();
     if (this.levelTimer !== null) {
       window.clearInterval(this.levelTimer);
@@ -528,6 +539,8 @@ export class Voice {
     const remote = new MediaStream();
     const audio = document.createElement('audio');
     audio.autoplay = true;
+    audio.volume = 1;
+    audio.muted = false;
     audio.setAttribute('playsinline', '');
     audio.style.display = 'none';
     audio.srcObject = remote;
@@ -540,6 +553,7 @@ export class Voice {
       remote,
       remoteTrack: null,
       audio,
+      outputSource: null,
       status: 'connecting',
       polite: !!this.selfId && this.selfId > id,
       makingOffer: false,
@@ -566,6 +580,7 @@ export class Voice {
       if (peer.remoteTrack && peer.remoteTrack !== remoteTrack) peer.remote.removeTrack(peer.remoteTrack);
       peer.remoteTrack = remoteTrack;
       if (!peer.remote.getTracks().includes(remoteTrack)) peer.remote.addTrack(remoteTrack);
+      this.connectRemoteOutput(peer);
       remoteTrack.onunmute = () => this.attemptPlay(peer);
       remoteTrack.onended = () => {
         if (peer.remoteTrack === remoteTrack) peer.remoteTrack = null;
@@ -799,6 +814,8 @@ export class Voice {
     peer.pc.onconnectionstatechange = null;
     peer.pc.oniceconnectionstatechange = null;
     peer.remoteTrack = null;
+    peer.outputSource?.disconnect();
+    peer.outputSource = null;
     peer.remote.getTracks().forEach((track) => peer.remote.removeTrack(track));
     peer.audio.srcObject = null;
     peer.audio.remove();
@@ -816,6 +833,40 @@ export class Voice {
       .play()
       .then(() => this.refreshPlaybackBlocked())
       .catch(() => this.emit({ playbackBlocked: true }));
+  }
+
+  /**
+   * Route remote speech through the same user-activated Web Audio context used
+   * by the mic analyser. Mobile WebKit otherwise sometimes switches the audio
+   * element to the quiet call receiver as soon as getUserMedia opens.
+   */
+  private connectRemoteOutput(peer: Peer): void {
+    if (!this.ctx || peer.outputSource || peer.remote.getAudioTracks().length === 0) return;
+    try {
+      const source = this.ctx.createMediaStreamSource(peer.remote);
+      source.connect(this.ctx.destination);
+      peer.outputSource = source;
+      peer.audio.muted = true;
+    } catch {
+      peer.audio.muted = false;
+    }
+  }
+
+  /** Only called from a user gesture (`wake` or microphone start). */
+  private ensureOutputContext(): void {
+    if (!this.ctx) {
+      const Ctor = audioContextCtor();
+      try {
+        this.ctx = Ctor ? new Ctor() : null;
+      } catch {
+        this.ctx = null;
+      }
+    }
+    if (!this.ctx) return;
+    setAudioSession(this.stream ? 'play-and-record' : 'playback');
+    this.watchContext();
+    if (this.ctx.state === 'suspended') void this.ctx.resume().catch(() => undefined);
+    for (const peer of this.peers.values()) this.connectRemoteOutput(peer);
   }
 
   private refreshPlaybackBlocked(): void {
@@ -849,6 +900,7 @@ export class Voice {
 
   private wake = (): void => {
     if (document.visibilityState === 'hidden') return;
+    this.ensureOutputContext();
     if (this.ctx?.state === 'suspended') void this.ctx.resume().catch(() => undefined);
     const track = this.stream?.getAudioTracks()[0];
     if (track && (track.readyState === 'ended' || track.muted)) void this.recoverTrack();

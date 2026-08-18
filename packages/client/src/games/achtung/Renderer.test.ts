@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach } from 'vitest';
+import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { AchtungRenderer } from './Renderer';
 import { feed } from '../../net/feed';
 import type { AchtungSnapshot } from '@mg/shared/achtung';
@@ -114,5 +114,28 @@ describe('AchtungRenderer state resets', () => {
     expect(renderer.bakedTick.size).toBe(0);
     // @ts-expect-error accessing private field
     expect(renderer.penPos.size).toBe(0);
+  });
+
+  it('does not clear the persistent trail when old snapshots remain buffered', () => {
+    const renderer = new AchtungRenderer(mockCanvas(), {
+      mySeat: 0,
+      colorBySeat: { 0: 0 },
+      nameBySeat: { 0: 'Player 1' },
+      hatBySeat: { 0: 0 },
+      settings: { game: 'achtung', powerupsEnabled: true, speedScale: 1, targetScore: 10, winByTwo: false },
+      paused: false,
+    });
+    feed.push(makeSnap(100, 2), performance.now());
+    feed.push(makeSnap(104, 2), performance.now());
+    // @ts-expect-error accessing private bake for regression coverage
+    renderer.bake(performance.now());
+    // @ts-expect-error accessing private canvas context for regression coverage
+    const clear = vi.spyOn(renderer.trailCtx, 'clearRect');
+
+    // The second pass sees tick 100 before 104. That is normal buffering, not
+    // a server rollback, and must leave the already-baked canvas untouched.
+    // @ts-expect-error accessing private bake for regression coverage
+    renderer.bake(performance.now());
+    expect(clear).not.toHaveBeenCalled();
   });
 });

@@ -4,6 +4,7 @@ import { useT } from '../strings';
 import { voice } from '../net/voice';
 import { useVoice } from './useVoice';
 import { sfx } from '../audio';
+import { MicrophoneIcon, MicrophoneOffIcon } from './Icons';
 
 interface Props {
   /** Compact form for the in-match HUD; the lobby gets the full thing. */
@@ -37,7 +38,7 @@ export function VoiceBar({ compact = false }: Props): JSX.Element | null {
   };
 
   const label = !state.active ? t.voiceJoin : state.muted ? t.voiceUnmute : t.voiceMute;
-  const icon = !state.active ? '🎙' : state.muted ? '🔇' : '🎤';
+  const icon = state.active && state.muted ? <MicrophoneOffIcon /> : <MicrophoneIcon />;
 
   return (
     <div className={`voicebar${compact ? ' voicebar--compact' : ''}`}>
@@ -93,6 +94,36 @@ export function VoiceBar({ compact = false }: Props): JSX.Element | null {
         </button>
       )}
     </div>
+  );
+}
+
+/** Always-visible microphone shortcut beside settings and fullscreen. */
+export function MicButton(): JSX.Element | null {
+  const room = useStore((state) => state.room);
+  const playerId = useStore((state) => state.playerId);
+  const state = useVoice();
+  const t = useT();
+  if (!room || !playerId) return null;
+
+  const toggle = (): void => {
+    sfx.click();
+    if (!state.active) void voice.start(playerId);
+    else voice.setMuted(!state.muted);
+  };
+  const label = !state.active ? t.voiceJoin : state.muted ? t.voiceUnmute : t.voiceMute;
+  const icon = state.active && state.muted ? <MicrophoneOffIcon /> : <MicrophoneIcon />;
+
+  return (
+    <button
+      type="button"
+      className={`micbtn${state.active && !state.muted ? ' micbtn--live' : ''}`}
+      onClick={toggle}
+      aria-pressed={state.active && !state.muted}
+      aria-label={label}
+      title={label}
+    >
+      <span aria-hidden="true">{icon}</span>
+    </button>
   );
 }
 

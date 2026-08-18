@@ -196,8 +196,9 @@ export function SeriesOver({
             const legWinner = winnerOf(room, series, i);
             const Art = CLIENT_GAMES[id].BoxArt;
             const played = i < series.legWinners.length;
+            const skipped = series.skippedLegs.includes(i);
             return (
-              <li key={i} className={`seriesover__leg${played ? '' : ' seriesover__leg--unplayed'}`}>
+              <li key={i} title={skipped ? t.gameSkipped : undefined} className={`seriesover__leg${played ? '' : ' seriesover__leg--unplayed'}${skipped ? ' seriesover__leg--skipped' : ''}`}>
                 <span className="seriesover__art">
                   <Art />
                 </span>
@@ -207,6 +208,7 @@ export function SeriesOver({
                     background: legWinner ? colorFor(legWinner.colorIndex) : 'var(--ink-soft)',
                   }}
                 />
+                {skipped && <span className="seriesover__skipmark" aria-label={t.gameSkipped}>×</span>}
               </li>
             );
           })}

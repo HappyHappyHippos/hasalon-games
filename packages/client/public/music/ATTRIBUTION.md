@@ -11,6 +11,7 @@ Background loops, each picked to match the screen or game it plays under.
 | `tanks.mp3` | Retro Games (Glitch Technology Synthwave) | FASSounds | Pixabay Content License | https://pixabay.com/music/video-games-retro-games-glitch-technology-synthwave-199939/ |
 | `gravity.mp3` | Interstellar Chase Theme with Glitchy Synths | DesiFreeMusic | Pixabay Content License | https://pixabay.com/music/upbeat-interstellar-chase-theme-with-glitchy-synths-385801/ |
 | `worms.mp3` | Celtic Winds | Psychronic | Pixabay Content License | https://pixabay.com/music/folk-celtic-winds-439101/ |
+| `telephone.mp3` | Playful Happy Background Music | JorisVermeer | Pixabay Content License | https://pixabay.com/music/instrumental-playful-happy-background-music-579027/ |
 
 Skribbl reuses `lobby.mp3`. Attribution is not required by the Pixabay Content
 License, but the source record stays here so every shipped asset is traceable.

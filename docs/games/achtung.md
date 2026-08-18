@@ -10,3 +10,8 @@ interdependent — the file's top comment explains why probes can never
 self-collide with a curve's own trail as long as the arc stays under 90°, and
 why a *shrinking* radius needs `SELF_GRACE_TICKS`. Read it before touching
 `achtung/constants.ts` speed/radius values.
+
+The trail canvas is persistent beyond the roughly one-second snapshot feed.
+Only the newest snapshot may signal a match rollback; old entries naturally
+remain in the interpolation buffer and must never reset the canvas. A new trail
+epoch clears once, while older-epoch entries are skipped until they age out.

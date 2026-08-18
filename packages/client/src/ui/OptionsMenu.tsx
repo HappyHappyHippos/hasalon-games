@@ -13,6 +13,8 @@ import { exitFullscreen, useIsFullscreen } from './useFullscreen';
 import type { TouchControlsMode } from '../store';
 import { LANGS, type Dict, type Lang } from '../i18n';
 import { GearIcon } from './Icons';
+import { VoiceBar } from './VoiceBar';
+import { trackUi } from '../analytics';
 
 const TOUCH_MODES: Array<{ mode: TouchControlsMode; label: (t: Dict) => string }> = [
   { mode: 'auto', label: (t) => t.touchAuto },
@@ -86,6 +88,11 @@ export function OptionsMenu(): JSX.Element {
         onClick={() => {
           sfx.click();
           setOpen(true);
+          // Only from the gear, not from the Escape shortcut above: the tap is
+          // somebody deliberately leaving the game to find something, which is
+          // the thing worth counting. A keyboard user hitting Escape twice is
+          // not four visits to the menu.
+          trackUi('menu');
         }}
       >
         <GearIcon />
@@ -175,6 +182,17 @@ export function OptionsMenu(): JSX.Element {
                       {t.restartMatch}
                     </Button>
                   )}
+                  {series?.phase === 'leg' && (
+                    <Button
+                      full
+                      onClick={() => {
+                        socket.seriesNext();
+                        close();
+                      }}
+                    >
+                      {t.skipCurrentGame}
+                    </Button>
+                  )}
                   <Button
                     variant="danger"
                     full
@@ -253,6 +271,8 @@ export function OptionsMenu(): JSX.Element {
               }}
             />
           </label>
+
+          {room && <VoiceBar />}
 
           {voice.active && <VoicePeers />}
         </section>

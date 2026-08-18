@@ -9,9 +9,16 @@ import {
 
 /** The manifest is data the sim trusts, so malformed geometry must fail in CI. */
 describe('Meme Machine template manifest', () => {
-  it('contains 120 stills and 80 animated templates without duplicate ids', () => {
-    expect(MEME_TEMPLATES.length).toBeGreaterThanOrEqual(200);
-    expect(MEME_TEMPLATES.filter((template) => template.format === 'mp4')).toHaveLength(80);
+  /**
+   * Floors rather than exact counts: both scrapers take the top N of a live
+   * Imgflip ranking, so a re-run legitimately shifts *which* templates are here.
+   * What must not silently shrink is how many, because the catalogue is what a
+   * full room of eight — each holding four skips a round — draws against.
+   */
+  it('contains a deep catalogue of stills and animations, with no duplicate ids', () => {
+    const animated = MEME_TEMPLATES.filter((template) => template.format === 'mp4');
+    expect(animated.length).toBeGreaterThanOrEqual(180);
+    expect(MEME_TEMPLATES.length - animated.length).toBeGreaterThanOrEqual(321);
     expect(new Set(MEME_TEMPLATES.map((template) => template.id)).size).toBe(
       MEME_TEMPLATES.length,
     );

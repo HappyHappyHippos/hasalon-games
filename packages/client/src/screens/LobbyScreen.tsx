@@ -6,12 +6,14 @@ import { socket } from '../net/socket';
 import { AppearancePicker } from '../ui/AppearancePicker';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
+import { BellIcon } from '../ui/Icons';
 import { GamePicker } from '../ui/GamePicker';
 import { SeriesSetup } from '../ui/SeriesSetup';
-import { VoiceBar } from '../ui/VoiceBar';
 import { useVoice } from '../ui/useVoice';
 import { CLIENT_GAMES } from '../games/registry';
 import { resetIOSLobbyViewport } from '../ui/mobileViewport';
+import { msUntil } from '../net/clock';
+import { trackUi } from '../analytics';
 
 export function LobbyScreen(): JSX.Element {
   const room = useStore((s) => s.room)!;
@@ -21,6 +23,8 @@ export function LobbyScreen(): JSX.Element {
   const t = useT();
   const speaking = new Set(useVoice().speaking);
   const [copied, setCopied] = useState(false);
+  const readyNudge = useStore((s) => s.readyNudge);
+  const [, setNudgeClock] = useState(0);
 
   useEffect(() => {
     // Creating/joining can replace HomeScreen while its input is still focused.
@@ -38,6 +42,14 @@ export function LobbyScreen(): JSX.Element {
   const readyPlayers = room.players.filter((p) => p.ready && p.connected);
   const connectedPlayers = room.players.filter((p) => p.connected);
   const everyoneReady = connectedPlayers.length > 0 && readyPlayers.length === connectedPlayers.length;
+  const otherUnready = connectedPlayers.some((player) => player.id !== playerId && !player.ready);
+  const nudgeCoolingDown = readyNudge?.until != null && msUntil(readyNudge.until) > 0;
+
+  useEffect(() => {
+    if (!nudgeCoolingDown) return;
+    const timer = window.setInterval(() => setNudgeClock((value) => value + 1), 250);
+    return () => window.clearInterval(timer);
+  }, [nudgeCoolingDown]);
 
   const canStart = readyPlayers.length >= game.meta.minPlayers;
   const overflow = Math.max(0, readyPlayers.length - game.meta.maxPlayers);
@@ -67,9 +79,16 @@ export function LobbyScreen(): JSX.Element {
   // Hidden until somebody's actually played something — an all-zero column
   // before the room's first match is noise, not standings.
   const showTotals = room.players.some((p) => p.totalScore > 0);
+  // Whoever is winning the room gets the trophy filled in. One number with no
+  // label read as a mystery; a number with a unit and a leader reads as a
+  // scoreboard, which is what it has been all along.
+  const topScore = Math.max(0, ...room.players.map((p) => p.totalScore));
 
   const copyLink = async (): Promise<void> => {
     const link = `${location.origin}${location.pathname}#/room/${room.code}`;
+    // Counted on intent, not on success: cancelling the share sheet still says
+    // the host reached for the invite, and how rooms fill up is the question.
+    trackUi('invite');
     if (navigator.share) {
       try {
         await navigator.share({
@@ -161,8 +180,14 @@ export function LobbyScreen(): JSX.Element {
                   </div>
                   <div className="person__badges">
                     {showTotals && (
-                      <span className="person__total" title={t.totalScoreTitle}>
-                        {t.totalScoreLabel(Math.round(player.totalScore))}
+                      <span
+                        className={`person__total${player.totalScore >= topScore ? ' person__total--leader' : ''}`}
+                        title={player.totalScore >= topScore ? t.totalScoreLeader : t.totalScoreTitle}
+                        aria-label={t.totalScoreLabel(Math.round(player.totalScore))}
+                      >
+                        <span aria-hidden="true" className="person__total-mark">🏆</span>
+                        <b dir="ltr">{Math.round(player.totalScore)}</b>
+                        <small>{t.totalScoreUnit}</small>
                       </span>
                     )}
                     <span
@@ -173,26 +198,51 @@ export function LobbyScreen(): JSX.Element {
                     >
                       {player.ready ? '✓' : ''}
                     </span>
+                    {isHost && player.id !== playerId && (
+                      <button
+                        type="button"
+                        className="person__kick"
+                        title={t.kickPlayer(player.name)}
+                        aria-label={t.kickPlayer(player.name)}
+                        onClick={() => {
+                          // Confirmed because it cannot be undone and the button
+                          // sits a thumb's width from the avatar carousel.
+                          if (window.confirm(t.kickConfirm(player.name))) {
+                            socket.kick(player.id);
+                          }
+                        }}
+                      >
+                        ✕
+                      </button>
+                    )}
                   </div>
                 </li>
               ))}
             </ul>
 
-            <div className="lobby__voice">
-              <VoiceBar />
-            </div>
-
             <div className="lobby__ready">
-              <Button
-                variant={me?.ready ? 'plain' : 'primary'}
-                size="lg"
-                full
-                tone={me?.ready ? undefined : colorFor(identity.colorIndex)}
-                disabled={!me?.connected}
-                onClick={() => socket.setReady(!me?.ready)}
-              >
-                {me?.ready ? t.notReady : t.ready}
-              </Button>
+              <div className="lobby__ready-actions">
+                <Button
+                  variant={me?.ready ? 'plain' : 'primary'}
+                  size="lg"
+                  full
+                  tone={me?.ready ? undefined : colorFor(identity.colorIndex)}
+                  disabled={!me?.connected}
+                  onClick={() => socket.setReady(!me?.ready)}
+                >
+                  {me?.ready ? t.notReady : t.ready}
+                </Button>
+                <button
+                  type="button"
+                  className="ready-nudge"
+                  disabled={!otherUnready || nudgeCoolingDown}
+                  onClick={() => socket.nudgeReady()}
+                  aria-label={t.readyNudge}
+                  title={t.readyNudge}
+                >
+                  <BellIcon aria-hidden="true" />
+                </button>
+              </div>
               {rouletteOn && !canStartSeries && (
                 <p className="muted small center" style={{ marginTop: '0.5rem' }}>
                   {!everyoneReady

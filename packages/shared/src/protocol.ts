@@ -2,7 +2,7 @@ import type { GameConfig, GameId, GameSnapshot } from './gameModule';
 import type { RoomView } from './roomTypes';
 
 /** Bump when the message shapes change so stale tabs fail loudly, not weirdly. */
-export const PROTOCOL_VERSION = 22;
+export const PROTOCOL_VERSION = 27;
 
 export const WS_PATH = '/ws';
 
@@ -19,12 +19,29 @@ export interface Identity {
 }
 
 export type ClientMessage =
+  /**
+   * What kind of browser this is, sent once as the opening frame.
+   *
+   * Deliberately not folded into `create`/`join`: most sockets never do either
+   * — somebody opens the site, looks at the game list and closes the tab — and
+   * that visit is exactly the one we would otherwise never see. Carries no room
+   * and no name, because the server learns those itself. See `ClientHello`.
+   */
+  | { t: 'hello'; hello: unknown }
+  /**
+   * The three things only the browser can know: an uncaught error, how the
+   * connection actually behaved, and the taps that reach no other message.
+   * Validated by `parseClientReport` — see `ClientReport`.
+   */
+  | { t: 'log'; log: unknown }
   | { t: 'create'; v: number; identity: Identity }
   | { t: 'join'; v: number; code: string; identity: Identity }
   /** Reclaim an existing seat after a reload or a dropped connection. */
   | { t: 'resume'; v: number; code: string; playerId: string; token: string }
   | { t: 'identity'; identity: Partial<Identity> }
   | { t: 'ready'; ready: boolean }
+  /** Anyone in the lobby — remind the other connected, unready players. */
+  | { t: 'readyNudge' }
   /** Host only — choose which game the room is about to play. */
   | { t: 'game'; gameId: GameId }
   /** Host only. Shape depends on the selected game. */
@@ -55,9 +72,20 @@ export type ClientMessage =
    * neither side of it.
    */
   | { t: 'seriesStart' }
-  /** Host only — end the lineup reveal or the between-legs break now. */
+  /** Host only — end the between-legs break now. The reveal is never skipped. */
   | { t: 'seriesSkip' }
+  /** Host only — abandon the running roulette leg without scoring it. */
+  | { t: 'seriesNext' }
   | { t: 'leave' }
+  /**
+   * Host only — throw somebody out.
+   *
+   * The room remembers the id so their client's automatic `resume` cannot walk
+   * straight back in. It is not an account ban and cannot be: there are no
+   * accounts, so anyone still holding the code can `join` again as a new player.
+   * See `Room.kick`.
+   */
+  | { t: 'kick'; playerId: string }
   /** Game-specific payload; the game module validates it. */
   | { t: 'input'; i: unknown }
   /**
@@ -91,6 +119,8 @@ export type ErrorCode =
   | 'NOT_ENOUGH_PLAYERS'
   | 'RESUME_FAILED'
   | 'RATE_LIMITED'
+  /** The host removed you. Sent to the kicked client just before it is dropped. */
+  | 'KICKED'
   /** Nothing drawable: an empty hat, or no game in it fits this many players. */
   | 'SERIES_UNAVAILABLE'
   /**
@@ -105,6 +135,8 @@ export type ServerMessage =
   /** Sent once on a successful create/join/resume. */
   | { t: 'welcome'; room: RoomView; playerId: string; token: string; seat: number }
   | { t: 'room'; room: RoomView }
+  /** Room-wide so every ready button observes the same server cooldown. */
+  | { t: 'readyNudge'; from: string; until: number }
   /**
    * `st` is when the server *authored* this snapshot, on the same clock as
    * `pong.serverTime`. The client places snapshots on a timeline built from
@@ -126,7 +158,7 @@ export type ServerMessage =
    * last.
    */
   | { t: 'matchStarted'; room: RoomView; resumed?: true }
-  | { t: 'matchEnded'; room: RoomView; winnerSeat: number | null }
+  | { t: 'matchEnded'; room: RoomView; winnerSeat: number | null; skipped?: true }
   /**
    * Game state for this socket alone — the half of the world a snapshot cannot
    * carry, because a snapshot is encoded once and sent to everybody.
@@ -136,6 +168,7 @@ export type ServerMessage =
    * secret in a frame that every other player receives and can read.
    */
   | { t: 'private'; data: unknown }
+  | { t: 'privateCatchUp'; data: unknown }
   | { t: 'error'; code: ErrorCode; message: string }
   /** A relayed `rtc` payload, stamped with who actually sent it. */
   | { t: 'rtc'; from: string; data: unknown }

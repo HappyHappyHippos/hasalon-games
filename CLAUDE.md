@@ -8,12 +8,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 a room, share the code/link, everyone joins, the host picks a game from a
 live game picker, then plays. No accounts, rooms live in memory only. The games
 that ship today: **Gun Mayhem** (2–6 player platform fighter, the priority —
-this is the flagship game and should get the most care), **Worms** (up to
+this is the flagship game and should get the most care), **Bomb It** (2–8 player
+grid-based bomber with kickable bombs), **Worms** (up to
 8-player turn-based artillery on destructible terrain), **Tank Trouble** (up to
 8-player top-down maze duel with ricocheting shells), **Achtung die Kurve** (up
 to 8-player curve/Snake game), **Gravity Guy** (up to 8-player one-button
 auto-run elimination race), **Skribbl** (up to 8-player draw and guess, Hebrew
-or English) and **Meme Machine**.
+or English), **Broken Telephone** (2–8 player draw/guess chains) and **Meme Machine**.
 
 npm workspaces monorepo. Git repo with `origin` at
 `github.com/HappyHappyHippos/hasalon-games` (public), deployed on Railway at
@@ -205,7 +206,15 @@ And the ones no compiler catches, which is why they are worth writing down:
   - `client/game/canvasDraw.ts` — `roundRect` and `shade`. Note Tank Trouble's
     local `darken(hex, factor)` is a *different* function with the opposite sign
     convention; that is why it has a different name.
+  - `client/game/canvasView.ts` — zoom/pan as pure arithmetic (`clampView`,
+    `zoomAbout`, `frameView`), applied by `CanvasStage.begin`. At `zoom: 1` the
+    stage computes exactly the letterbox it always did, so a game that never
+    touches `stage.view` cannot tell it exists.
   - `ui/motion.ts:prefersReducedMotion` gates shake, trails and parallax.
+  - `ui/mobileViewport.ts` — `--keyboard-inset` (how much of the *shell* the
+    soft keyboard covers, which is zero wherever the shell already shrank) and
+    `keepFocusedFieldVisible`. Anything with a text field reads these two;
+    neither needs a media query, and both do nothing on a desktop.
 - `shared/src/games/<id>/rng.ts` — **copy it, do not import another game's.**
   The duplication is the isolation: it is what makes "editing Achtung cannot
   change which template Meme Machine deals" true. Gun Mayhem used to import
@@ -214,6 +223,27 @@ And the ones no compiler catches, which is why they are worth writing down:
   — snapshot tagged with its own id, `defaultConfig` surviving
   `normalizeConfig`, junk input neither throwing nor escaping. A new game is
   covered the moment it is added to `GAMES`, with nothing to remember here.
+
+### Usage logging
+
+Who uses the site, when, how, and what breaks — see
+[`docs/analytics.md`](docs/analytics.md) for the field reference and the
+dashboard at `/admin`. Three things about it are worth knowing before touching
+anything nearby:
+
+- **The server is the only writer.** It already sees joins, picks, matches and
+  errors, so the client reports only what the server cannot observe: device
+  shape (`hello`), uncaught browser errors, round-trip time, and three taps that
+  send no other message. Before adding a client event, check whether the server
+  already knows — it usually does, and two writers of one fact is how a log
+  starts contradicting itself.
+- **Adding a game needs nothing here.** Events carry the `GameId` as a string
+  and the dashboard groups by whatever it finds, so a new game appears in the
+  games table the first time somebody plays it. This is the one list in this
+  file that a new game is *not* on.
+- **`analytics` is a singleton**, like `serverNow`, and `Client.sendError`
+  records every error the server sends. Recording never throws and never blocks
+  — a logging bug must not be able to stall a tick loop.
 
 ### Private per-player state
 
@@ -336,19 +366,38 @@ obvious once you know they exist:
 ### Per-game notes
 
 The details that only matter when you are inside one game live next to a
-pointer instead of in this file, so every session does not pay for all seven.
+pointer instead of in this file, so every session does not pay for all nine.
 **Read the one you are touching before you touch it** — each is a list of
 things that cost real debugging time to learn.
 
 - **Achtung die Kurve** — [`docs/games/achtung.md`](docs/games/achtung.md)
+- **Bomb It** — [`docs/games/bombit.md`](docs/games/bombit.md)
 - **Gun Mayhem** — [`docs/games/gunmayhem.md`](docs/games/gunmayhem.md)
 - **Worms** — [`docs/games/worms.md`](docs/games/worms.md)
 - **Tank Trouble** — [`docs/games/tanks.md`](docs/games/tanks.md)
 - **Gravity Guy** — [`docs/games/gravity.md`](docs/games/gravity.md)
 - **Skribbl** — [`docs/games/skribbl.md`](docs/games/skribbl.md)
-- **Meme Machine** — no notes yet; `packages/shared/src/games/memes/` is
-  conventional, and its one subtlety (captions are private until the reveal)
-  is covered by *Private per-player state* above.
+- **Broken Telephone** — [`docs/games/telephone.md`](docs/games/telephone.md)
+- **Meme Machine** — no separate notes; `packages/shared/src/games/memes/` is
+  conventional, and its one secrecy subtlety (captions are private until the
+  reveal) is covered by *Private per-player state* above. Two things that are
+  not obvious from the code:
+  - **The catalogue is generated, and re-running the generator replaces it.**
+    `scripts/curate-memes.ps1` (stills) and `curate-gif-memes.ps1` (muted mp4
+    loops) take the top N of a *live* Imgflip ranking, so a re-run legitimately
+    changes which templates are present. `templates.test.ts` therefore asserts
+    floors, not exact counts. The stills script also emits the shared
+    `MemeAsset` interface that `gifTemplateAssets.ts` is typed against — it must
+    keep declaring `format?: 'mp4'`, or every animated template fails to compile
+    the next time it runs.
+  - **`MemesSnapshot.gallery` is null until `matchOver`.** The end-of-match
+    gallery is every meme of the match, archived in `finishRound` (after
+    `awardTopMemes` settles the scores, before `dealRound` empties `entries`).
+    It is attached to exactly one snapshot rather than carried the whole way
+    through, because `Room.broadcastSnapshot` re-encodes and re-sends the
+    snapshot thirty times a second and nobody can look at a gallery mid-match.
+    `MatchClock` broadcasts a final snapshot before stopping, and `sendCatchUp`
+    replays it, so a reconnecting player still gets the whole thing.
 
 ### Client structure
 
@@ -477,5 +526,13 @@ canvas input, dispatch `PointerEvent`s at the element and stub
   `translateX`, the touch controls' physical left/right, and numeric readouts
   that pin `dir="ltr"` in JSX. Content whose direction is its own — a room code,
   a Skribbl word from the other language's list — gets an explicit `dir`.
+  **Never centre a floating element with `inset-inline-start: 50%` and a
+  `translateX(-50%)`**: one is logical and the other physical, so they agree in
+  English and cancel out wrong in Hebrew. `inset-inline: 0` with
+  `margin-inline: auto` centres in both.
+- **Room codes are four digits** (`roomTypes.ts:CODE_ALPHABET`), so the join
+  field can ask for the number pad with `inputMode="numeric"`. Keep `type`
+  as `text` — `number` strips a leading zero and hands back `""` for anything
+  half-typed.
 - The appearance picker is an inline carousel flanking the avatar with chevrons,
   not a grid of labelled buttons.

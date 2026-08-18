@@ -100,6 +100,15 @@ countdown ─▶ handoff ─▶ turn ──fire──▶ retreat ──▶ resol
                                                  └▶ roundOver ─▶ matchOver
 ```
 
+**Rotation is by seat, then by that seat's own worms** (`nextLivingWorm`), not by
+position in a flat worm list. The two are identical while everyone is alive —
+`order` is dealt copy-major so it alternates — and diverge the moment a worm
+dies: a flat cursor closes the gap the corpse left and the following seat
+inherits that slot as well as its own. Two players with two worms each, one
+death, and the survivor took every other turn *and* the dead worm's, i.e. two in
+a row for the rest of the round. `state.seatCursor` walks `state.seatOrder`, each
+seat remembers its `lastWorm`, and a seat with nothing alive is skipped.
+
 **A turn that runs out of clock goes to `resolve`, never to `retreat`.** Retreat
 is only ever entered by firing. That single rule is why "the clock expired while
 this worm was mid-flight from someone else's mine" is not a case that needs
@@ -151,7 +160,7 @@ Do not write it speculatively for one caller.
 
 ## Weapons
 
-`weapons.ts` is a table and `sim.ts:fire` switches on four `kind`s and nothing
+`weapons.ts` is a table and `sim.ts:fire` switches on three `kind`s and nothing
 else. A new weapon that is a variant of an existing one is a row in that file
 and no code anywhere. Resist adding a `switch (spec.id)`.
 
@@ -166,14 +175,19 @@ Three entries are less obvious than they look:
   at 2000 units a second. Reusing the marcher means it collides with terrain and
   worms by exactly the same code as everything else, rather than by a second
   ray-cast that has to agree with it.
-- **A mine is a projectile with `persist`**, kept in `state.projectiles` like
-  everything else. The two places the difference matters each read the flag. A
-  resting mine is explicitly excluded from `resolve`'s settle test — waiting on
-  one would hang every turn after the first is laid.
+- **`death` is a weapon.** A worm that runs out of health detonates one, and it
+  is a table row rather than a bare blast so a death can chain into the next
+  death. `selectable: false` keeps it out of the picker and out of `weaponsFor`.
 - **`isWeaponId` uses `hasOwnProperty`, not `in`.** `'constructor' in WEAPONS`
   is true, and `in` would hand the simulation `Object.prototype.constructor`,
   whose `kind` is undefined, and `fire`'s exhaustive switch would throw and take
   the room down.
+
+**Dynamite, the mine and the baseball bat were removed**, and with them the
+machinery that existed only for those three: the `melee` kind and `aim`, the
+`proximity` detonate mode, the `persist`/`resting` projectile flags and the
+snapshot's `mines` array. A future melee or persistent weapon re-adds what it
+needs; git history has the previous versions. Nothing else read any of it.
 
 **Knockback replaces velocity rather than adding to it**, following
 `gunmayhem/sim.ts:damageAndLaunch`. It is why a hit reads the same every time:
@@ -183,6 +197,19 @@ that as the weapon being unreliable rather than as physics.
 
 ## Client
 
+- Shot power is an explicit 15–100 slider and `fire` is a reliable one-off
+  command. The old held `IN_FIRE` path remains accepted by the simulation for
+  replay/backward compatibility, but no current client emits it. The trajectory
+  preview advances a temporary projectile through `stepProjectile`, the same
+  marcher the server uses, against the live client terrain mask. It renders only
+  the first 62% of that computed path (and caps long paths at roughly 110 ticks),
+  so even a nearby collision remains a hint rather than revealing the endpoint.
+- The sprite is drawn taller than its movement box, and projectile/blast hit
+  tests use `WORM_HIT_R`. Do not enlarge `WORM_HALF_W/H` just to make the art or
+  target easier to see: those constants define whether ramps are walkable.
+- Touch and desktop controls use translucent fills with no backdrop blur. They
+  must remain readable over every stage, but should never hide a worm beneath
+  an opaque control panel.
 - **The camera is a local, per-client spring**, and that is a deliberate
   divergence from `gravity/camera.ts`, whose whole point is being identical
   everywhere. Free pan and zoom is a feature here and two players looking at

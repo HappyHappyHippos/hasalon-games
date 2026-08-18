@@ -2,13 +2,13 @@ import { seconds } from '../../engine';
 import type { GameSeat } from '../../gameModule';
 import { isUsableCaption, normalizeCaption } from './caption';
 import {
-  BALLOT_POINTS,
   DEFAULT_ROUNDS,
   DEFAULT_VOTE_SECONDS,
   DEFAULT_WRITE_SECONDS,
   DRAFT_BUDGET_REFILL_TICKS,
   INTRO_TICKS,
   MAX_DRAFTS_PER_SECOND,
+  SKIPS_PER_ROUND,
   MAX_ROUNDS,
   MAX_VOTE_SECONDS,
   MAX_WRITE_SECONDS,
@@ -21,10 +21,9 @@ import {
   RESULT_TICKS,
   REVEAL_TICKS,
   STANDINGS_TICKS,
-  SWEEP_BONUS,
   TOP_MEME_BONUS,
-  VOTE_POINTS,
 } from './constants';
+import { BALLOT_POINTS, scoreVotes, tallyVotes } from './rating';
 import { makeRng, shuffle } from './rng';
 import { boxesForCaptionCount, pickTemplates, templateById } from './templates';
 import type {
@@ -92,7 +91,7 @@ export function createState(seats: GameSeat[], config: MemesConfig, seed: number
         draftPositions: [],
         submitted: false,
         draftBudget: MAX_DRAFTS_PER_SECOND,
-        skipsRemaining: 2,
+        skipsRemaining: SKIPS_PER_ROUND,
         connected: true,
       }),
     ),
@@ -105,6 +104,7 @@ export function createState(seats: GameSeat[], config: MemesConfig, seed: number
     entries: [],
     entryIndex: -1,
     usedTemplates: new Set(),
+    gallery: [],
   };
   dealRound(state);
   return state;
@@ -130,7 +130,7 @@ function dealRound(state: MemesState): void {
     player.draftPositions = (template?.boxes ?? []).map(({ x, y, w, h }) => ({ x, y, w, h }));
     player.submitted = false;
     player.draftBudget = MAX_DRAFTS_PER_SECOND;
-    player.skipsRemaining = 2;
+    player.skipsRemaining = SKIPS_PER_ROUND;
     if (template) state.usedTemplates.add(template.id);
   }
 }
@@ -259,28 +259,10 @@ function countedBallots(state: MemesState, entry: MemesEntry): MemesVote[] {
     .filter((vote): vote is MemesVote => vote !== undefined);
 }
 
-function tallyOf(votes: readonly MemesVote[]): [number, number, number] {
-  let like = 0;
-  let neutral = 0;
-  let dislike = 0;
-  for (const vote of votes) {
-    if (vote === 1) like += 1;
-    else if (vote === 0) neutral += 1;
-    else dislike += 1;
-  }
-  return [like, neutral, dislike];
-}
-
 function scoreEntry(state: MemesState, entry: MemesEntry): void {
   const voterIds = eligibleVoterIds(state, entry).filter((id) => entry.ballots.has(id));
   const votes = voterIds.map((id) => entry.ballots.get(id)!);
-  const raw = votes.reduce<number>((sum, vote) => {
-    if (vote === 1) return sum + VOTE_POINTS.like;
-    if (vote === 0) return sum + VOTE_POINTS.neutral;
-    return sum + VOTE_POINTS.dislike;
-  }, 0);
-  entry.award = votes.length > 0 ? Math.round(raw / votes.length) : 0;
-  if (votes.length > 0 && votes.every((vote) => vote === 1)) entry.award += SWEEP_BONUS;
+  entry.award = scoreVotes(votes);
 
   const author = state.players.find((player) => player.id === entry.authorId);
   if (author) {
@@ -316,8 +298,31 @@ function awardTopMemes(state: MemesState): void {
 
 function finishRound(state: MemesState): void {
   awardTopMemes(state);
+  archiveRound(state);
   state.entryIndex = -1;
   enterPhase(state, 'standings', STANDINGS_TICKS);
+}
+
+/**
+ * Keep this round's memes for the end-of-match gallery.
+ *
+ * Here, and not anywhere else: `awardTopMemes` has just settled `award` and
+ * `top`, and `dealRound` empties `entries` before the next round starts, so
+ * this is the one moment the round exists in its final form. Copies rather than
+ * references, because the entries themselves are about to be thrown away.
+ */
+function archiveRound(state: MemesState): void {
+  for (const entry of state.entries) {
+    state.gallery.push({
+      templateId: entry.templateId,
+      texts: [...entry.texts],
+      positions: entry.positions.map((position) => ({ ...position })),
+      authorSeat: entry.authorSeat,
+      award: entry.award,
+      top: entry.top ? 1 : 0,
+      round: state.round,
+    });
+  }
 }
 
 function advanceAfterResult(state: MemesState): void {
@@ -460,7 +465,7 @@ function stageEntry(state: MemesState): MemesStageEntry | null {
     authorSeat: result ? entry.authorSeat : -1,
     ballots: votes.length,
     eligible: eligibleVoterIds(state, entry).length,
-    tally: result ? tallyOf(votes) : null,
+    tally: result ? tallyVotes(votes) : null,
     award: result ? entry.award : 0,
     top: entry.top ? 1 : 0,
     reactions: [...entry.reactions],
@@ -488,6 +493,10 @@ export function makeSnapshot(state: MemesState, tick = state.tickCount): MemesSn
       sub: player.submitted ? 1 : 0,
       v: entry?.ballots.has(player.id) ? 1 : 0,
     })),
+    // Only once, at the end. See the note on `MemesSnapshot.gallery`: this rides
+    // in a string that is re-encoded and re-sent thirty times a second while the
+    // match is running, and nobody can look at it until the match is over.
+    gallery: state.phase === 'matchOver' ? state.gallery : null,
   };
 }
 

@@ -27,14 +27,16 @@ function seatsFor(module: GameModule): GameSeat[] {
 }
 
 describe('registry', () => {
-  it('registers all seven games', () => {
+  it('registers all nine games', () => {
     expect(ids.sort()).toEqual([
       'achtung',
+      'bombit',
       'gravity',
       'gunmayhem',
       'memes',
       'skribbl',
       'tanks',
+      'telephone',
       'worms',
     ]);
   });

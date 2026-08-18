@@ -77,14 +77,16 @@ export interface SeriesView {
    * tank round is not seat 2 in the next one. Null for a leg nobody won.
    */
   legWinners: (string | null)[];
+  /** Lineup indices the host abandoned; distinct from a completed leg with no winner. */
+  skippedLegs: number[];
   /** The series stopped short because a leg could not be seated. */
   aborted: boolean;
 }
 
 /** Two is the smallest thing that is a series rather than a match. */
 export const MIN_SERIES_ROUNDS = 2;
-/** Legs are distinct, and there are seven games. */
-export const MAX_SERIES_ROUNDS = 7;
+/** Legs are distinct, and there are nine games. */
+export const MAX_SERIES_ROUNDS = 9;
 export const DEFAULT_SERIES_ROUNDS = 3;
 
 /** The breather between legs. Long enough to read the standings, short enough not to drift off. */

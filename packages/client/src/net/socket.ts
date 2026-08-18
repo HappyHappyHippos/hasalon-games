@@ -41,10 +41,13 @@ import { receiveSkribbl, resetInk } from '../games/skribbl/inkBus';
 import { terrainBus } from '../games/worms/terrainBus';
 import type { WormsTerrainPrivate } from '@mg/shared/worms';
 import type { MemesPrivate } from '@mg/shared/memes';
+import type { TelephonePrivate, TelephonePrivateCatchUp } from '@mg/shared/telephone';
+import { receiveTelephoneCatchUp, resetTelephoneDraftInk } from '../games/telephone/draftBus';
 import { clock } from './clock';
 import { voice } from './voice';
 import { delayed, readNetSim } from './netsim';
 import { sfx } from '../audio';
+import { helloPayload, setReportSender, trackNet } from '../analytics';
 import {
   loadSession,
   saveSession,
@@ -52,6 +55,7 @@ import {
   type Hud,
   type HudPlayer,
   type MemesHud,
+  type TelephoneHud,
   type Secret,
   type SkribblHud,
   type WormsHud,
@@ -93,6 +97,14 @@ class GameSocket {
   private lastCountdown = 0;
   /** Voice flags may only be re-announced after this socket is accepted into a room. */
   private membershipConfirmed = false;
+  /**
+   * Round-trip samples for the match in progress, reported once when it ends.
+   *
+   * Collected off the HUD mirror, which already runs a few times a second, so
+   * this measures the connection without adding a single measurement of its own.
+   * Bounded because a long Skribbl evening would otherwise grow it without limit.
+   */
+  private rttSamples: number[] = [];
 
   connect(): void {
     if (
@@ -121,6 +133,11 @@ class GameSocket {
     ws.onopen = () => {
       this.reconnectAttempts = 0;
       useStore.getState().setStatus('open');
+
+      // First frame on the wire, before the resume. It carries no room and no
+      // name — the server learns those from what follows — so it does not have
+      // to wait for either, and a visit that never becomes a join is still seen.
+      this.raw({ t: 'hello', hello: helloPayload() });
 
       // Reclaim our seat before anything queued, so the server knows who we are.
       const session = loadSession();
@@ -244,6 +261,10 @@ class GameSocket {
     this.send({ t: 'ready', ready });
   }
 
+  nudgeReady(): void {
+    this.send({ t: 'readyNudge' });
+  }
+
   setGame(gameId: GameId): void {
     this.send({ t: 'game', gameId });
   }
@@ -282,13 +303,34 @@ class GameSocket {
     this.send({ t: 'seriesSkip' });
   }
 
+  seriesNext(): void {
+    this.send({ t: 'seriesNext' });
+  }
+
   leave(): void {
     this.send({ t: 'leave' });
+    this.tearDownRoom();
+  }
+
+  /** Host only — remove another player. Ignored by the server for anyone else. */
+  kick(playerId: string): void {
+    this.send({ t: 'kick', playerId });
+  }
+
+  /**
+   * Let go of everything that belonged to the room we were in, whether we left
+   * or were removed.
+   *
+   * Two of these are load-bearing rather than tidy. `voice.stop()`: the mesh is
+   * per-room, and leaving one up holds a live microphone open to people you are
+   * no longer in a room with. `setHashCode(null)`: the join effect in `App.tsx`
+   * reads the hash on mount, so a kicked tab that keeps `#/room/CODE` walks
+   * straight back in on the next reload.
+   */
+  private tearDownRoom(): void {
     saveSession(null);
     feed.reset();
     resetInk();
-    // The mesh is per-room; leaving one without tearing it down leaves a live
-    // microphone open to people you are no longer in a room with.
     voice.stop();
     useStore.getState().reset();
     setHashCode(null);
@@ -315,6 +357,14 @@ class GameSocket {
   /** WebRTC signalling for one peer. Unbuffered — a stale offer is worse than none. */
   sendRtc(to: string, data: unknown): void {
     this.raw({ t: 'rtc', to, data });
+  }
+
+  /**
+   * A usage report. Queued rather than dropped when the socket is down, because
+   * the most valuable one — a crash — often happens on the way to a disconnect.
+   */
+  sendLog(log: unknown): void {
+    this.send({ t: 'log', log });
   }
 
   setVoice(on: boolean): void {
@@ -359,9 +409,17 @@ class GameSocket {
         this.confirmMembership(store.playerId);
         return;
 
+      case 'readyNudge': {
+        store.setReadyNudge({ from: message.from, until: message.until });
+        const me = store.room?.players.find((player) => player.id === store.playerId);
+        if (me && !me.ready && message.from !== store.playerId) sfx.powerup();
+        return;
+      }
+
       case 'matchStarted':
         feed.reset();
         resetInk();
+        resetTelephoneDraftInk();
         this.lastCountdown = 0;
         // `resumed` is the catch-up copy sent to a socket that reconnected into
         // a running match, and reconnects happen on a half-second backoff. Only
@@ -370,6 +428,7 @@ class GameSocket {
         else store.onMatchStarted(message.room);
         store.setHud({ phase: 'countdown', round: 0, countdown: 0, players: [] });
         this.confirmMembership(store.playerId);
+        this.rttSamples = [];
         return;
 
       case 'snapshot':
@@ -383,7 +442,12 @@ class GameSocket {
 
       case 'matchEnded':
         store.onMatchEnded(message.room, message.winnerSeat);
-        sfx.win();
+        if (!message.skipped) sfx.win();
+        // How the match this player just finished actually felt on their link.
+        // The server cannot measure this — round trip is a client-side number —
+        // and "it was laggy" is unfalsifiable without it.
+        trackNet(this.rttSamples, feed.delayMs);
+        this.rttSamples = [];
         return;
 
       case 'pong':
@@ -398,6 +462,10 @@ class GameSocket {
         this.receivePrivate(message.data);
         return;
 
+      case 'privateCatchUp':
+        if (store.room?.gameId === 'telephone') receiveTelephoneCatchUp((message.data as TelephonePrivateCatchUp | null) ?? null);
+        return;
+
       case 'error': {
         if (message.code === 'RESUME_FAILED') {
           // The seat is gone — drop the stale session and show the home screen.
@@ -405,6 +473,13 @@ class GameSocket {
           feed.reset();
           store.reset();
           setHashCode(null);
+          return;
+        }
+        if (message.code === 'KICKED') {
+          // Exactly as if they had left, and then say why. The order matters:
+          // the teardown resets the store, which would wipe the toast.
+          this.tearDownRoom();
+          useStore.getState().setError('KICKED');
           return;
         }
         // `message.message` is the server's English; it stays in the logs where
@@ -437,10 +512,18 @@ class GameSocket {
       case 'memes':
         store.setMemesPrivate((data as MemesPrivate | null) ?? null);
         store.setSecret(null);
+        store.setTelephonePrivate(null);
         terrainBus.reset();
         return;
       case 'skribbl':
         store.setSecret((data as Secret | null) ?? null);
+        store.setMemesPrivate(null);
+        store.setTelephonePrivate(null);
+        terrainBus.reset();
+        return;
+      case 'telephone':
+        store.setTelephonePrivate((data as TelephonePrivate | null) ?? null);
+        store.setSecret(null);
         store.setMemesPrivate(null);
         terrainBus.reset();
         return;
@@ -451,16 +534,20 @@ class GameSocket {
         terrainBus.receive((data as WormsTerrainPrivate | null) ?? null);
         store.setSecret(null);
         store.setMemesPrivate(null);
+        store.setTelephonePrivate(null);
         return;
       // No hidden state; their `privateFor` returns null and the server never
       // sends this. `undefined` is "no room yet", which clears the same way.
       case 'achtung':
+      case 'bombit':
       case 'gravity':
       case 'gunmayhem':
       case 'tanks':
       case undefined:
         store.setSecret(null);
         store.setMemesPrivate(null);
+        store.setTelephonePrivate(null);
+        resetTelephoneDraftInk();
         terrainBus.reset();
         return;
       default: {
@@ -481,11 +568,16 @@ class GameSocket {
     // slowly and are displayed as whole milliseconds; pushing them at the
     // snapshot rate would re-render the tree 30 times a second to show the
     // same number.
+    const rtt = Math.round(feed.rttMs);
     useStore.getState().setNet({
-      rtt: Math.round(feed.rttMs),
+      rtt,
       jitter: Math.round(feed.jitterMs),
       delay: Math.round(feed.delayMs),
     });
+
+    // Piggy-backing on the mirror's own throttle: a few samples a second is
+    // plenty to characterise a match, and the cap keeps a long one bounded.
+    if (this.rttSamples.length < 600) this.rttSamples.push(rtt);
 
     const countdown =
       snap.phase === 'countdown' ? Math.ceil(snap.phaseTicks / TICK_RATE) : 0;
@@ -506,6 +598,7 @@ class GameSocket {
     let skribbl: SkribblHud | undefined;
     let memes: MemesHud | undefined;
     let worms: WormsHud | undefined;
+    let telephone: TelephoneHud | undefined;
     switch (snap.game) {
       case 'achtung':
         players = snap.players.map((p) => ({
@@ -527,6 +620,21 @@ class GameSocket {
           seat: p.s,
           score: p.p,
           alive: p.al === 1,
+        }));
+        break;
+      case 'bombit':
+        players = snap.players.map((p) => ({
+          seat: p.s,
+          score: p.p,
+          alive: p.al === 1,
+          // Bombs in hand and blast range are what a player checks before
+          // committing to a fight, so they belong in the rail rather than only
+          // on the canvas. `effects` carries the two debuffs somebody else
+          // picked up, which are otherwise invisible until you try to move.
+          bombs: p.b,
+          range: p.r,
+          shields: p.sh,
+          effects: [...(p.sl ? ['slow'] : []), ...(p.rv ? ['reverse'] : [])],
         }));
         break;
       case 'worms': {
@@ -551,6 +659,8 @@ class GameSocket {
           fuse: snap.seats.find((s) => s.s === active?.s)?.fz ?? 3,
           ammo: (snap.seats.find((s) => s.s === active?.s)?.am ?? {}) as Record<string, number>,
           power: active?.pw ?? 0,
+          targetX: snap.tx,
+          targetY: snap.ty,
         };
         break;
       }
@@ -599,11 +709,16 @@ class GameSocket {
           entryIndex: snap.entryIndex,
           entryCount: snap.entryCount,
           stage: snap.stage,
+          gallery: snap.gallery,
         };
+        break;
+      case 'telephone':
+        players = snap.players.map((p) => ({ seat: p.s, score: p.p, alive: true, submitted: p.sub === 1, voted: p.v === 1 }));
+        telephone = snap;
         break;
     }
 
-    const hud: Hud = { phase: snap.phase, round: snap.round, countdown, players, skribbl, memes, worms };
+    const hud: Hud = { phase: snap.phase, round: snap.round, countdown, players, skribbl, memes, worms, telephone };
     useStore.getState().setHud(hud);
   }
 }
@@ -617,13 +732,17 @@ voice.send = (to, data) => socket.sendRtc(to, data);
 voice.announce = (on) => socket.setVoice(on);
 voice.announceListening = (on) => socket.setListening(on);
 
+// Same reason, same direction: `analytics` must not import the socket, or the
+// two form a cycle.
+setReportSender((report) => socket.sendLog(report));
+
 // ---------------------------------------------------------------------------
 // Shareable #/room/CODE links
 // ---------------------------------------------------------------------------
 
 export function readHashCode(): string | null {
-  const match = /^#\/room\/([A-Za-z0-9]{4})$/.exec(location.hash);
-  return match ? match[1]!.toUpperCase() : null;
+  const match = /^#\/room\/(\d{4})$/u.exec(location.hash);
+  return match ? match[1]! : null;
 }
 
 export function setHashCode(code: string | null): void {

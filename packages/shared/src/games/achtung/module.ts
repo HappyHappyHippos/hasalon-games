@@ -1,5 +1,5 @@
 import type { GameConfig, GameInstance, GameModule, GameSeat } from '../../gameModule';
-import { MAX_PLAYERS, MIN_PLAYERS, TARGET_SCORE_PER_OPPONENT } from './constants';
+import { MAX_PLAYERS, MIN_PLAYERS } from './constants';
 import {
   applyInput,
   createState,
@@ -69,8 +69,8 @@ export const achtungModule: GameModule = {
   // lobby default. A win-by-two tail is unbounded — two players trading rounds
   // at the target can run indefinitely — and a series has five more legs
   // waiting behind this one. The target itself is also well under the lobby's
-  // `TARGET_SCORE_PER_OPPONENT` of 10 per opponent, which is the whole reason
-  // this method exists rather than reusing `defaultConfig`.
+  // `TARGET_SCORE_PER_PLAYER`, which is the whole reason this method exists
+  // rather than reusing `defaultConfig`.
   seriesConfig(playerCount, pace) {
     const base = defaultConfig(playerCount);
     const perOpponent = pace === 'quick' ? 3 : pace === 'long' ? 8 : 5;
@@ -141,8 +141,4 @@ function nearestPreset(value: number): number {
     }
   }
   return best;
-}
-
-export function suggestedTargetScore(playerCount: number): number {
-  return Math.max(1, playerCount - 1) * TARGET_SCORE_PER_OPPONENT;
 }

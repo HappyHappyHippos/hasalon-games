@@ -1,7 +1,8 @@
 import { create } from 'zustand';
 import { isFaceIndex, isHatIndex } from '@mg/shared';
 import type { ErrorCode, Identity, RoomView } from '@mg/shared';
-import type { MemesPrivate, MemesStageEntry } from '@mg/shared/memes';
+import type { MemesGalleryEntry, MemesPrivate, MemesStageEntry } from '@mg/shared/memes';
+import type { TelephonePrivate, TelephoneSnapshot } from '@mg/shared/telephone';
 import { isLang, type Lang } from './i18n';
 import { DEFAULT_MUSIC_VOLUME } from './music';
 
@@ -41,6 +42,10 @@ export interface HudPlayer {
   health?: number;
   /** Worms: how many of this seat's worms are still alive. */
   wormsLeft?: number;
+  /** Bomb It: how far this seat's blast reaches, in tiles. */
+  range?: number;
+  /** Bomb It: explosions this seat can still walk away from. */
+  shields?: number;
 }
 
 /**
@@ -86,6 +91,15 @@ export interface WormsHud {
   ammo: Record<string, number>;
   /** Charge on the shot being held, 0..1000. */
   power: number;
+  /**
+   * Where the map reticle is, or -1 when nothing is marked.
+   *
+   * The HUD needs this and not just the renderer: a weapon that needs a target
+   * refuses to fire until one is placed, and without the flag the fire button
+   * looks live and silently does nothing.
+   */
+  targetX: number;
+  targetY: number;
 }
 
 /** Meme Machine is entirely React-rendered, so its latest whole stage view lives here. */
@@ -97,7 +111,10 @@ export interface MemesHud {
   entryIndex: number;
   entryCount: number;
   stage: MemesStageEntry | null;
+  /** Every meme of the match. Null until the match is over — see the snapshot type. */
+  gallery: MemesGalleryEntry[] | null;
 }
+export type TelephoneHud = TelephoneSnapshot;
 
 export interface Hud {
   phase: string;
@@ -108,6 +125,7 @@ export interface Hud {
   skribbl?: SkribblHud;
   worms?: WormsHud;
   memes?: MemesHud;
+  telephone?: TelephoneHud;
 }
 
 /**
@@ -166,6 +184,7 @@ export interface AppState {
    * already on screen when someone switches language switches with it.
    */
   error: ErrorCode | null;
+  readyNudge: { from: string; until: number } | null;
   pendingCode: string;
   busy: boolean;
   hud: Hud;
@@ -200,11 +219,13 @@ export interface AppState {
   secret: Secret | null;
   /** Meme Machine's per-socket template, draft, and ballot state. */
   memesPrivate: MemesPrivate | null;
+  telephonePrivate: TelephonePrivate | null;
 
   setStatus(status: ConnectionStatus): void;
   setRoom(room: RoomView | null): void;
   setIdentity(patch: Partial<Identity>): void;
   setError(error: ErrorCode | null): void;
+  setReadyNudge(value: { from: string; until: number } | null): void;
   setPendingCode(code: string): void;
   setBusy(busy: boolean): void;
   setHud(hud: Hud): void;
@@ -218,6 +239,7 @@ export interface AppState {
   pushChat(lines: ChatLine[]): void;
   setSecret(secret: Secret | null): void;
   setMemesPrivate(value: MemesPrivate | null): void;
+  setTelephonePrivate(value: TelephonePrivate | null): void;
   setNet(net: NetStats): void;
   setMuted(muted: boolean): void;
   setMusicMuted(muted: boolean): void;
@@ -332,12 +354,14 @@ export const useStore = create<AppState>((set) => ({
   playerId: null,
   identity: loadIdentity(),
   error: null,
+  readyNudge: null,
   pendingCode: '',
   busy: false,
   hud: emptyHud,
   chat: [],
   secret: null,
   memesPrivate: null,
+  telephonePrivate: null,
   net: { rtt: 0, jitter: 0, delay: 0 },
   matchWinnerSeat: null,
   muted: false,
@@ -363,11 +387,13 @@ export const useStore = create<AppState>((set) => ({
     }),
 
   setError: (error) => set({ error, busy: false }),
+  setReadyNudge: (readyNudge) => set({ readyNudge }),
   setPendingCode: (pendingCode) => set({ pendingCode }),
   setBusy: (busy) => set({ busy }),
   setHud: (hud) => set({ hud }),
   setSecret: (secret) => set({ secret }),
   setMemesPrivate: (memesPrivate) => set({ memesPrivate }),
+  setTelephonePrivate: (telephonePrivate) => set({ telephonePrivate }),
 
   pushChat: (lines) =>
     set((state) => {
@@ -410,6 +436,7 @@ export const useStore = create<AppState>((set) => ({
       chat: [],
       secret: null,
       memesPrivate: null,
+      telephonePrivate: null,
       matchNonce: state.matchNonce + 1,
     })),
 
@@ -426,8 +453,10 @@ export const useStore = create<AppState>((set) => ({
       chat: [],
       secret: null,
       memesPrivate: null,
+      telephonePrivate: null,
       matchWinnerSeat: null,
       busy: false,
+      readyNudge: null,
     }),
 }));
 

@@ -21,7 +21,16 @@ import {
   WORM_HIT_R,
 } from './constants';
 import { outOfWorld, solidAt, surfaceNormal } from './terrain';
-import type { Projectile, TerrainMask, WeaponSpec, Worm } from './types';
+import type { Projectile, TerrainMask, WeaponSpec } from './types';
+
+/** The collision-sized subset needed while a projectile is in flight. */
+export interface ProjectileTarget {
+  id: number;
+  seat: number;
+  x: number;
+  y: number;
+  alive: boolean;
+}
 
 export type ProjectileOutcome =
   /** Still going. */
@@ -44,7 +53,7 @@ export function stepProjectile(
   shot: Projectile,
   spec: WeaponSpec,
   mask: TerrainMask,
-  worms: readonly Worm[],
+  worms: readonly ProjectileTarget[],
   wind: number,
 ): ProjectileOutcome {
   const physics = spec.projectile;
@@ -72,7 +81,7 @@ export function stepProjectile(
     const ny = shot.y + sy;
 
     if (armed) {
-      const hit = wormAt(worms, nx, ny, shot.owner, physics.persist === true);
+      const hit = wormAt(worms, nx, ny, shot.owner, false);
       if (hit >= 0) return { kind: 'detonate', x: nx, y: ny, hitWorm: hit };
     }
 
@@ -91,11 +100,6 @@ export function stepProjectile(
     if (shot.fuse === 0) return { kind: 'detonate', x: shot.x, y: shot.y, hitWorm: -1 };
   }
 
-  if (physics.detonate === 'proximity' && armed) {
-    const near = wormAt(worms, shot.x, shot.y, -1, true, physics.proximityR ?? 0);
-    if (near >= 0) return { kind: 'detonate', x: shot.x, y: shot.y, hitWorm: near };
-  }
-
   if (outOfWorld(shot.x, shot.y, OUT_OF_BOUNDS_X)) return { kind: 'gone' };
   return { kind: 'fly' };
 }
@@ -108,7 +112,7 @@ export function stepProjectile(
  * weapons — a mine you dropped is a mine, and standing on it is your problem.
  */
 function wormAt(
-  worms: readonly Worm[],
+  worms: readonly ProjectileTarget[],
   x: number,
   y: number,
   owner: number,

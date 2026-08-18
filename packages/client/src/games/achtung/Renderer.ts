@@ -148,6 +148,9 @@ export class AchtungRenderer {
   /** Where each curve's stroke currently ends, so strokes join up. */
   private penPos = new Map<number, Point>();
   private seenEventTick = -1;
+  /** Newest snapshot observed. Older buffered entries are not a reset signal. */
+  private newestTick = -1;
+  private newestEpoch = -1;
   private bursts: DeathBurst[] = [];
 
   constructor(canvas: HTMLCanvasElement, context: AchtungRenderContext) {
@@ -192,6 +195,8 @@ export class AchtungRenderer {
     this.bursts = [];
     this.trailEpoch = -1;
     this.seenEventTick = -1;
+    this.newestTick = -1;
+    this.newestEpoch = -1;
   }
 
   // -------------------------------------------------------------------------
@@ -276,14 +281,30 @@ export class AchtungRenderer {
    *   curve that was lethal in the server's grid and not on screen.
    */
   private bake(renderTime: number): void {
+    const newest = [...feed.entries]
+      .reverse()
+      .find((entry) => entry.snap.game === 'achtung')?.snap;
+    if (!newest || newest.game !== 'achtung') return;
+
+    // Only the newest snapshot can establish that the server moved backwards.
+    // Looking at every buffered entry made the oldest entry reset this canvas
+    // on every frame, so the persistent trail was effectively only one second.
+    if (
+      this.newestTick >= 0 &&
+      (newest.tick < this.newestTick || newest.trailEpoch < this.newestEpoch)
+    ) {
+      this.reset();
+    }
+    this.newestTick = newest.tick;
+    this.newestEpoch = newest.trailEpoch;
+
     for (const entry of feed.entries) {
       const snap = entry.snap;
       if (snap.game !== 'achtung') continue;
 
-      if (snap.trailEpoch < this.trailEpoch || snap.tick < this.seenEventTick) {
-        // A new match has started or state was reset. Reset renderer state.
-        this.reset();
-      }
+      // Old epochs remain in the interpolation buffer briefly. They must not
+      // clear or re-bake a trail that has already advanced to the new epoch.
+      if (snap.trailEpoch < this.trailEpoch) continue;
 
       if (snap.trailEpoch > this.trailEpoch) {
         // New round, or someone grabbed "clear trails".

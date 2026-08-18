@@ -71,6 +71,24 @@ export interface MemesPlayer {
   connected: boolean;
 }
 
+/**
+ * One finished meme, kept for the end-of-match gallery.
+ *
+ * Archived at `finishRound`, after `awardTopMemes` has settled `award` and
+ * `top`, and specifically *before* `dealRound` empties `entries` for the next
+ * round. Authorship is a seat rather than an id because nothing is secret any
+ * more by the time this is sent.
+ */
+export interface MemesGalleryEntry {
+  templateId: string;
+  texts: string[];
+  positions: MemeBoxPosition[];
+  authorSeat: number;
+  award: number;
+  top: 0 | 1;
+  round: number;
+}
+
 export interface MemesState {
   config: MemesConfig;
   rng: RngState;
@@ -84,6 +102,8 @@ export interface MemesState {
   entries: MemesEntry[];
   entryIndex: number;
   usedTemplates: Set<string>;
+  /** Every scored meme of the match so far, oldest first. */
+  gallery: MemesGalleryEntry[];
 }
 
 export interface MemesStageEntry {
@@ -120,6 +140,19 @@ export interface MemesSnapshot {
   entryCount: number;
   stage: MemesStageEntry | null;
   players: MemesSnapshotPlayer[];
+  /**
+   * Every meme of the match, and **null until the match is over**.
+   *
+   * Deliberately not carried the whole way through. `Room.broadcastSnapshot`
+   * encodes one snapshot per broadcast and pushes the same string to everybody
+   * thirty times a second; a list that grows by one meme per player per round
+   * would be re-encoded and re-sent on every one of those ticks for the length
+   * of the match, to say something nobody can look at yet. At `matchOver` the
+   * tick loop has stopped, so this is encoded once — and because `sendCatchUp`
+   * replays the last snapshot, somebody who reconnects onto the end screen
+   * still gets the whole gallery.
+   */
+  gallery: MemesGalleryEntry[] | null;
 }
 
 export interface MemesPrivate {

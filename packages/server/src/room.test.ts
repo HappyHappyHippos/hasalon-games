@@ -36,7 +36,10 @@ function fakeClient(): Client & { sent: ServerMessage[]; closed: boolean } {
       state.closed = true;
     },
   };
-  const client = new Client(socket as never) as Client & { sent: ServerMessage[]; closed: boolean };
+  const client = new Client(socket as never, { openedAt: 0, userAgent: '' }) as Client & {
+    sent: ServerMessage[];
+    closed: boolean;
+  };
   Object.defineProperty(client, 'sent', { value: sent });
   Object.defineProperty(client, 'closed', { get: () => state.closed });
   return client;
@@ -193,7 +196,150 @@ describe('Room membership', () => {
   });
 });
 
+describe('Room kick', () => {
+  it('tells them why, then takes the seat away', () => {
+    const room = new Room('TEST');
+    const hostClient = fakeClient();
+    const guestClient = fakeClient();
+    room.addPlayer(hostClient, identity('Host', 0));
+    const guest = room.addPlayer(guestClient, identity('Guest', 1))!;
+
+    expect(room.kick(guest.id)).toBe(true);
+    expect(guestClient.sent.at(-1)).toMatchObject({ t: 'error', code: 'KICKED' });
+    expect(room.players.map((p) => p.name)).toEqual(['Host']);
+
+    room.dispose();
+  });
+
+  /**
+   * The notice has to be sent before the removal, not after: `removePlayer`
+   * unhooks the socket from the room, and a message sent afterwards has nowhere
+   * to go. Ordering this the obvious way removes them in silence.
+   */
+  it('sends the notice before it unhooks the socket', () => {
+    const room = new Room('TEST');
+    room.addPlayer(fakeClient(), identity('Host', 0));
+    const guestClient = fakeClient();
+    const guest = room.addPlayer(guestClient, identity('Guest', 1))!;
+
+    room.kick(guest.id);
+    expect(guestClient.sent.some((m) => m.t === 'error' && m.code === 'KICKED')).toBe(true);
+    expect(guestClient.closed).toBe(false);
+
+    room.dispose();
+  });
+
+  it('will not kick the host, or anybody who is not here', () => {
+    const room = new Room('TEST');
+    const host = room.addPlayer(fakeClient(), identity('Host', 0))!;
+    room.addPlayer(fakeClient(), identity('Guest', 1));
+
+    expect(room.kick(host.id)).toBe(false);
+    expect(room.kick('nobody')).toBe(false);
+    expect(room.players).toHaveLength(2);
+
+    room.dispose();
+  });
+
+  /**
+   * The seat is gone from `players`, so the kicked client's own automatic
+   * `resume` finds nothing and fails — which is what stops them reappearing on
+   * their next dropped frame, without needing a ban list to enforce it.
+   */
+  it('leaves nothing for their reconnect to resume into', () => {
+    const room = new Room('TEST');
+    room.addPlayer(fakeClient(), identity('Host', 0));
+    const guestClient = fakeClient();
+    const guest = room.addPlayer(guestClient, identity('Guest', 1))!;
+    const token = guest.token;
+
+    room.kick(guest.id);
+    expect(room.resumePlayer(fakeClient(), guest.id, token)).toBeNull();
+
+    room.dispose();
+  });
+
+  it('hands the host on when the host leaves, and the new host can kick', () => {
+    const room = new Room('TEST');
+    const hostClient = fakeClient();
+    const host = room.addPlayer(hostClient, identity('Host', 0))!;
+    const second = room.addPlayer(fakeClient(), identity('Second', 1))!;
+    const third = room.addPlayer(fakeClient(), identity('Third', 2))!;
+
+    expect(room.hostId).toBe(host.id);
+    room.removePlayer(host.id);
+    expect(room.hostId).toBe(second.id);
+
+    expect(room.kick(second.id)).toBe(false);
+    expect(room.kick(third.id)).toBe(true);
+
+    room.dispose();
+  });
+});
+
 describe('Room match gating', () => {
+  it('lets anyone remind unready players, with one room-wide cooldown', () => {
+    const room = new Room('TEST');
+    const aClient = fakeClient();
+    const bClient = fakeClient();
+    const cClient = fakeClient();
+    // A is the host and therefore already ready, so B and C are the only two
+    // who can be reminded of anything — hence three players for this one.
+    const a = room.addPlayer(aClient, identity('A', 0))!;
+    const b = room.addPlayer(bClient, identity('B', 1))!;
+    room.addPlayer(cClient, identity('C', 2));
+    aClient.sent.length = 0;
+    bClient.sent.length = 0;
+
+    expect(room.nudgeReady(a)).toBe(true);
+    expect(bClient.sent.at(-1)).toMatchObject({ t: 'readyNudge', from: a.id });
+    expect(room.nudgeReady(b)).toBe(false);
+
+    // Move only the feature's own deadline; faking the monotonic process clock
+    // here would contaminate the real tick-loop tests later in this file.
+    (room as unknown as { readyNudgeUntil: number }).readyNudgeUntil = 0;
+    expect(room.nudgeReady(b)).toBe(true);
+    room.setReady(b, true);
+    room.setReady(room.players[2]!, true);
+    (room as unknown as { readyNudgeUntil: number }).readyNudgeUntil = 0;
+    expect(room.nudgeReady(a)).toBe(false);
+    room.dispose();
+  });
+
+  /**
+   * The host does not tick a box next to their own name. They opened the room,
+   * they choose the game, and they are the only one who can start it — the
+   * ready flag was a question they had already answered by being the host, and
+   * a start button that sat disabled waiting for it read as broken.
+   */
+  it('keeps the host ready without them ever pressing it', () => {
+    const room = new Room('TEST');
+    const host = room.addPlayer(fakeClient(), identity('A', 0))!;
+    const guest = room.addPlayer(fakeClient(), identity('B', 1))!;
+
+    expect(host.ready).toBe(true);
+    expect(guest.ready).toBe(false);
+
+    // They can still stand down — and pressing start puts them back in.
+    room.setReady(host, false);
+    room.setReady(guest, true);
+    expect(room.canStart()).toBe(false);
+    expect(room.start(host)).toBe(true);
+    expect(host.ready).toBe(true);
+    room.dispose();
+  });
+
+  it('hands the ready flag to whoever inherits the room', () => {
+    const room = new Room('TEST');
+    const host = room.addPlayer(fakeClient(), identity('A', 0))!;
+    const guest = room.addPlayer(fakeClient(), identity('B', 1))!;
+
+    room.removePlayer(host.id, 'left');
+    expect(room.hostId).toBe(guest.id);
+    expect(guest.ready).toBe(true);
+    room.dispose();
+  });
+
   it('will not start without two ready players', () => {
     const room = new Room('TEST');
     const a = room.addPlayer(fakeClient(), identity('A', 0))!;
@@ -588,6 +734,12 @@ describe('Room series', () => {
     return (room as unknown as { settingsByGame: Record<string, GameConfig> }).settingsByGame;
   }
 
+  /** Test-only: the public reveal is intentionally not skippable anymore. */
+  function beginDrawnLeg(room: Room): void {
+    (room as unknown as { advanceLeg(): void }).advanceLeg();
+    expect(room.seriesView?.phase).toBe('leg');
+  }
+
   /** A lobby of `count` ready players with the roulette configured. */
   function lobby(count: number, setup: Partial<SeriesSetup> = {}) {
     const room = new Room('TEST');
@@ -700,7 +852,7 @@ describe('Room series', () => {
     room.setSettings({ targetWins: 15, roundSeconds: 180 });
 
     expect(room.startSeries()).toBe(true);
-    expect(room.skipSeriesWait()).toBe(true);
+    beginDrawnLeg(room);
 
     expect(room.gameId).toBe('tanks');
     const live = room.settings;
@@ -721,7 +873,7 @@ describe('Room series', () => {
     room.setGame('tanks');
     room.setSettings({ targetWins: 15 });
     expect(room.startSeries()).toBe(true);
-    expect(room.skipSeriesWait()).toBe(true);
+    beginDrawnLeg(room);
 
     room.rematch();
 
@@ -738,7 +890,7 @@ describe('Room series', () => {
     try {
       const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
       expect(room.startSeries()).toBe(true);
-      expect(room.skipSeriesWait()).toBe(true);
+      beginDrawnLeg(room);
 
       const seatsBefore = players.map((p) => p.seat);
       const firstLeg = room.gameId;
@@ -764,7 +916,7 @@ describe('Room series', () => {
   it('records each leg winner by player id', () => {
     const { room, players } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
     expect(room.startSeries()).toBe(true);
-    expect(room.skipSeriesWait()).toBe(true);
+    beginDrawnLeg(room);
 
     const winner = players.find((p) => p.seat === 1)!;
     endMatch(room, 1);
@@ -780,7 +932,7 @@ describe('Room series', () => {
     try {
       const { room } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
       expect(room.startSeries()).toBe(true);
-      expect(room.skipSeriesWait()).toBe(true);
+      beginDrawnLeg(room);
 
       endMatch(room, 0);
       vi.advanceTimersByTime(SERIES_BREAK_MS + 50);
@@ -806,7 +958,7 @@ describe('Room series', () => {
     try {
       const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
       expect(room.startSeries()).toBe(true);
-      expect(room.skipSeriesWait()).toBe(true);
+      beginDrawnLeg(room);
 
       endMatch(room, 0);
       const before = startedMatches(room).length;
@@ -833,7 +985,7 @@ describe('Room series', () => {
     try {
       const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
       expect(room.startSeries()).toBe(true);
-      expect(room.skipSeriesWait()).toBe(true);
+      beginDrawnLeg(room);
 
       endMatch(room, 0);
       const before = startedMatches(room).length;
@@ -858,7 +1010,7 @@ describe('Room series', () => {
     try {
       const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
       expect(room.startSeries()).toBe(true);
-      expect(room.skipSeriesWait()).toBe(true);
+      beginDrawnLeg(room);
       endMatch(room, 0);
 
       const before = startedMatches(room).length;
@@ -880,7 +1032,7 @@ describe('Room series', () => {
     try {
       const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
       expect(room.startSeries()).toBe(true);
-      expect(room.skipSeriesWait()).toBe(true);
+      beginDrawnLeg(room);
       endMatch(room, 0);
       expect(vi.getTimerCount()).toBeGreaterThan(0);
 
@@ -896,7 +1048,7 @@ describe('Room series', () => {
   it('refuses a restart during a break, so a scored leg cannot be scored twice', () => {
     const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
     expect(room.startSeries()).toBe(true);
-    expect(room.skipSeriesWait()).toBe(true);
+    beginDrawnLeg(room);
 
     endMatch(room, 0);
     const totals = players.map((p) => p.totalScore);
@@ -911,11 +1063,30 @@ describe('Room series', () => {
   it('still allows a restart mid-leg', () => {
     const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
     expect(room.startSeries()).toBe(true);
-    expect(room.skipSeriesWait()).toBe(true);
+    beginDrawnLeg(room);
     expect(room.seriesView!.phase).toBe('leg');
 
     expect(room.restart()).toBe(true);
 
+    room.dispose();
+  });
+
+  it('skips a live leg without awarding points and records it in the run', () => {
+    const { room, players } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
+    expect(room.startSeries()).toBe(true);
+    beginDrawnLeg(room);
+
+    expect(room.skipSeriesLeg()).toBe(true);
+    expect(room.phase).toBe('matchOver');
+    expect(room.seriesView).toMatchObject({
+      phase: 'break',
+      legWinners: [null],
+      skippedLegs: [0],
+    });
+    expect(players.map((player) => player.totalScore)).toEqual([0, 0, 0]);
+    const sent = (players[0]!.client as unknown as { sent: ServerMessage[] }).sent;
+    expect(sent.at(-1)).toMatchObject({ t: 'matchEnded', skipped: true, winnerSeat: null });
+    expect(room.skipSeriesLeg()).toBe(false);
     room.dispose();
   });
 
@@ -946,10 +1117,22 @@ describe('Room series', () => {
 });
 
 describe('Room input handover', () => {
-  /** A started Gun Mayhem match; `p` is seat 0. */
+  /**
+   * A started Gun Mayhem match; `p` is seat 0.
+   *
+   * The level is pinned rather than left on `'random'`. `beginMatch` seeds the
+   * instance from `Math.random()`, so the stage — and with it seat 0's footing —
+   * used to depend on how many draws the process had already made, i.e. on which
+   * tests ran first. These tests hold a run for 900 ms, which carries a worm
+   * ~134 units (300 ms at `RUN_SPEED` plus ~31 of `GROUND_FRICTION`); on the
+   * narrower stages that walked seat 0 off its ledge, and an airborne player
+   * coasts on `AIR_FRICTION` instead of stopping, failing the assertion below.
+   * Green Hills spawns seat 0 on a 410-wide ledge, so the run stays grounded.
+   */
   function match(): { room: Room; client: ReturnType<typeof fakeClient>; p: RoomPlayer } {
     const room = new Room('TEST');
     room.setGame('gunmayhem');
+    room.setSettings({ levelId: 'green' });
     const client = fakeClient();
     const p = room.addPlayer(client, identity('A', 0))!;
     const b = room.addPlayer(fakeClient(), identity('B', 1))!;

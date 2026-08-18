@@ -32,7 +32,6 @@ function shot(kind: Projectile['kind'], over: Partial<Projectile> = {}): Project
     age: 0,
     tx: -1,
     ty: -1,
-    resting: false,
     ...over,
   };
 }
@@ -210,29 +209,6 @@ describe('fuses', () => {
     const mask = world();
     const projectile = shot('bazooka', { x: 100, y: 100, vx: 3000, vy: 0 });
     expect(fly(projectile, mask).kind).toBe('gone');
-  });
-});
-
-describe('proximity', () => {
-  it('sets a mine off when somebody walks past, but not before it is armed', () => {
-    const mask = world([{ x0: 0, y0: 400, x1: 999, y1: 799 }]);
-    const victim = worm({ id: 3, seat: 1, x: 200, y: 380 });
-    const mine = shot('mine', { x: 200, y: 380, owner: 0 });
-
-    // Still arming: two seconds of standing on it does nothing.
-    const early = stepProjectile(mine, WEAPONS.mine, mask, [victim], 0);
-    expect(early.kind).toBe('fly');
-
-    mine.age = (WEAPONS.mine.projectile?.armTicks ?? 0) + 1;
-    const late = stepProjectile(mine, WEAPONS.mine, mask, [victim], 0);
-    expect(late.kind).toBe('detonate');
-  });
-
-  it('is armed against the worm that laid it, once it is live', () => {
-    const mask = world([{ x0: 0, y0: 400, x1: 999, y1: 799 }]);
-    const owner = worm({ id: 4, seat: 0, x: 200, y: 380 });
-    const mine = shot('mine', { x: 200, y: 380, owner: 0, age: 10_000 });
-    expect(stepProjectile(mine, WEAPONS.mine, mask, [owner], 0).kind).toBe('detonate');
   });
 });
 
