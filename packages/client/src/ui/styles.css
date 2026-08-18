@@ -3098,9 +3098,16 @@ strong,
     z-index: 4;
     top: calc(6px + env(safe-area-inset-top));
     inset-inline-start: calc(8px + env(safe-area-inset-left));
-    /* Stops short of the options gear and the maximize button, which share this
-       corner mid-match. */
-    inset-inline-end: calc(150px + env(safe-area-inset-right));
+    /* Stops short of the fixed buttons that share this corner mid-match, via
+       the token that measures them rather than a number of its own. The
+       hardcoded 150px this replaces was one button out of date: the row is
+       gear, pause, maximize *and* microphone, the last of which ends at 178px,
+       so the rail's own box ran 28px underneath it. Cards are
+       `pointer-events: auto`, so a full roster put one over the microphone and
+       took the tap. `--chrome-gutter` is also what every game header already
+       reserves, and it drops to 140px by itself in a standalone app where
+       there is no maximize button. */
+    inset-inline-end: calc(var(--chrome-gutter) + env(safe-area-inset-right));
     width: auto;
     flex-direction: row;
     align-items: center;
