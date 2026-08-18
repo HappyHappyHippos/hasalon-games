@@ -5108,7 +5108,18 @@ strong,
 @media (max-height: 560px) and (orientation: landscape) and (min-width: 600px) {
   .skribbl { height: 100%; overflow: hidden; }
   .skribbl__body {
-    grid-template-columns: minmax(100px, 0.35fr) minmax(280px, 1.55fr) minmax(180px, 0.65fr);
+    /* The three minimums still add up to 560px, exactly as before, so this
+       cannot overflow anywhere the previous split fitted. What changed is how
+       they are shared out.
+       0.35fr of this row resolves to less than the scoreboard's own minimum at
+       every width a phone has, so that column is always *exactly* its min —
+       and at 100px it was 30px short of holding what it contains. Rank, a 30px
+       avatar, the score and the gaps left the name flex 3px of a declared
+       48px, so `.skribbl__name`'s `max-width: 48px` below never came into
+       play and the scoreboard showed six ellipses and no names. 160px is what
+       lets that cap actually be reached; the drawing stage gives up 37px for
+       it and is still by far the largest region. */
+    grid-template-columns: minmax(160px, 0.35fr) minmax(240px, 1.55fr) minmax(160px, 0.65fr);
     grid-template-rows: minmax(0, 1fr);
   }
   .skribbl__side { max-height: none; }
