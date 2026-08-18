@@ -1685,7 +1685,7 @@ strong,
   position: fixed;
   z-index: 15;
   inset-inline-end: calc(100px + env(safe-area-inset-right));
-  bottom: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
   width: 38px;
   height: 38px;
   display: grid;
@@ -1774,8 +1774,13 @@ strong,
 .fullscreenbtn__wrap {
   position: fixed;
   z-index: 15;
-  bottom: 12px;
-  inset-inline-end: 56px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  /* The inset matters as much as the offset. These three share one row and
+     only the microphone was reserving the cutout, so on a phone held in
+     landscape the row went 12 / 56 / 144 instead of 12 / 56 / 100: one 44px
+     gap, then a doubled one, with the gear itself sitting inside the housing.
+     Mid-match (`.app--playing`, below) every button already did this. */
+  inset-inline-end: calc(56px + env(safe-area-inset-right));
   display: flex;
   flex-direction: row-reverse;
   align-items: center;
@@ -2030,7 +2035,17 @@ strong,
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  /* Per side, and never less than the cutout. On a phone `.screenbox` is
+     `inset: 0` with no border, so this backdrop runs to the physical edges of
+     the display — a plain `padding: 16px` puts the card under the camera
+     housing in landscape and under the status bar and home indicator in
+     portrait. `.rail` in the same media query already reserves these; this is
+     the same reservation for everything that opens over the arena: the
+     match-over standings, the pause card, the roulette reveal, the series
+     interstitial and champion cards, and Skribbl's word picker. */
+  padding:
+    max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   /* This backdrop covers the whole screen, so it is the last line of defence
      against a sideways drag — landscape mobile is where it mattered: a
      `position: sticky` footer inside `.overlay__card` (added for the
@@ -2554,8 +2569,8 @@ strong,
 
 .options {
   position: fixed;
-  inset-inline-end: 12px;
-  bottom: 12px;
+  inset-inline-end: calc(12px + env(safe-area-inset-right));
+  bottom: calc(12px + env(safe-area-inset-bottom));
   z-index: 15;
   width: 38px;
   height: 38px;
@@ -2809,18 +2824,21 @@ strong,
 }
 
 @media (max-height: 560px) {
+  /* Tighter, but still never inside the cutout — 6px where there is no cutout,
+     the cutout's own width where there is.
+     `.overlay` and `.options__overlay` are both single class selectors, so a
+     bare `padding: 6px` here silently beat the safe-area padding the options
+     overlay sets at full size. A phone held in landscape for a match is
+     exactly `max-height: 560px` and *not* `max-width: 760px` (it is ~812
+     wide), so it matched here and nowhere else, and the menu ran under the
+     side camera cutout. The same shorthand was doing it to every *other*
+     overlay too — the match-over card is 760px wide in landscape, which on a
+     notched phone reaches ~19px under the housing, and the standings sit in
+     the column nearest it. One rule on `.overlay` now covers both. */
   .overlay {
-    padding: 6px;
-  }
-  /* `.overlay` and `.options__overlay` are both single class selectors, so this
-     `padding: 6px` shorthand — later in the file — silently beat the
-     safe-area padding on the options overlay whenever it applied. A phone held
-     in landscape for a match is exactly `max-height: 560px` and *not*
-     `max-width: 760px` (it is ~812 wide), so it matched here and nowhere else,
-     and the menu ran under the side camera cutout. Restate the reservation:
-     6px when there is no cutout, the cutout's own width when there is. */
-  .options__overlay {
-    padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+    padding:
+      max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right))
+      max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
   }
   .overlay__card,
   .options__panel {
