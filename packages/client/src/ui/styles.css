@@ -2518,7 +2518,12 @@ strong,
 
 .toast {
   position: fixed;
-  top: 12px;
+  /* Reserve the notch. Installed to the home screen there is no browser chrome
+     above this, so `top: 12px` put the toast behind the Dynamic Island — and
+     this is the only channel the app has for "connection lost", "that room is
+     full" and "this page is out of date, please reload". Every other
+     top-pinned element already adds this inset. */
+  top: calc(12px + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
