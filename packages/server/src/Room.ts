@@ -151,7 +151,7 @@ export class Room {
       this.instance?.stepTick();
       return this.instance?.status() !== 'over';
     },
-    snapshot: () => this.broadcastSnapshot(),
+    snapshot: (final) => this.broadcastSnapshot(final),
     finished: () => this.endMatch(this.instance?.winnerSeat() ?? null),
     pauseLapsed: () => this.broadcastRoom(),
   });
@@ -880,14 +880,23 @@ export class Room {
     this.instance.applyInput(player.id, raw);
   }
 
-  private broadcastSnapshot(): void {
+  /**
+   * `final` is the last snapshot of the match, and it is never droppable.
+   *
+   * `droppableSnapshots` says a snapshot is safe to skip for a backed-up socket
+   * because the next one restores everything it carried. The last one has no
+   * next one — and it is the only snapshot that ever carries Meme Machine's
+   * end-of-match gallery, so skipping it costs a connected player the gallery
+   * for good. `sendCatchUp` only helps somebody who reloads.
+   */
+  private broadcastSnapshot(final = false): void {
     if (!this.instance) return;
     this.lastSnapshot = this.instance.snapshot();
     this.lastSnapshotAt = serverNow();
 
     // Encoded once for the whole room rather than once per recipient.
     const encoded = encode({ t: 'snapshot', snap: this.lastSnapshot, st: this.lastSnapshotAt });
-    const droppable = this.module.meta.droppableSnapshots;
+    const droppable = this.module.meta.droppableSnapshots && !final;
     for (const p of this.players) p.client?.sendSnapshot(encoded, droppable);
 
     for (const p of this.players) this.sendPrivate(p);

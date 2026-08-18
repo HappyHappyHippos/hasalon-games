@@ -29,8 +29,16 @@ export interface MatchClockHooks {
    * finished, which stops the clock — the final snapshot and `finished` follow.
    */
   tick(): boolean;
-  /** Broadcast a snapshot. Called on the cadence, and once more at the end. */
-  snapshot(): void;
+  /**
+   * Broadcast a snapshot. Called on the cadence, and once at the end of the
+   * match if the cadence did not already cover that tick.
+   *
+   * `final` marks the last snapshot of the match — the one with nothing after
+   * it to correct or replace it. A game whose end-of-match payload rides in a
+   * snapshot (Meme Machine's gallery) has exactly one carrier, so this is the
+   * one that must not be dropped for a backed-up socket.
+   */
+  snapshot(final: boolean): void;
   /** The match is over. The clock is already stopped and will not re-arm. */
   finished(): void;
   /** A pause hit `PAUSE_MAX_MS` and was lifted; the room needs to be told. */
@@ -173,14 +181,23 @@ export class MatchClock {
       const alive = this.hooks.tick();
       this.ticksSinceSnapshot += 1;
 
+      // Whether the cadence has already covered this tick. A match that ends on
+      // a cadence tick used to be broadcast twice — the same state, encoded and
+      // pushed to every socket in the room a second time, which the client then
+      // discarded as a repeated tick. That is half of all matches, since the
+      // cadence is every second tick.
+      let sent = false;
       if (this.ticksSinceSnapshot >= SNAPSHOT_EVERY) {
         this.ticksSinceSnapshot = 0;
-        this.hooks.snapshot();
+        this.hooks.snapshot(!alive);
+        sent = true;
       }
 
       if (!alive) {
-        this.ticksSinceSnapshot = 0;
-        this.hooks.snapshot();
+        if (!sent) {
+          this.ticksSinceSnapshot = 0;
+          this.hooks.snapshot(true);
+        }
         this.stop();
         this.hooks.finished();
         return;

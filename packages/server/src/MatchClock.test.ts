@@ -28,6 +28,7 @@ function harness(): {
   clock: MatchClock;
   ticks: () => number;
   snapshots: () => number[];
+  finalFlags: () => boolean[];
   finished: () => number;
   lapsed: () => number;
   endAfter: (n: number) => void;
@@ -37,13 +38,17 @@ function harness(): {
   let finishedCount = 0;
   let lapsedCount = 0;
   const snapshotAtTick: number[] = [];
+  const snapshotFinal: boolean[] = [];
 
   const hooks: MatchClockHooks = {
     tick: () => {
       tickCount += 1;
       return tickCount < endAt;
     },
-    snapshot: () => snapshotAtTick.push(tickCount),
+    snapshot: (final) => {
+      snapshotAtTick.push(tickCount);
+      snapshotFinal.push(final);
+    },
     finished: () => {
       finishedCount += 1;
     },
@@ -56,6 +61,7 @@ function harness(): {
     clock: new MatchClock(hooks),
     ticks: () => tickCount,
     snapshots: () => snapshotAtTick,
+    finalFlags: () => snapshotFinal,
     finished: () => finishedCount,
     lapsed: () => lapsedCount,
     endAfter: (n) => {
@@ -222,6 +228,39 @@ describe('match end', () => {
     expect(h.finished()).toBe(1);
     // The last snapshot is the one forced at the end, at the final tick.
     expect(h.snapshots().at(-1)).toBe(5);
+  });
+
+  it('broadcasts the last snapshot once, however the final tick falls', () => {
+    // The cadence is every second tick, so a match ending on an even tick used
+    // to be snapshotted twice: once by the cadence and once by the forced
+    // final. Identical state, encoded and pushed to every socket in the room a
+    // second time, and discarded by the client as a repeated tick — on half of
+    // all matches, since which parity a match ends on is arbitrary.
+    for (const endAt of [4, 5, 6, 7]) {
+      const h = harness();
+      h.endAfter(endAt);
+      h.clock.start();
+      vi.advanceTimersByTime(TICK_MS * 100);
+
+      const at = h.snapshots();
+      expect(at.at(-1)).toBe(endAt);
+      expect(at.filter((tick) => tick === endAt)).toHaveLength(1);
+      h.clock.stop();
+    }
+  });
+
+  it('marks only the last snapshot final, so the room can refuse to drop it', () => {
+    // `Room` sends the final snapshot even to a backed-up socket: it is the one
+    // with nothing after it to restore what it carried, and for Meme Machine it
+    // is the only snapshot that ever holds the end-of-match gallery.
+    const h = harness();
+    h.endAfter(6);
+    h.clock.start();
+    vi.advanceTimersByTime(TICK_MS * 100);
+
+    const flags = h.finalFlags();
+    expect(flags.at(-1)).toBe(true);
+    expect(flags.slice(0, -1).every((final) => final === false)).toBe(true);
   });
 
   it('does not re-arm after finishing', () => {
