@@ -5724,13 +5724,24 @@ strong,
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  /* Same reservation as `.overlay`: this is a fixed, edge-to-edge backdrop, so
+     on a notched phone in landscape a flat 16px puts the panel under the
+     camera housing. */
+  padding:
+    max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
 }
 
 .worms__picker-panel {
   width: 100%;
   max-width: 480px;
-  max-height: 85vh;
+  /* Bounded by the padded backdrop above, exactly like `.overlay__card`.
+     This was `85vh`, and `vh` is the one length that lies on a phone: iOS
+     resolves it against the *large* viewport, the one with the address bar
+     hidden, so with the bar showing the panel could be taller than the screen
+     and its head scrolled out of reach. Everything else here sizes from
+     `--app-visible-height` or a percentage of a padded parent for that reason. */
+  max-height: 100%;
   overflow-y: auto;
   background: var(--surface);
   border: 3px solid var(--ink);
