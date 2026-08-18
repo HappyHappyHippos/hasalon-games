@@ -447,7 +447,19 @@ export class Room {
     this.broadcastRoom();
   }
 
+  /**
+   * Only a real change gets a broadcast, the same rule `setVoice` and
+   * `setListening` below already follow.
+   *
+   * Without it, `ready` was an amplifier: the answer to a `ready` message is a
+   * room view sent to *everyone*, and a client that re-sends its current state
+   * on each of those — which is the obvious way to write one, since `rematch`
+   * clears the flag and it does have to be re-sent then — feeds itself. A test
+   * bot written exactly that way took itself to `RATE_LIMITED` in under a
+   * second, with the room broadcasting to all eight players the whole way.
+   */
   setReady(player: RoomPlayer, ready: boolean): void {
+    if (player.ready === ready) return;
     player.ready = ready;
     this.broadcastRoom();
   }

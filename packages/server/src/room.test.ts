@@ -1287,6 +1287,36 @@ describe('Room input handover', () => {
   });
 });
 
+describe('ready', () => {
+  it('does not broadcast when the flag has not actually changed', () => {
+    // A `ready` message is answered with a room view sent to everyone, so a
+    // client that re-sends its current state on each broadcast feeds itself.
+    // That is the obvious way to write a client, too — `rematch` clears the
+    // flag, so it does have to be re-sent sometimes. `setVoice` and
+    // `setListening` have always guarded against this; this did not, and a
+    // test bot written that way reached `RATE_LIMITED` in under a second.
+    const room = new Room('TEST');
+    const host = room.addPlayer(fakeClient(), identity('Ohad', 0))!;
+    const guest = room.addPlayer(fakeClient(), identity('Yoni', 1))!;
+    const client = guest.client as ReturnType<typeof fakeClient>;
+
+    const before = client.sent.filter((m) => m.t === 'room').length;
+    room.setReady(guest, true);
+    const afterChange = client.sent.filter((m) => m.t === 'room').length;
+    room.setReady(guest, true);
+    room.setReady(guest, true);
+    const afterRepeats = client.sent.filter((m) => m.t === 'room').length;
+
+    expect(afterChange).toBe(before + 1);
+    expect(afterRepeats).toBe(afterChange);
+
+    // And a genuine change still goes out.
+    room.setReady(guest, false);
+    expect(client.sent.filter((m) => m.t === 'room').length).toBe(afterRepeats + 1);
+    expect(host.ready).toBe(true);
+  });
+});
+
 describe('how a match is written down', () => {
   /**
    * A match that ran its whole length and ended level is still a match that
