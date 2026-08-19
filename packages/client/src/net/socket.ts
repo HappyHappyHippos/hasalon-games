@@ -48,6 +48,7 @@ import type { MemesPrivate } from '@mg/shared/memes';
 import type { TelephonePrivate, TelephonePrivateCatchUp } from '@mg/shared/telephone';
 import { receiveTelephoneCatchUp, resetTelephoneDraftInk } from '../games/telephone/draftBus';
 import { clock } from './clock';
+import { readHashCode, setHashCode } from './hashLink';
 import { voice } from './voice';
 import { delayed, readNetSim } from './netsim';
 import { sfx } from '../audio';
@@ -758,17 +759,6 @@ voice.announceListening = (on) => socket.setListening(on);
 // two form a cycle.
 setReportSender((report) => socket.sendLog(report));
 
-// ---------------------------------------------------------------------------
-// Shareable #/room/CODE links
-// ---------------------------------------------------------------------------
-
-export function readHashCode(): string | null {
-  const match = /^#\/room\/(\d{4})$/u.exec(location.hash);
-  return match ? match[1]! : null;
-}
-
-export function setHashCode(code: string | null): void {
-  const next = code ? `#/room/${code}` : '';
-  if (location.hash === next) return;
-  history.replaceState(null, '', next || location.pathname + location.search);
-}
+// Re-exported so `App.tsx` and everything else keep importing the wire surface
+// from one place; the implementation lives in `hashLink.ts` so it can be tested.
+export { readHashCode, setHashCode };
