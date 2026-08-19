@@ -600,8 +600,18 @@ const he = {
 
   colorNames: ['אדום', 'ירוק', 'כחול', 'צהוב', 'כתום', 'סגול', 'תכלת', 'ורוד'],
   colorTaken: (name: string) => `${name} — תפוס`,
-  hatNames: ['בלי כובע', 'קסקט', 'כתר', 'מגבעת', 'קרניים', 'סרט', 'הילה', 'גרבון'],
-  faceNames: ['רגיל', 'שמח', 'כועס', 'משקפיים', 'מסוחרר', 'ציקלופ'],
+  // One entry per `HATS` / `FACES`, in that order — `appearanceNames.test.ts`
+  // keeps them in step, because a short array reads as `undefined`.
+  hatNames: ['בלי כובע', 'קסקט', 'כתר', 'מגבעת', 'קרניים', 'סרט', 'הילה', 'גרבון',
+    'ברט', 'כובע יום הולדת', 'כובע בוקרים', 'כובע פיראטים', 'כובע חג', 'כובע סיום'],
+  faceNames: ['רגיל', 'שמח', 'כועס', 'משקפיים', 'מסוחרר', 'ציקלופ', 'מופתע', 'עייף', 'קורץ'],
+  prevHat: 'הכובע הקודם',
+  nextHat: 'הכובע הבא',
+  prevFace: 'הפרצוף הקודם',
+  nextFace: 'הפרצוף הבא',
+  prevColour: 'הצבע הקודם',
+  nextColour: 'הצבע הבא',
+  appearanceNow: (hat: string, face: string, colour: string) => `${colour}, ${face}, ${hat}`,
 
   // -------------------------------------------------------------------------
   // Errors and connection
@@ -1178,8 +1188,16 @@ const en: Dict = {
 
   colorNames: ['Red', 'Green', 'Blue', 'Yellow', 'Orange', 'Purple', 'Cyan', 'Pink'],
   colorTaken: (name: string) => `${name} — taken`,
-  hatNames: ['No hat', 'Cap', 'Crown', 'Top hat', 'Horns', 'Headband', 'Halo', 'Beanie'],
-  faceNames: ['Normal', 'Happy', 'Angry', 'Shades', 'Dizzy', 'Cyclops'],
+  hatNames: ['No hat', 'Cap', 'Crown', 'Top hat', 'Horns', 'Headband', 'Halo', 'Beanie',
+    'Beret', 'Birthday hat', 'Cowboy hat', 'Pirate hat', 'Santa hat', 'Graduation cap'],
+  faceNames: ['Normal', 'Happy', 'Angry', 'Shades', 'Dizzy', 'Cyclops', 'Surprised', 'Tired', 'Wink'],
+  prevHat: 'Previous hat',
+  nextHat: 'Next hat',
+  prevFace: 'Previous face',
+  nextFace: 'Next face',
+  prevColour: 'Previous colour',
+  nextColour: 'Next colour',
+  appearanceNow: (hat: string, face: string, colour: string) => `${colour}, ${face}, ${hat}`,
 
   lostConnection: 'Lost the connection — trying again…',
   dismiss: 'Dismiss',

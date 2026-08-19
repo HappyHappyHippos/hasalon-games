@@ -9,8 +9,14 @@ import { msUntil } from '../net/clock';
  * player who checks a message during the break and comes back would find a
  * countdown frozen at whatever it read when they left. A tenth of a second of
  * granularity is plenty for a number that counts whole seconds.
+ *
+ * Named `POLL_MS` rather than `TICK_MS`: this is how often a React countdown
+ * re-reads the clock, while `TICK_MS` everywhere else in this codebase is the
+ * engine's 16.667 ms simulation step. Two unrelated quantities under one name,
+ * six times apart, is a swap waiting to be made by whoever next tidies the
+ * imports in this file.
  */
-const TICK_MS = 100;
+const POLL_MS = 100;
 
 export interface SeriesCountdown {
   msLeft: number;
@@ -30,7 +36,7 @@ export function useSeriesCountdown(until: number | null, totalMs: number): Serie
     }
     const read = (): void => setMsLeft(Math.max(0, msUntil(until)));
     read();
-    const id = window.setInterval(read, TICK_MS);
+    const id = window.setInterval(read, POLL_MS);
     return () => window.clearInterval(id);
   }, [until]);
 
