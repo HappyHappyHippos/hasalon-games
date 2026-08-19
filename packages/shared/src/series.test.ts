@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GameId } from './gameModule';
+import { GAMES } from './registry';
 import {
   DEFAULT_SERIES_ROUNDS,
   MAX_SERIES_ROUNDS,
@@ -198,5 +199,32 @@ describe('revealDurationMs', () => {
 
   it('is positive even with nothing to reveal', () => {
     expect(revealDurationMs(0)).toBeGreaterThan(0);
+  });
+});
+
+describe('MAX_SERIES_ROUNDS tracks the catalogue', () => {
+  /**
+   * A roulette run draws *distinct* games, so the ceiling on how many legs the
+   * host may ask for is exactly how many games there are. It is a hand-written
+   * literal — `registry.ts` says to bump it when adding a game, and nothing
+   * made that true.
+   *
+   * Both directions matter and neither announces itself. Too low and a tenth
+   * game is registered, playable and in the hat, but the round stepper still
+   * stops at nine, so the longest run the room can ask for is one leg short of
+   * what it has. Too high and the stepper offers a number `drawLineup` will
+   * quietly clamp, so the host picks ten and gets nine with no explanation.
+   */
+  it('is exactly the number of registered games', () => {
+    expect(MAX_SERIES_ROUNDS).toBe(Object.keys(GAMES).length);
+  });
+
+  it('covers every game, so the whole catalogue can be drawn in one run', () => {
+    const everything = Object.keys(GAMES) as GameId[];
+    // Eight players is the only size every game seats, so this is the widest
+    // pool that is actually drawable in one go.
+    const lineup = drawLineup(eligibleGames(everything, 8), MAX_SERIES_ROUNDS);
+    expect(new Set(lineup).size).toBe(lineup.length);
+    expect(lineup.length).toBe(eligibleGames(everything, 8).length);
   });
 });
