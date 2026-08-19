@@ -18,11 +18,14 @@ interface Props {
  * everyone in the room.
  *
  * This is a front-facing portrait; `game/appearance.ts` draws the same hats and
- * faces side-on for the arena. Hats are markup and switch exhaustively over the
- * shared `Hat` union, so adding an eighth fails to compile in both places rather
- * than silently rendering nothing in one of them. Faces do **not** get that
- * safety net any more — they became assets in `public/faces/`, so a tenth entry
- * in the `Face` union compiles fine and 404s at runtime. Add the file.
+ * faces side-on for the arena. Hats switch exhaustively over the shared `Hat`
+ * union in both files, so a new one fails to compile in both rather than
+ * silently rendering nothing in one of them — checked, and it does.
+ *
+ * Faces get no such help from the compiler: they are assets, and
+ * `/faces/${face}.svg` is a string. A new entry in the `Face` union compiles,
+ * ships, and 404s on every avatar that picks it. `faceAssets.test.ts` is the
+ * check that the file exists, since `tsc` cannot be.
  */
 export function Avatar({
   colorIndex,
