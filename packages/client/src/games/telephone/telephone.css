@@ -41,8 +41,8 @@
 }
 
 /* ---------------------------------------------------------------------------
-   The header: clock and step. Not drawn at all while drawing — see
-   `.telephone__float-clock`.
+   The header: clock and step. Up for every phase of a live match, including
+   drawing — it is what the fixed chrome buttons sit in.
    --------------------------------------------------------------------------- */
 
 .telephone__top {
@@ -116,25 +116,17 @@
   50% { border-color: var(--red); }
 }
 
-/* Drawing gets the whole screen, so the clock comes off the header and floats
-   in the corner the fixed gear/pause/maximize buttons do not use. */
-.telephone__float-clock {
-  position: fixed;
-  z-index: 14;
-  top: calc(var(--chrome-top) + env(safe-area-inset-top));
-  inset-inline-start: calc(10px + env(safe-area-inset-left));
-  pointer-events: none;
-}
-
-[dir='rtl'] .telephone__float-clock {
-  inset-inline-start: calc(10px + env(safe-area-inset-right));
-}
-
-.telephone__float-clock .telephone__clock {
-  width: 40px;
-  height: 40px;
-  font-size: 1rem;
-}
+/* The header stays up while drawing.
+   It used to be dropped so the sheet could have the whole screen, and the clock
+   floated in the opposite corner instead. What that actually produced was the
+   one screen in the game with no header card at all: the fixed gear, pause,
+   maximize and microphone buttons sat bare on the drawing sheet rather than
+   reading as part of a card the way they do in every other game, and the
+   prompt banner — centred, and collapsing to a 26px toggle — landed under the
+   maximize button on a phone, so the control that shows you what you are
+   drawing was covered by one that does something else.
+   Sixty-four pixels of sheet is the price; consistency with every other screen
+   and a reachable toggle is what it buys. */
 
 /* ---------------------------------------------------------------------------
    The phase box
@@ -574,6 +566,20 @@
   flex: none;
   text-align: center;
 }
+
+/* Chain paging, only while browsing the album after the match. */
+.telephone__album-nav {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+}
+
+.telephone__album-nav .btn {
+  min-width: 44px;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
 
 .telephone__album-head .eyebrow {
   margin-block-end: 3px;

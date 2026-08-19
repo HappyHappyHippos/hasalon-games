@@ -597,6 +597,8 @@ const he = {
   telephoneShowPrompt: 'הציגו את המשפט',
   telephoneBrowseChains: 'הביטו שוב בשרשראות',
   telephoneBackToResults: 'חזרה לתוצאות',
+  telephonePrevChain: 'השרשרת הקודמת',
+  telephoneNextChain: 'השרשרת הבאה',
 
   colorNames: ['אדום', 'ירוק', 'כחול', 'צהוב', 'כתום', 'סגול', 'תכלת', 'ורוד'],
   colorTaken: (name: string) => `${name} — תפוס`,
@@ -1185,6 +1187,8 @@ const en: Dict = {
   telephoneShowPrompt: 'Show the prompt',
   telephoneBrowseChains: 'Look back at the chains',
   telephoneBackToResults: 'Back to the results',
+  telephonePrevChain: 'Previous chain',
+  telephoneNextChain: 'Next chain',
 
   colorNames: ['Red', 'Green', 'Blue', 'Yellow', 'Orange', 'Purple', 'Cyan', 'Pink'],
   colorTaken: (name: string) => `${name} — taken`,

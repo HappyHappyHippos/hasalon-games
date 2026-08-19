@@ -47,6 +47,10 @@ import type { WormsTerrainPrivate } from '@mg/shared/worms';
 import type { MemesPrivate } from '@mg/shared/memes';
 import type { TelephonePrivate, TelephonePrivateCatchUp } from '@mg/shared/telephone';
 import { receiveTelephoneCatchUp, resetTelephoneDraftInk } from '../games/telephone/draftBus';
+// Telephone's chains, kept as the reveal walks past them so the end card can
+// show them again. Outside the HUD throttle for the same reason Skribbl's ink
+// is: a chain's last step lands in exactly one snapshot.
+import { receiveTelephoneChains, resetTelephoneAlbum } from '../games/telephone/albumBus';
 import { clock } from './clock';
 import { readHashCode, setHashCode } from './hashLink';
 import { voice } from './voice';
@@ -434,6 +438,7 @@ class GameSocket {
         feed.reset();
         resetInk();
         resetTelephoneDraftInk();
+        resetTelephoneAlbum();
         this.lastCountdown = 0;
         this.lastHudPhase = '';
         // `resumed` is the catch-up copy sent to a socket that reconnected into
@@ -452,6 +457,7 @@ class GameSocket {
         // chat are drained server-side — each appears in exactly one snapshot —
         // so anything the 120 ms throttle skips is lost for good.
         if (message.snap.game === 'skribbl') receiveSkribbl(message.snap);
+        if (message.snap.game === 'telephone') receiveTelephoneChains(message.snap);
         this.mirrorHud(message.snap);
         return;
 
