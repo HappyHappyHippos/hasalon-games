@@ -149,7 +149,11 @@ describe('surfaces', () => {
     body.y = at.y + ny * (at.half + SHOULDER * 0.5);
 
     drive(body, STRAIGHT, 30);
-    expect(speedOf(body)).toBeLessThan(before * 0.65);
+    // Half a second of grass has to cost a real chunk of the speed carried
+    // onto it — the point is that leaving the road is an event, not a drift
+    // downwards you can ignore.
+    expect(speedOf(body)).toBeLessThan(before * 0.75);
+    expect(speedOf(body)).toBeLessThan(OFFROAD_TOP_SPEED + 5);
   });
 });
 
@@ -237,21 +241,6 @@ describe('steering and drift', () => {
 
     const turned = Math.abs(body.angle - before);
     expect(turned).toBeGreaterThan(TURN_RATE * MIN_TURN_AUTHORITY * DT * 10);
-  });
-
-  it('turns the other way when reversed', () => {
-    const normal = onGrid();
-    drive(normal, STRAIGHT, 60);
-    drive(normal, RIGHT, 30);
-
-    const reversed = onGrid();
-    drive(reversed, STRAIGHT, 60);
-    drive(reversed, RIGHT, 30, { ...NO_CAR_MODS, reversed: true });
-
-    // Mirrored about the straight-ahead heading, near enough — the two are not
-    // exactly symmetric because the track curves under them.
-    expect(Math.sign(normal.angle - reversed.angle)).not.toBe(0);
-    expect(Math.abs(normal.angle)).toBeGreaterThan(0);
   });
 
   it('spins on its own when spun out, whatever the input says', () => {

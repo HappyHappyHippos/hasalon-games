@@ -125,24 +125,42 @@ wheel than the server's. This is most of the difference between twitchy and
 planted, and it matters most on a keyboard, where the input is instantly full
 lock.
 
-**Reversed steering gets three separate indicators, and that is deliberate.**
-It is the only effect in the game a player cannot diagnose from what happened to
-them — "the car turned" looks entirely normal — so the failure mode is pressing
-left, going right, and concluding the game is broken. It gets a banner across
-the arena, a violet steering wheel with a ⇄ in the hub, and a rotating badge over
-the car. **The wheel shows the effect and does not compensate for it**; turning
-the drawn wheel the other way would hide it at exactly the moment it needs to be
-understood. Measured with a bot that ignored the indicator, reverse alone took a
-race from 0 respawns to 66 and doubled lap times; with a bot that noticed, it
-cost almost nothing. That gap *is* the powerup.
+**There are two powerups, and neither of them slows anybody.** `speed` helps
+you, `mine` hurts whoever is behind. There used to be a third, `reverse`, which
+flipped everyone else's steering — it was removed, and the removal is worth
+recording because the thing that made it interesting is also what made it wrong.
+A bot that ignored the indicator went from 0 respawns to 66 and doubled its lap
+times; one that noticed paid almost nothing. That is a huge swing decided by
+whether you happened to be looking, applied to people who did nothing to deserve
+it, and no amount of signposting fixes the underlying shape.
+
+The spin-out's speed penalty went the same way. A mine takes the wheel away and
+that is the whole punishment — stacking a slow on top of a loss of control
+turned one mine into most of a lap. Cornering drag does the rest for free: a car
+rotating that fast is sideways, and sideways scrubs speed.
+
+**A race ends when the second-to-last car is home.** Nobody wants to watch one
+car do a lap on its own, and the driver of that car wants it least. In a two-car
+race that is the winner crossing the line, which is the rule working rather than
+an edge case. The stragglers are still placed, on the progress they managed.
 
 **The steering wheel is a relative control, not a thumbstick, and the two are
 not interchangeable.** A stick is a *direction* control — you point it where you
 want to go — which is meaningless for a car that can only turn relative to its
 own heading. Pointing a stick "up-left" means something different every second
 on a course that changes compass direction constantly. Drag left or right
-instead: it matches the two bits the sim actually consumes, and it is the
-control every player has already used.
+instead: it matches the axis the sim actually consumes.
+
+**The whole lower band of the screen is the wheel; the drawn wheel is a
+readout.** The first version was a small graphic in a corner that you had to
+hit, with full lock only 78 px away — so the usable travel was a few dozen
+pixels, every input was near full lock, and the car darted. It also looked
+rotary while behaving linear, so the gesture it invited was not the one it
+wanted. Now: press anywhere in the band and that point becomes centre (the same
+floating origin `Thumbstick` uses, for the same reason), full lock is 190 px
+away so the middle of the range is somewhere you can sit, and the corner dial
+plus the bar along the bottom show how much lock is on without looking away
+from the road.
 
 **Skid marks are local and deliberately not in the snapshot.** They are pure
 decoration derived from a flag the server already sends, so putting the marks
@@ -161,6 +179,11 @@ knows the others as of the last snapshot. `RemoteBodies` absorbs it; don't add
 rollback for a shove.
 
 ## Assets
+
+Each course has its own palette in `tracks.ts` — red rock, pine, grey stone,
+bleached salt — because that is most of what makes them feel like different
+places rather than one loop with the corners moved. The renderer reads those and
+decides nothing itself.
 
 There is no art for this game yet, and **the placeholders are not
 approximations**. The renderer paints the course from `TrackGeometry` — the

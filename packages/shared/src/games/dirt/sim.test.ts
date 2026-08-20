@@ -14,11 +14,11 @@ import {
   COUNTDOWN_TICKS,
   POSITION_POINTS,
   RACE_LIMIT_PER_LAP,
-  REVERSE_TICKS,
   SPIN_TICKS,
   STUCK_TICKS,
   TRACK_TOP_SPEED,
 } from './constants';
+import { DIRT_POWERUP_KINDS } from './powerups';
 import {
   advanceProgress,
   applyInput,
@@ -62,10 +62,9 @@ function race(state: DirtState, ticks: number, use = false): void {
       let diff = Math.atan2(aim.y - car.y, aim.x - car.x) - car.angle;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff <= -Math.PI) diff += Math.PI * 2;
-      const flip = car.reverseTicks > 0 ? -1 : 1;
       let bits = 0;
-      if (diff * flip > 0.06) bits |= IN_RIGHT;
-      if (diff * flip < -0.06) bits |= IN_LEFT;
+      if (diff > 0.06) bits |= IN_RIGHT;
+      if (diff < -0.06) bits |= IN_LEFT;
       if (use && car.item) bits |= IN_USE;
       applyInput(state, car.id, state.tick + 1, bits);
     }
@@ -236,9 +235,45 @@ describe('finishing', () => {
     }
   });
 
+  it('ends when the second-to-last car is home, not the last', () => {
+    // Nobody wants to watch one car do a lap on its own, and the driver of that
+    // car wants it least of all — last is last whether it is confirmed or not.
+    const state = start(4, { laps: 1, races: 1 });
+    race(state, COUNTDOWN_TICKS + 5);
+
+    // Walk three of the four over the line by hand, leaving one out on circuit.
+    const geometry = geometryOf(state);
+    for (const car of state.cars.slice(0, 3)) {
+      car.progress = geometry.length * 1.01;
+      car.lap = 1;
+    }
+    race(state, 3);
+
+    expect(state.phase === 'raceOver' || state.phase === 'matchOver').toBe(true);
+    // The straggler is still placed, on the progress they managed.
+    expect(state.cars.every((c) => c.finishPlace > 0)).toBe(true);
+    expect(state.cars.filter((c) => c.finishPlace === 4)).toHaveLength(1);
+  });
+
+  it('ends a two-car race the moment the winner crosses', () => {
+    // Second-to-last of two is first, which is the rule working rather than an
+    // edge case sneaking through.
+    const state = start(2, { laps: 1, races: 1 });
+    race(state, COUNTDOWN_TICKS + 5);
+    const geometry = geometryOf(state);
+    const leader = state.cars[0]!;
+    leader.progress = geometry.length * 1.01;
+    leader.lap = 1;
+    race(state, 3);
+
+    expect(state.phase === 'raceOver' || state.phase === 'matchOver').toBe(true);
+    expect(leader.finishPlace).toBe(1);
+  });
+
   it('places everyone, even the cars that never crossed the line', () => {
-    // The finish grace exists so a race ends when somebody has put their phone
-    // down. Whoever is left is placed on the progress they managed.
+    // A race ends when the second-to-last car is home, so somebody is usually
+    // still out on the circuit. Whoever is left is placed on the progress they
+    // managed.
     const state = start(4, { laps: 1, races: 1 });
     race(state, 60 * 90);
     const places = state.cars.map((c) => c.finishPlace).sort((a, b) => a - b);
@@ -320,6 +355,16 @@ describe('never permanently stuck', () => {
 });
 
 describe('powerups', () => {
+  it('has exactly two kinds, neither of which slows anybody', () => {
+    // Reverse was removed: it punished a player for something they could not
+    // see coming and could not do anything about. The spin-out's speed penalty
+    // went with it — a mine takes the wheel away, and that is the whole
+    // punishment. Cornering drag does the rest, because a car rotating that
+    // fast is sideways and sideways scrubs speed.
+    expect(DIRT_POWERUP_KINDS).toEqual(['speed', 'mine']);
+  });
+
+
   it('hands out one item per pad and empties the pad', () => {
     const state = start(1);
     race(state, COUNTDOWN_TICKS + 2);
@@ -410,34 +455,6 @@ describe('powerups', () => {
     car.y = mine.y;
     stepTick(state);
     expect(car.spinTicks).toBe(0);
-  });
-
-  it('reverses everyone except the car that used it', () => {
-    const state = start(4);
-    race(state, COUNTDOWN_TICKS + 30);
-    const [me, ...others] = state.cars;
-    me!.item = 'reverse';
-    applyInput(state, me!.id, state.tick + 1, IN_USE);
-    stepTick(state);
-
-    expect(me!.reverseTicks).toBe(0);
-    for (const other of others) expect(other.reverseTicks).toBe(REVERSE_TICKS);
-  });
-
-  it('refreshes rather than stacks reverse', () => {
-    const state = start(3);
-    race(state, COUNTDOWN_TICKS + 30);
-    const [a, b, victim] = state.cars as [typeof state.cars[0], typeof state.cars[0], typeof state.cars[0]];
-    a.item = 'reverse';
-    applyInput(state, a.id, state.tick + 1, IN_USE);
-    stepTick(state);
-    b.item = 'reverse';
-    applyInput(state, b.id, state.tick + 1, IN_USE);
-    stepTick(state);
-
-    // One full duration, not two — otherwise a pair of players holding the same
-    // item can lock the leader's steering between them.
-    expect(victim.reverseTicks).toBeLessThanOrEqual(REVERSE_TICKS);
   });
 
   it('leaves the pads empty when powerups are switched off', () => {
@@ -562,7 +579,6 @@ describe('snapshot', () => {
     const car = makeSnapshot(state, []).cars[0]!;
     expect(car.bo).toBeUndefined();
     expect(car.sp).toBeUndefined();
-    expect(car.rv).toBeUndefined();
     expect(car.it).toBeUndefined();
   });
 

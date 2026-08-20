@@ -655,8 +655,6 @@ class GameSocket {
           lap: c.l,
           position: c.pos,
           item: c.it,
-          // The one effect that has to be unmissable. See `DirtScreen`.
-          effects: c.rv ? ['reverse'] : undefined,
         }));
         break;
       case 'bombit':

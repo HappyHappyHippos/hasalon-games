@@ -57,14 +57,8 @@ import { DirtPredictor, advanceCar, ticksBehind } from './predictor';
 // ---------------------------------------------------------------------------
 
 const LETTERBOX = '#100f16';
-/** Everything past the shoulder. Not a colour a car ever stands on. */
-const SCENERY = '#2c3a24';
-const SCENERY_SPECK = '#25321e';
-const OFFROAD = '#6d7a3f';
-const TRACK = '#a8794b';
-const TRACK_GRAIN = '#9c6f44';
-const KERB_LIGHT = '#f2e6d2';
-const KERB_DARK = '#b4462f';
+const KERB_LIGHT = '#f4ead6';
+const KERB_DARK = '#bb4630';
 const INK = '#191420';
 
 /** Hard offset shadow, never a blur — see the note at the top of `tokens.css`. */
@@ -92,6 +86,31 @@ interface Skid {
 const SKID_LIFE_MS = 4200;
 const MAX_SKIDS = 900;
 
+/**
+ * A puff of something — dust off the shoulder, tyre smoke off a drift, sparks
+ * off a rock.
+ *
+ * Local, like the skid marks, and for the same reason: it is all derived from
+ * flags the snapshot already carries, so putting the particles themselves on
+ * the wire would pay 30 Hz of bandwidth for something every client can work out
+ * for itself. Two clients disagreeing about where a speck of dust is costs
+ * nothing.
+ */
+interface Puff {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  born: number;
+  life: number;
+  r: number;
+  color: string;
+  /** Sparks are drawn as streaks, dust as blobs. */
+  spark: boolean;
+}
+
+const MAX_PUFFS = 260;
+
 export class DirtRenderer {
   private stage: CanvasStage | null = null;
   private raf = 0;
@@ -107,8 +126,10 @@ export class DirtRenderer {
   private readonly remotes = new RemoteBodies(220);
 
   private skids: Skid[] = [];
+  private puffs: Puff[] = [];
   private shake = 0;
   private reduced = false;
+  private vignette: CanvasGradient | null = null;
   /** Rebuilt when the course changes; the ribbons never move within a race. */
   private courseLayer: HTMLCanvasElement | null = null;
 
@@ -141,6 +162,7 @@ export class DirtRenderer {
     this.smoother.reset();
     this.remotes.clear();
     this.skids = [];
+    this.puffs = [];
     this.courseLayer = null;
   }
 
@@ -170,9 +192,11 @@ export class DirtRenderer {
 
     this.drawCourse(ctx, geometry);
     this.drawSkids(ctx, now);
+    this.drawPuffs(ctx, now);
     this.drawPads(ctx, snap, now);
     this.drawMines(ctx, snap, now);
     this.drawCars(ctx, snap, geometry, now, entry.serverAt);
+    this.drawVignette(ctx);
     if (DEBUG_TERRAIN) this.drawTerrainDebug(ctx, geometry);
   }
 
@@ -191,6 +215,7 @@ export class DirtRenderer {
     this.remotes.clear();
     this.predictor.reset();
     this.skids = [];
+    this.puffs = [];
     this.courseLayer = null;
     return this.geometry;
   }
@@ -232,11 +257,11 @@ export class DirtRenderer {
     // `tracks.ts`'s `backdropUrl`, 1600×900.
     // ────────────────────────────────────────────────────────────────────────
     const backdrop = getImage(geometry.backdropUrl);
-
-    ctx.fillStyle = SCENERY;
-    ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+    const pal = geometry.palette;
 
     if (backdrop) {
+      ctx.fillStyle = pal.scenery;
+      ctx.fillRect(0, 0, ARENA_W, ARENA_H);
       ctx.drawImage(backdrop, 0, 0, ARENA_W, ARENA_H);
       // Even with art, the kerbs are drawn from the geometry — they are the
       // one thing a driver reads at speed and they must mark the real edge.
@@ -244,42 +269,93 @@ export class DirtRenderer {
       return layer;
     }
 
-    // Scenery texture, so the solid region reads as ground rather than as a
-    // background colour. Deterministic from position — a hash rather than
-    // `Math.random`, so it does not crawl when the layer is repainted.
-    ctx.fillStyle = SCENERY_SPECK;
-    for (let y = 12; y < ARENA_H; y += 26) {
-      for (let x = 12; x < ARENA_W; x += 26) {
-        const h = hash2(x, y);
-        if (h > 0.55) continue;
-        ctx.fillRect(x + (h * 40 - 10), y + (h * 62 - 20), 3 + h * 5, 3);
+    // Scenery, in layers. Flat colour reads as a background; a base plus
+    // patches plus flecks reads as ground you are driving past.
+    ctx.fillStyle = pal.scenery;
+    ctx.fillRect(0, 0, ARENA_W, ARENA_H);
+
+    // Broad tonal patches first — the thing that stops a big empty region
+    // looking like a fill. Deterministic from position, so it never crawls.
+    ctx.fillStyle = pal.sceneryDetail;
+    for (let y = 0; y < ARENA_H; y += 90) {
+      for (let x = 0; x < ARENA_W; x += 90) {
+        const h = hash2(x * 0.7, y * 0.7);
+        if (h > 0.5) continue;
+        ctx.beginPath();
+        ctx.ellipse(x + h * 90, y + h * 70, 60 + h * 90, 40 + h * 60, h * 3, 0, Math.PI * 2);
+        ctx.fill();
       }
     }
 
-    // Shoulder first, then the racing surface on top of it — two passes of the
-    // same ribbon at two widths, which is why the shoulder is always exactly as
-    // wide as the physics says and never a hand-drawn approximation of it.
-    fillRibbon(ctx, geometry.outline, (p) => p.w + p.s, OFFROAD, true);
-    for (const cut of geometry.shortcutOutlines) {
-      fillRibbon(ctx, cut, (p) => p.w + p.s, OFFROAD, false);
-    }
-    fillRibbon(ctx, geometry.outline, (p) => p.w, TRACK, true);
-    for (const cut of geometry.shortcutOutlines) {
-      fillRibbon(ctx, cut, (p) => p.w, TRACK, false);
+    // Scatter: little rocks and tufts out in the scenery. Purely something for
+    // the eye to measure speed against — none of it is collidable, because
+    // everything out here is solid already.
+    for (let y = 14; y < ARENA_H; y += 34) {
+      for (let x = 14; x < ARENA_W; x += 34) {
+        const h = hash2(x, y);
+        if (h > 0.34) continue;
+        const px = x + h * 60 - 15;
+        const py = y + hash2(y, x) * 50 - 12;
+        const r = 3 + h * 9;
+        ctx.fillStyle = pal.propShade;
+        ctx.beginPath();
+        ctx.ellipse(px, py + r * 0.5, r * 1.1, r * 0.55, 0, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = pal.prop;
+        ctx.beginPath();
+        ctx.ellipse(px, py, r, r * 0.82, h * 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
 
-    // Grain along the direction of travel, so the surface reads as a road with
-    // a direction rather than as a brown shape.
+    // Shoulder, then the racing surface on top of it — two passes of the same
+    // ribbon at two widths, which is why the shoulder is always exactly as wide
+    // as the physics says and never a hand-drawn approximation of it.
+    fillRibbon(ctx, geometry.outline, (q) => q.w + q.s, pal.offroad, true);
+    for (const cut of geometry.shortcutOutlines) {
+      fillRibbon(ctx, cut, (q) => q.w + q.s, pal.offroad, false);
+    }
+    // A soft dark lip where the shoulder meets the scenery, so the drivable
+    // world has an edge rather than just ending.
+    strokeRibbonEdge(ctx, geometry.outline, (q) => q.w + q.s, 'rgba(0, 0, 0, 0.22)', 7, true);
+
+    fillRibbon(ctx, geometry.outline, (q) => q.w, pal.track, true);
+    for (const cut of geometry.shortcutOutlines) {
+      fillRibbon(ctx, cut, (q) => q.w, pal.track, false);
+    }
+
+    // The worn racing line: a darker band down the middle where the cars go.
+    // Sells the road as something that has been driven on more than anything
+    // else here, for one stroke.
     ctx.save();
-    clipRibbon(ctx, geometry.outline, (p) => p.w, true);
-    ctx.strokeStyle = TRACK_GRAIN;
-    ctx.lineWidth = 5;
-    for (const side of [-0.55, -0.2, 0.2, 0.55]) {
+    clipRibbon(ctx, geometry.outline, (q) => q.w, true);
+    ctx.strokeStyle = pal.trackWorn;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    geometry.outline.forEach((q, i) => {
+      if (i === 0) ctx.moveTo(q.x, q.y);
+      else ctx.lineTo(q.x, q.y);
+    });
+    ctx.closePath();
+    ctx.lineWidth = 74;
+    ctx.globalAlpha = 0.55;
+    ctx.stroke();
+    ctx.lineWidth = 40;
+    ctx.globalAlpha = 0.4;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    // Ruts along the direction of travel, so the surface reads as a road with a
+    // direction rather than as a brown shape.
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.09)';
+    ctx.lineWidth = 4;
+    for (const side of [-0.62, -0.28, 0.28, 0.62]) {
       ctx.beginPath();
-      geometry.outline.forEach((p, i) => {
+      geometry.outline.forEach((q, i) => {
         const n = normalAt(geometry.outline, i, true);
-        const x = p.x + n.x * p.w * side;
-        const y = p.y + n.y * p.w * side;
+        const x = q.x + n.x * q.w * side;
+        const y = q.y + n.y * q.w * side;
         if (i === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       });
@@ -309,44 +385,67 @@ export class DirtRenderer {
         return { x: p.x + n.x * p.w * sign, y: p.y + n.y * p.w * sign };
       });
 
-      // Alternating dashes, walked by arc length so the blocks stay the same
-      // size through a hairpin as down a straight.
+      // Alternating blocks, walked by arc length so they stay the same size
+      // through a hairpin as down a straight. Drawn twice: a dark seat first,
+      // then the blocks on top, which gives the kerb thickness without a blur.
       let run = 0;
-      for (let i = 0; i < pts.length; i += 1) {
-        const a = pts[i]!;
-        const b = pts[(i + 1) % pts.length]!;
-        const len = Math.hypot(b.x - a.x, b.y - a.y);
-        ctx.strokeStyle = Math.floor(run / 26) % 2 === 0 ? KERB_LIGHT : KERB_DARK;
-        ctx.lineWidth = 7;
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
-        run += len;
+      ctx.lineCap = 'butt';
+      for (const pass of [0, 1]) {
+        run = 0;
+        for (let i = 0; i < pts.length; i += 1) {
+          const a = pts[i]!;
+          const b = pts[(i + 1) % pts.length]!;
+          const len = Math.hypot(b.x - a.x, b.y - a.y);
+          if (pass === 0) {
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.lineWidth = 12;
+          } else {
+            ctx.strokeStyle = Math.floor(run / 30) % 2 === 0 ? KERB_LIGHT : KERB_DARK;
+            ctx.lineWidth = 8;
+          }
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+          run += len;
+        }
       }
     }
   }
 
+  /**
+   * The start/finish line, square across the track.
+   *
+   * The rotation is the whole thing, and it was wrong: `atan2(-n.x, n.y)` maps
+   * the local +x axis to a vector that is neither the normal nor the tangent,
+   * so the chequer band sat skew to the road and hung off one side of it. The
+   * band has to run *along the normal* — local +x → n is `atan2(n.y, n.x)`.
+   */
   private drawStartLine(ctx: CanvasRenderingContext2D, geometry: TrackGeometry): void {
     const start = geometry.outline[0];
     if (!start) return;
     const n = normalAt(geometry.outline, 0, true);
     const squares = 8;
+    // Out to the kerb rather than the bare surface, so the line meets the edge
+    // of the road instead of stopping short of it.
+    const half = start.w + 4;
+    const cell = (half * 2) / squares;
 
     ctx.save();
     ctx.translate(start.x, start.y);
-    ctx.rotate(Math.atan2(-n.x, n.y));
-    const cell = (start.w * 2) / squares;
+    ctx.rotate(Math.atan2(n.y, n.x));
+
     for (let i = 0; i < squares; i += 1) {
       for (let row = 0; row < 2; row += 1) {
         ctx.fillStyle = (i + row) % 2 === 0 ? '#f7f2e8' : INK;
-        ctx.fillRect(-start.w + i * cell, -cell + row * cell, cell, cell);
+        ctx.fillRect(-half + i * cell, -cell + row * cell, cell, cell);
       }
     }
     ctx.restore();
   }
 
   private drawSolids(ctx: CanvasRenderingContext2D, geometry: TrackGeometry): void {
+    const pal = geometry.palette;
     for (const pass of [0, 1]) {
       const offset = pass === 0 ? SHADOW_OFFSET : 0;
       for (const box of geometry.solids) {
@@ -354,14 +453,21 @@ export class DirtRenderer {
         // A per-track prop sheet would go here, drawn into the same rectangle.
         // The box stays the hitbox either way — see `tracks.ts`.
         // ────────────────────────────────────────────────────────────────────
-        ctx.fillStyle = pass === 0 ? '#000000' : '#7d6f60';
-        roundRect(ctx, box.x + offset, box.y + offset, box.w, box.h, 9);
+        ctx.fillStyle = pass === 0 ? 'rgba(0, 0, 0, 0.55)' : pal.solid;
+        roundRect(ctx, box.x + offset, box.y + offset, box.w, box.h, 10);
         ctx.fill();
-        if (pass === 1) {
-          ctx.fillStyle = '#94867a';
-          roundRect(ctx, box.x + 5, box.y + 5, box.w - 10, Math.max(4, box.h * 0.4), 6);
-          ctx.fill();
-        }
+        if (pass === 0) continue;
+
+        // A lit top face and a hard ink edge: the same flat 2.5D language the
+        // other games' stages use, so these read as objects standing on the
+        // ground rather than holes cut in it.
+        ctx.fillStyle = pal.solidTop;
+        roundRect(ctx, box.x + 5, box.y + 4, box.w - 10, Math.max(5, box.h * 0.42), 7);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.4)';
+        ctx.lineWidth = 2.5;
+        roundRect(ctx, box.x, box.y, box.w, box.h, 10);
+        ctx.stroke();
       }
     }
   }
@@ -389,12 +495,28 @@ export class DirtRenderer {
     for (const pad of snap.pads) {
       // An empty pad still draws its plate, so the racing line stays learnable:
       // you should be able to plan to come through here next lap.
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.22)';
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
       ctx.beginPath();
-      ctx.ellipse(pad.x, pad.y, PAD_R * 1.15, PAD_R * 0.75, 0, 0, Math.PI * 2);
+      ctx.ellipse(pad.x, pad.y + 3, PAD_R * 1.2, PAD_R * 0.62, 0, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = pad.k ? 'rgba(255, 244, 214, 0.75)' : 'rgba(255, 244, 214, 0.28)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.ellipse(pad.x, pad.y + 3, PAD_R * 1.2, PAD_R * 0.62, 0, 0, Math.PI * 2);
+      ctx.stroke();
 
       if (!pad.k) continue;
+
+      // A ring that expands and fades on a loop — the "come and get it" cue,
+      // and the only thing on the track that moves when nothing is happening.
+      if (!this.reduced) {
+        const beat = ((now / 1100) % 1);
+        ctx.strokeStyle = `rgba(255, 244, 214, ${0.5 * (1 - beat)})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(pad.x, pad.y + 3, PAD_R * (0.7 + beat * 1.1), PAD_R * (0.36 + beat * 0.6), 0, 0, Math.PI * 2);
+        ctx.stroke();
+      }
 
       const bob = this.reduced ? 0 : Math.sin(now / 380 + pad.x * 0.05) * 3;
       const cy = pad.y + bob;
@@ -442,7 +564,10 @@ export class DirtRenderer {
       ctx.ellipse(mine.x + 2, mine.y + 3, MINE_R * 0.9, MINE_R * 0.6, 0, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = armed ? '#ffd447' : '#8d8470';
+      // An armed mine blinks; an unarmed one is flat and dull. Two states you
+      // can tell apart at speed without reading anything.
+      const blink = armed && !this.reduced && Math.floor(now / 260) % 2 === 0;
+      ctx.fillStyle = armed ? (blink ? '#ff5b45' : '#ffd447') : '#8d8470';
       ctx.beginPath();
       ctx.arc(mine.x, mine.y, MINE_R * 0.7 * pulse, 0, Math.PI * 2);
       ctx.fill();
@@ -497,7 +622,34 @@ export class DirtRenderer {
 
       if (car.df === 1 && !this.reduced) this.pushSkid(drawn.x, drawn.y, body.angle, car.s, now);
 
-      this.drawCar(ctx, drawn.x, drawn.y, body.angle, car, now);
+      // Flourishes, all derived from what the snapshot already says.
+      const speed = Math.hypot(body.vx, body.vy);
+      // Named for the part of the car, not the clock — `behind` above is how
+      // many ticks stale the snapshot is.
+      const tail = {
+        x: drawn.x - Math.cos(body.angle) * CAR_R,
+        y: drawn.y - Math.sin(body.angle) * CAR_R,
+      };
+
+      if (surfaceAt(geometry, drawn.x, drawn.y) === 'offroad' && speed > 60) {
+        // Rooster tail off the shoulder, in the colour of the ground it is
+        // being thrown off.
+        this.emit(now, tail.x, tail.y, 2, geometry.palette.offroad, {
+          spread: 1.1, speed: 70, life: 620, r: 8,
+        });
+      } else if (car.df === 1 && speed > 120) {
+        // Tyre smoke off a drift — paler and slower than dust.
+        this.emit(now, tail.x, tail.y, 1, '#d9d2c6', { spread: 0.9, speed: 34, life: 760, r: 9 });
+      }
+
+      if (car.bo) {
+        // Boost throws sparks straight out the back.
+        this.emit(now, tail.x, tail.y, 2, '#ffbe3c', {
+          spread: 0.5, speed: 150, life: 320, r: 4, spark: true,
+        });
+      }
+
+      this.drawCar(ctx, drawn.x, drawn.y, body.angle, car, now, speed);
     }
   }
 
@@ -508,6 +660,7 @@ export class DirtRenderer {
     angle: number,
     car: DirtSnapshot['cars'][number],
     now: number,
+    speed: number,
   ): void {
     const color = colorFor(this.context.colorBySeat[car.s] ?? car.s);
     const finished = car.fp > 0;
@@ -515,6 +668,21 @@ export class DirtRenderer {
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(angle);
+
+    // Speed streaks either side while boosting — the cheapest possible "this
+    // is fast" and it reads instantly at a glance.
+    if (car.bo && !this.reduced && speed > 100) {
+      ctx.strokeStyle = 'rgba(255, 226, 150, 0.5)';
+      ctx.lineWidth = 3;
+      ctx.lineCap = 'round';
+      for (const side of [-1, 1]) {
+        const off = side * CAR_R * 1.15;
+        ctx.beginPath();
+        ctx.moveTo(-CAR_R * 1.3, off);
+        ctx.lineTo(-CAR_R * (2.4 + Math.sin(now / 60 + side) * 0.5), off);
+        ctx.stroke();
+      }
+    }
 
     // Boost flame, behind the car so it reads as thrust rather than as a decal.
     if (car.bo && !this.reduced) {
@@ -539,39 +707,65 @@ export class DirtRenderer {
     if (sprite) {
       ctx.drawImage(sprite, -CAR_R * 1.5, -CAR_R, CAR_R * 3, CAR_R * 2);
     } else {
-      const len = CAR_R * 1.45;
-      const wide = CAR_R * 0.92;
+      const len = CAR_R * 1.5;
+      const wide = CAR_R * 0.94;
+      // The front wheels turn. Tiny detail, but it is the only part of the car
+      // that shows what the player is *asking* for rather than what the car is
+      // doing, and at this size it is the difference between a shape sliding
+      // around and something being driven.
+      const lock = (car.st ?? 0) * 0.5;
 
-      ctx.fillStyle = '#000000';
-      roundRect(ctx, -len + SHADOW_OFFSET, -wide + SHADOW_OFFSET, len * 2, wide * 2, 7);
+      // Ground shadow, offset the same way as everything else here.
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      roundRect(ctx, -len + SHADOW_OFFSET, -wide + SHADOW_OFFSET, len * 2, wide * 2, 8);
       ctx.fill();
 
-      // Wheels, sticking out past the body so the car reads as a car at the
-      // size it is actually drawn — about forty pixels on a phone.
-      ctx.fillStyle = INK;
-      for (const wx of [-len * 0.58, len * 0.55]) {
-        for (const wy of [-wide - 2, wide - 5]) {
-          roundRect(ctx, wx - 8, wy, 16, 7, 3);
-          ctx.fill();
-        }
+      // Wheels under the body, rears square on, fronts steered.
+      ctx.fillStyle = '#15120f';
+      for (const wy of [-wide - 1, wide - 6]) {
+        roundRect(ctx, -len * 0.68 - 9, wy, 18, 7, 3);
+        ctx.fill();
+      }
+      for (const wy of [-wide - 1, wide - 6]) {
+        ctx.save();
+        ctx.translate(len * 0.62, wy + 3.5);
+        ctx.rotate(lock);
+        roundRect(ctx, -9, -3.5, 18, 7, 3);
+        ctx.fill();
+        ctx.restore();
       }
 
+      // Body, then a darker nose and a lighter shoulder line: three tones is
+      // enough to read as a moulded shape rather than a rectangle.
       ctx.fillStyle = color;
-      roundRect(ctx, -len, -wide, len * 2, wide * 2, 7);
+      roundRect(ctx, -len, -wide, len * 2, wide * 2, 8);
       ctx.fill();
 
-      // Nose flash and windscreen: two marks, enough to tell which way it is
-      // pointed when it is sideways, which in this game is most of the time.
-      ctx.fillStyle = shade(color, -0.35);
-      roundRect(ctx, len * 0.34, -wide + 3, len * 0.5, wide * 2 - 6, 4);
+      ctx.fillStyle = shade(color, -0.34);
+      roundRect(ctx, len * 0.3, -wide + 2, len * 0.62, wide * 2 - 4, 6);
       ctx.fill();
-      ctx.fillStyle = 'rgba(226, 240, 255, 0.85)';
-      roundRect(ctx, -len * 0.1, -wide * 0.62, len * 0.42, wide * 1.24, 3);
+
+      ctx.fillStyle = shade(color, 0.28);
+      roundRect(ctx, -len + 4, -wide + 3, len * 1.1, 5, 3);
+      ctx.fill();
+
+      // Cockpit and a helmet, so the car has a driver and a clear front.
+      ctx.fillStyle = 'rgba(24, 30, 40, 0.85)';
+      roundRect(ctx, -len * 0.16, -wide * 0.66, len * 0.5, wide * 1.32, 4);
+      ctx.fill();
+      ctx.fillStyle = shade(color, 0.5);
+      ctx.beginPath();
+      ctx.arc(len * 0.02, 0, wide * 0.38, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Rear light bar, brighter under boost.
+      ctx.fillStyle = car.bo ? '#ffd166' : '#c2402f';
+      roundRect(ctx, -len + 1, -wide * 0.62, 4, wide * 1.24, 2);
       ctx.fill();
 
       ctx.strokeStyle = INK;
       ctx.lineWidth = 2.5;
-      roundRect(ctx, -len, -wide, len * 2, wide * 2, 7);
+      roundRect(ctx, -len, -wide, len * 2, wide * 2, 8);
       ctx.stroke();
     }
 
@@ -583,7 +777,6 @@ export class DirtRenderer {
     ctx.translate(x, y);
     ctx.globalAlpha = 1;
 
-    if (car.rv) this.drawReversedBadge(ctx, now);
     if (car.sp) this.drawSpinBadge(ctx, now);
 
     if (car.s === this.context.mySeat && !finished) {
@@ -598,52 +791,6 @@ export class DirtRenderer {
     ctx.restore();
   }
 
-  /**
-   * The reversed-steering marker.
-   *
-   * Loud on purpose, and the loudest thing this renderer draws. Reversed
-   * controls are the one effect a player must not have to *work out* — the
-   * failure mode is pressing left, going right, and concluding the game is
-   * broken. So it gets a rotating pair of arrows over the car, a coloured ring
-   * around it, and (in `DirtScreen`) a banner across the arena and a wheel that
-   * changes colour. Any one of those alone has been enough to miss.
-   */
-  private drawReversedBadge(ctx: CanvasRenderingContext2D, now: number): void {
-    const spin = this.reduced ? 0 : (now / 260) % (Math.PI * 2);
-    const r = CAR_R + 13;
-
-    ctx.save();
-    ctx.strokeStyle = '#c77dff';
-    ctx.lineWidth = 4;
-    ctx.setLineDash([9, 7]);
-    ctx.beginPath();
-    ctx.arc(0, 0, r, spin, spin + Math.PI * 2);
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    ctx.translate(0, -r - 14);
-    ctx.fillStyle = '#c77dff';
-    roundRect(ctx, -17, -11, 34, 22, 6);
-    ctx.fill();
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2;
-    roundRect(ctx, -17, -11, 34, 22, 6);
-    ctx.stroke();
-
-    // A pair of opposed arrows — the same glyph the HUD chip uses.
-    ctx.strokeStyle = INK;
-    ctx.lineWidth = 2.5;
-    ctx.lineCap = 'round';
-    for (const dir of [-1, 1]) {
-      ctx.beginPath();
-      ctx.moveTo(-10 * dir, -4 * dir);
-      ctx.lineTo(10 * dir, -4 * dir);
-      ctx.moveTo(10 * dir, -4 * dir);
-      ctx.lineTo(5 * dir, -8 * dir);
-      ctx.stroke();
-    }
-    ctx.restore();
-  }
 
   private drawSpinBadge(ctx: CanvasRenderingContext2D, now: number): void {
     if (this.reduced) return;
@@ -677,6 +824,99 @@ export class DirtRenderer {
     if (last && last.seat === seat && Math.hypot(last.x - x, last.y - y) < 7) return;
     this.skids.push({ x, y, angle, born: now, seat });
     if (this.skids.length > MAX_SKIDS) this.skids.splice(0, this.skids.length - MAX_SKIDS);
+  }
+
+  /**
+   * Throw a few particles. Capped hard, because eight cars drifting through one
+   * corner would otherwise emit faster than they expire.
+   */
+  private emit(
+    now: number,
+    x: number,
+    y: number,
+    count: number,
+    color: string,
+    opts: { spread?: number; speed?: number; life?: number; r?: number; spark?: boolean } = {},
+  ): void {
+    if (this.reduced) return;
+    const spread = opts.spread ?? Math.PI * 2;
+    const speed = opts.speed ?? 40;
+    for (let i = 0; i < count; i += 1) {
+      if (this.puffs.length >= MAX_PUFFS) break;
+      const a = (Math.random() - 0.5) * spread;
+      const v = speed * (0.4 + Math.random() * 0.9);
+      this.puffs.push({
+        x,
+        y,
+        vx: Math.cos(a) * v,
+        vy: Math.sin(a) * v,
+        born: now,
+        life: (opts.life ?? 520) * (0.7 + Math.random() * 0.6),
+        r: (opts.r ?? 7) * (0.6 + Math.random() * 0.8),
+        color,
+        spark: opts.spark ?? false,
+      });
+    }
+  }
+
+  private drawPuffs(ctx: CanvasRenderingContext2D, now: number): void {
+    if (this.puffs.length === 0) return;
+    let write = 0;
+    for (const puff of this.puffs) {
+      const age = (now - puff.born) / puff.life;
+      if (age >= 1) continue;
+      this.puffs[write] = puff;
+      write += 1;
+
+      // Position is integrated from the particle's own age rather than stepped
+      // per frame, so a dropped frame does not stall the animation.
+      const t = (now - puff.born) / 1000;
+      const x = puff.x + puff.vx * t;
+      const y = puff.y + puff.vy * t;
+      const fade = 1 - age;
+
+      ctx.globalAlpha = fade * (puff.spark ? 0.95 : 0.5);
+      ctx.fillStyle = puff.color;
+      if (puff.spark) {
+        ctx.strokeStyle = puff.color;
+        ctx.lineWidth = 2.5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - puff.vx * 0.02, y - puff.vy * 0.02);
+        ctx.stroke();
+      } else {
+        // Dust grows as it disperses.
+        ctx.beginPath();
+        ctx.arc(x, y, puff.r * (1 + age * 1.4), 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    this.puffs.length = write;
+  }
+
+  /**
+   * A soft darkening at the edges of the arena.
+   *
+   * The one deliberate gradient in this renderer. The house rule is hard offset
+   * shadows and no blur, but that is about *objects* — this is light, it sits
+   * behind nothing, and without it a flat-lit top-down map has no centre for
+   * the eye to sit in.
+   */
+  private drawVignette(ctx: CanvasRenderingContext2D): void {
+    if (this.reduced) return;
+    if (!this.vignette) {
+      const g = ctx.createRadialGradient(
+        ARENA_W / 2, ARENA_H / 2, Math.min(ARENA_W, ARENA_H) * 0.42,
+        ARENA_W / 2, ARENA_H / 2, Math.max(ARENA_W, ARENA_H) * 0.72,
+      );
+      g.addColorStop(0, 'rgba(0, 0, 0, 0)');
+      g.addColorStop(1, 'rgba(0, 0, 0, 0.34)');
+      this.vignette = g;
+    }
+    ctx.fillStyle = this.vignette;
+    ctx.fillRect(0, 0, ARENA_W, ARENA_H);
   }
 
   private drawSkids(ctx: CanvasRenderingContext2D, now: number): void {
@@ -720,6 +960,7 @@ export class DirtRenderer {
       switch (event.t) {
         case 'bump':
           this.shake = Math.min(9, this.shake + 3);
+          this.emit(now, event.x, event.y, 5, '#ffd98a', { speed: 130, life: 340, r: 3, spark: true });
           if (noisy < 2) {
             sfx.crush();
             noisy += 1;
@@ -727,22 +968,32 @@ export class DirtRenderer {
           break;
         case 'thud':
           this.shake = Math.min(9, this.shake + 4);
+          this.emit(now, event.x, event.y, 8, '#ffe6a8', { speed: 170, life: 380, r: 3, spark: true });
           if (noisy < 2) {
             sfx.crash();
             noisy += 1;
           }
           break;
-        case 'pickup':
+        case 'pickup': {
+          const taker = snap.cars.find((c) => c.s === event.seat);
+          if (taker) this.emit(now, taker.x, taker.y, 10, '#8dff7a', { speed: 120, life: 460, r: 4, spark: true });
           if (event.seat === this.context.mySeat) sfx.pickup();
           break;
+        }
         case 'use':
           if (event.kind === 'speed') sfx.powerup();
           else sfx.click();
           break;
-        case 'spin':
+        case 'spin': {
           this.shake = Math.min(12, this.shake + 7);
+          const hit = snap.cars.find((c) => c.s === event.seat);
+          if (hit) {
+            this.emit(now, hit.x, hit.y, 16, '#ffc247', { speed: 210, life: 480, r: 4, spark: true });
+            this.emit(now, hit.x, hit.y, 10, '#8a8177', { speed: 70, life: 700, r: 11 });
+          }
           sfx.explode();
           break;
+        }
         case 'lap':
           if (event.seat === this.context.mySeat) sfx.countdown(false);
           break;
@@ -759,7 +1010,6 @@ export class DirtRenderer {
           break;
       }
     }
-    void now;
   }
 }
 
@@ -822,6 +1072,33 @@ function fillRibbon(
   ctx.fill();
 }
 
+/** Outline a ribbon's edge — the lip where the drivable world stops. */
+function strokeRibbonEdge(
+  ctx: CanvasRenderingContext2D,
+  pts: RibbonPoint[],
+  halfAt: (p: RibbonPoint) => number,
+  stroke: string,
+  width: number,
+  closed: boolean,
+): void {
+  if (pts.length < 2) return;
+  for (const sign of [-1, 1]) {
+    ctx.beginPath();
+    pts.forEach((p, i) => {
+      const n = normalAt(pts, i, closed);
+      const h = halfAt(p) * sign;
+      const x = p.x + n.x * h;
+      const y = p.y + n.y * h;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    if (closed) ctx.closePath();
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = width;
+    ctx.stroke();
+  }
+}
+
 function clipRibbon(
   ctx: CanvasRenderingContext2D,
   pts: RibbonPoint[],
@@ -876,21 +1153,6 @@ function drawPowerupGlyph(ctx: CanvasRenderingContext2D, kind: DirtPowerup, r: n
         ctx.beginPath();
         ctx.moveTo(Math.cos(a) * r * 0.5, Math.sin(a) * r * 0.5);
         ctx.lineTo(Math.cos(a) * r * 0.82, Math.sin(a) * r * 0.82);
-        ctx.stroke();
-      }
-      break;
-    }
-    case 'reverse': {
-      // Two arrows pointing opposite ways — the same mark as the in-world badge
-      // and the HUD chip, so the three read as one thing.
-      for (const dir of [-1, 1]) {
-        const y = r * 0.34 * dir;
-        ctx.beginPath();
-        ctx.moveTo(-r * 0.62 * dir, y);
-        ctx.lineTo(r * 0.62 * dir, y);
-        ctx.lineTo(r * 0.28 * dir, y - r * 0.28 * dir);
-        ctx.moveTo(r * 0.62 * dir, y);
-        ctx.lineTo(r * 0.28 * dir, y + r * 0.28 * dir);
         ctx.stroke();
       }
       break;

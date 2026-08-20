@@ -73,9 +73,37 @@ export interface TrackShortcut {
   path: TrackPoint[];
 }
 
+/**
+ * A course's colours.
+ *
+ * Lives with the track rather than in the renderer because it is part of what
+ * the course *is* — Salt Flat being pale and blinding and The Quarry being grey
+ * and industrial is most of what makes them feel like different places rather
+ * than the same loop with the corners moved. The renderer reads these and
+ * nothing else decides them.
+ */
+export interface TrackPalette {
+  /** Everything past the shoulder. */
+  scenery: string;
+  /** Flecks of texture over the scenery. */
+  sceneryDetail: string;
+  /** Scattered rocks/trees/props dotted through the scenery. */
+  prop: string;
+  propShade: string;
+  /** The shoulder either side of the racing surface. */
+  offroad: string;
+  /** The racing surface, and the worn-in line down the middle of it. */
+  track: string;
+  trackWorn: string;
+  /** Solid objects lining the road. */
+  solid: string;
+  solidTop: string;
+}
+
 export interface DirtTrackDef {
   id: DirtTrackId;
   name: string;
+  palette: TrackPalette;
   /**
    * ── ASSET SWAP POINT ──────────────────────────────────────────────────────
    * The painted course. Until a file exists at this path the renderer draws the
@@ -146,6 +174,7 @@ interface SegmentSet {
 export interface TrackGeometry {
   id: DirtTrackId;
   name: string;
+  palette: TrackPalette;
   backdropUrl: string;
   /** The centreline, resampled. Progress and lap counting run off this one. */
   main: SegmentSet;
@@ -227,6 +256,7 @@ export function trackGeometry(def: DirtTrackDef): TrackGeometry {
   const geometry: TrackGeometry = {
     id: def.id,
     name: def.name,
+    palette: def.palette,
     backdropUrl: def.backdropUrl,
     main,
     shortcuts,
