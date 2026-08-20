@@ -567,6 +567,7 @@ class GameSocket {
       // sends this. `undefined` is "no room yet", which clears the same way.
       case 'achtung':
       case 'bombit':
+      case 'dirt':
       case 'gunmayhem':
       case 'tanks':
       case undefined:
@@ -641,6 +642,21 @@ class GameSocket {
           seat: p.s,
           score: p.p,
           alive: p.al === 1,
+        }));
+        break;
+      case 'dirt':
+        players = snap.cars.map((c) => ({
+          seat: c.s,
+          score: c.p,
+          // Nobody is eliminated in a race. Crossing the line is the closest
+          // thing, and the rail greys a finished car the way it greys a dead
+          // one everywhere else.
+          alive: c.fp === 0,
+          lap: c.l,
+          position: c.pos,
+          item: c.it,
+          // The one effect that has to be unmissable. See `DirtScreen`.
+          effects: c.rv ? ['reverse'] : undefined,
         }));
         break;
       case 'bombit':

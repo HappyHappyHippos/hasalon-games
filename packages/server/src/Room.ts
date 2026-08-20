@@ -187,6 +187,7 @@ export class Room {
     this.settingsByGame = {
       achtung: GAMES.achtung.defaultConfig(2),
       bombit: GAMES.bombit.defaultConfig(2),
+      dirt: GAMES.dirt.defaultConfig(2),
       gunmayhem: GAMES.gunmayhem.defaultConfig(2),
       memes: GAMES.memes.defaultConfig(3),
       skribbl: GAMES.skribbl.defaultConfig(2),

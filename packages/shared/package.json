@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./achtung": "./src/games/achtung/index.ts",
     "./bombit": "./src/games/bombit/index.ts",
+    "./dirt": "./src/games/dirt/index.ts",
     "./gunmayhem": "./src/games/gunmayhem/index.ts",
     "./memes": "./src/games/memes/index.ts",
     "./skribbl": "./src/games/skribbl/index.ts",

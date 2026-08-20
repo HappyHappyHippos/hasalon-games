@@ -46,6 +46,10 @@ export interface HudPlayer {
   range?: number;
   /** Bomb It: explosions this seat can still walk away from. */
   shields?: number;
+  /** Dirt Racing: lap, race position, and whatever is in the boot. */
+  lap?: number;
+  position?: number;
+  item?: string;
 }
 
 /**
