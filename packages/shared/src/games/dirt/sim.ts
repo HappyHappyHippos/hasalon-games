@@ -17,7 +17,6 @@ import {
   DEFAULT_LAPS,
   DEFAULT_RACES,
   DRIFT_THRESHOLD,
-  FINISH_GRACE_TICKS,
   MAX_PROGRESS_JUMP,
   MINE_ARM_TICKS,
   MINE_DROP_BACK,
@@ -37,7 +36,6 @@ import {
 } from './constants';
 import {
   carMods,
-  applyReverse,
   grantBoost,
   spinOut,
   tickEffects,
@@ -106,7 +104,6 @@ export function createState(seats: GameSeat[], config: DirtConfig, seed: number)
     points: 0,
     boostTicks: 0,
     spinTicks: 0,
-    reverseTicks: 0,
     ghostTicks: 0,
     spinDir: 1,
     item: null,
@@ -131,7 +128,6 @@ export function createState(seats: GameSeat[], config: DirtConfig, seed: number)
     mines: [],
     pads: [],
     nextMineId: 1,
-    finishGrace: 0,
     finishedCount: 0,
     raceTicks: 0,
     events: [],
@@ -151,7 +147,6 @@ function startRace(state: DirtState): void {
   state.phase = 'countdown';
   state.phaseTicks = COUNTDOWN_TICKS;
   state.mines = [];
-  state.finishGrace = 0;
   state.finishedCount = 0;
   state.raceTicks = 0;
 
@@ -199,7 +194,6 @@ function gridUp(state: DirtState, geometry: TrackGeometry): void {
     car.finishPlace = 0;
     car.boostTicks = 0;
     car.spinTicks = 0;
-    car.reverseTicks = 0;
     car.ghostTicks = 0;
     car.item = null;
     car.stuckTicks = 0;
@@ -475,13 +469,7 @@ function finish(state: DirtState, car: DirtCarState): void {
   car.finishPlace = state.finishedCount;
   car.item = null;
   car.boostTicks = 0;
-  car.reverseTicks = 0;
   state.events.push({ t: 'finish', seat: car.seat, place: car.finishPlace });
-
-  // The clock starts with the winner, not with the last car. A race has to end
-  // even when somebody has put their phone down, and waiting for a last place
-  // that is never coming is the most boring way for a match to stall.
-  if (state.finishedCount === 1) state.finishGrace = FINISH_GRACE_TICKS;
 }
 
 // ---------------------------------------------------------------------------
@@ -548,16 +536,6 @@ function useItem(state: DirtState, car: DirtCarState, geometry: TrackGeometry): 
       return;
     }
 
-    case 'reverse':
-      // Everyone still racing except the user. Not "everyone ahead": from last
-      // place the difference is nothing, and from the front it is the only
-      // thing that makes holding one worth the risk of being rammed for it.
-      for (const other of state.cars) {
-        if (other.seat === car.seat || other.finishPlace > 0) continue;
-        applyReverse(other);
-        state.events.push({ t: 'reversed', seat: other.seat });
-      }
-      return;
   }
 }
 
@@ -610,14 +588,28 @@ function stepPads(state: DirtState): void {
 // Race resolution
 // ---------------------------------------------------------------------------
 
+/**
+ * When a race is over.
+ *
+ * **The second-to-last car home ends it.** Nobody wants to watch one car
+ * complete a lap on their own, and the driver of that car wants it even less —
+ * last place is last place whether it is confirmed or not, so the race stops
+ * being interesting the moment the result is decided. In a two-car race that
+ * means the winner crossing the line, which is exactly right.
+ *
+ * The other two conditions are backstops rather than the rule: everyone
+ * genuinely finishing (so a full field still ends cleanly at the last
+ * crossing), and a hard ceiling per lap so a room can never be stuck in a
+ * match it cannot leave.
+ */
 function checkRaceOver(state: DirtState): void {
-  if (state.finishGrace > 0) {
-    state.finishGrace = countdown(state.finishGrace);
-  }
   const everyone = state.cars.every((car) => car.finishPlace > 0);
-  const graceUp = state.finishedCount > 0 && state.finishGrace === 0;
+  // Second-to-last: everyone but one is home. With a single car — which the
+  // room minimum makes unreachable, but the sim should not assume it — this
+  // would be true from the start, so it needs at least one real finisher.
+  const decided = state.finishedCount > 0 && state.finishedCount >= state.cars.length - 1;
   const limitUp = state.raceTicks >= RACE_LIMIT_PER_LAP * state.config.laps;
-  if (!everyone && !graceUp && !limitUp) return;
+  if (!everyone && !decided && !limitUp) return;
 
   // Whoever did not make it home is placed by how far they got, behind
   // everyone who did — the same order the scoreboard has been showing.
@@ -665,7 +657,6 @@ export function makeSnapshot(state: DirtState, events: DirtEvent[]): DirtSnapsho
     round: state.race,
     tk: state.trackId,
     lp: state.config.laps,
-    fg: state.finishGrace,
     cars: state.cars.map((car) => ({
       s: car.seat,
       p: car.points,
@@ -683,7 +674,6 @@ export function makeSnapshot(state: DirtState, events: DirtEvent[]): DirtSnapsho
       ...(car.item ? { it: car.item } : {}),
       ...(car.boostTicks > 0 ? { bo: car.boostTicks } : {}),
       ...(car.spinTicks > 0 ? { sp: car.spinTicks, sd: car.spinDir } : {}),
-      ...(car.reverseTicks > 0 ? { rv: car.reverseTicks } : {}),
       ...(car.ghostTicks > 0 ? { gh: car.ghostTicks } : {}),
       ...(isDrifting(car) ? { df: 1 as const } : {}),
     })),

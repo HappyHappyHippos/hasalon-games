@@ -120,11 +120,13 @@ export const INDEX_REACH = 220;
  * scenery goes past rather than from the number, and 300 across a 1600-unit
  * arena still crosses the map in five seconds.
  *
- * The turning circle now comes out at ~94 units, comfortably inside every
- * corner `tracks.test.ts` allows — which is what makes the car feel like it is
- * being steered rather than aimed.
+ * Eased again from 300 after a playtest: the courses are compact and a lap is
+ * over quickly, so the top end was still arriving faster than a corner could be
+ * read. The turning circle is now ~80 units, well inside every corner
+ * `tracks.test.ts` allows — which is what makes the car feel like it is being
+ * steered rather than aimed.
  */
-export const TRACK_TOP_SPEED = 300;
+export const TRACK_TOP_SPEED = 255;
 
 /**
  * Top speed on grass, sand and dirt.
@@ -141,12 +143,12 @@ export const TRACK_TOP_SPEED = 300;
  * whether a lap can be skipped. That guarantee is structural and this number
  * cannot weaken it.
  */
-export const OFFROAD_TOP_SPEED = 195;
+export const OFFROAD_TOP_SPEED = 168;
 
 /** ~0.6 s from a standing start to full speed. Cars accelerate on their own. */
-export const CAR_ACCEL = 480;
+export const CAR_ACCEL = 420;
 /** Coasting deceleration, used during the countdown and after finishing. */
-export const CAR_DECEL = 560;
+export const CAR_DECEL = 500;
 /**
  * How fast speed carried onto grass bleeds away.
  *
@@ -154,7 +156,7 @@ export const CAR_DECEL = 560;
  * — but no longer brutal. Separate from deceleration so that "I lifted off" and
  * "I left the road" are not the same event.
  */
-export const OFFROAD_BLEED = 620;
+export const OFFROAD_BLEED = 560;
 
 /** Radians per second at full lock and full authority. */
 export const TURN_RATE = 3.2;
@@ -378,7 +380,6 @@ export const MINE_LIFE_TICKS = seconds(30);
 export const SPIN_TICKS = seconds(1.5);
 /** Radians per second while spun out — fast enough to read as a loss of control. */
 export const SPIN_RATE = 9.5;
-export const SPIN_SPEED_MUL = 0.32;
 
 /**
  * Reverse: everyone else's steering swaps for this long.
@@ -396,14 +397,6 @@ export const REVERSE_TICKS = seconds(4.5);
 
 export const COUNTDOWN_TICKS = seconds(3.5);
 export const RACE_OVER_TICKS = seconds(4);
-
-/**
- * How long the rest of the field gets after the winner crosses the line.
- *
- * A race has to end even when somebody has stopped playing, and waiting for a
- * last place that is never coming is the most boring way for a match to stall.
- */
-export const FINISH_GRACE_TICKS = seconds(20);
 
 /**
  * Points by finishing position, best first.

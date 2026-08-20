@@ -6071,9 +6071,10 @@ strong,
 /* ===========================================================================
  * Dirt Racing
  *
- * Two controls and one banner. The banner is the loud one, and deliberately:
- * reversed steering is the only effect in the game a player cannot diagnose
- * from what happened to them, because "the car turned" looks entirely normal.
+ * Two controls: a wheel under one thumb and one item button under the other.
+ * The game has a single axis and a single button, and the whole appeal of the
+ * thing it is modelled on is that a phone can be handed to somebody who is
+ * racing before anybody has explained anything.
  * =========================================================================== */
 
 .dirt__pad {
@@ -6085,81 +6086,144 @@ strong,
 /* The wheel sits under the left thumb, the item button under the right — the
  * same hand split as every other pad here. `touch-action: none` on both, or the
  * browser steals the drag for a scroll. */
-.dirt__wheel {
+/* The steering zone: a wide band across the bottom of the arena. Pressing
+ * anywhere in it anchors the wheel to your thumb, so it cannot be missed and
+ * never has to be looked for. Physical left/right throughout — a wheel belongs
+ * under the same hand whatever language the menus are in (see CLAUDE.md). */
+.dirt__steer {
   position: absolute;
-  /* Physical `left`, not `inset-inline-start` — one of the documented
-   * exceptions to the logical-property rule (see CLAUDE.md). A steering wheel
-   * belongs under the same thumb whatever language the menus are in; using a
-   * logical property put the wheel on the right and the item button on the
-   * left the moment the UI was Hebrew, which is a different control layout for
-   * the same game. `.stick` and `.pad__btn` do the same, for the same reason. */
-  left: max(16px, env(safe-area-inset-left));
-  bottom: max(14px, env(safe-area-inset-bottom));
-  width: 178px;
-  height: 178px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: min(38%, 220px);
   pointer-events: auto;
   touch-action: none;
   -webkit-tap-highlight-color: transparent;
+  /* The zone itself is invisible: it is a place to put your thumb, not a
+   * picture. Only the readout below is drawn. */
+  background: none;
+}
+
+/* The readout lives in the bottom-left corner, out of the way of the arena.
+ * The *touch zone* above is what you actually steer with, and it is the whole
+ * width of the screen — this is a dial, not a target. */
+.dirt__steer-wheel {
+  position: absolute;
+  left: max(14px, env(safe-area-inset-left));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  width: clamp(84px, 22vmin, 124px);
+  height: clamp(84px, 22vmin, 124px);
   display: grid;
   place-items: center;
+  opacity: 0.72;
+  transition: opacity 140ms ease;
 }
+.dirt__steer--held .dirt__steer-wheel { opacity: 0.95; }
 
-.dirt__wheel-rim {
-  width: 132px;
-  height: 132px;
-  border-radius: 999px;
-  border: 9px solid rgba(255, 255, 255, 0.8);
-  background: rgba(20, 17, 15, 0.52);
+.dirt__steer-rim {
   position: relative;
-  /* Fast enough to feel connected to the thumb, slow enough to read as a
-   * wheel rather than a jump cut. Not a spring — the settle is in the input
-   * path, not here, so the drawn angle never lags what is being sent. */
-  transition: transform 60ms linear, border-color 120ms ease, background 120ms ease;
+  width: 100%;
+  height: 100%;
+  border-radius: 999px;
+  border: 8px solid rgba(248, 244, 236, 0.9);
+  background: radial-gradient(circle at 50% 38%, rgba(46, 40, 36, 0.5), rgba(18, 15, 13, 0.62));
+  box-shadow: 0 3px 0 rgba(0, 0, 0, 0.45);
+  /* Short and linear: the drawn angle must not lag what is being sent, or the
+   * wheel becomes a second opinion about where the car is going. */
+  transition: transform 55ms linear;
 }
 
-.dirt__wheel-spoke {
+/* The mark at twelve o'clock — the fastest read of "am I straight". */
+.dirt__steer-mark {
   position: absolute;
-  /* Physical: this is the wheel's own drawing, not page layout. Mirroring it
-   * in RTL would rotate the spokes relative to the hub. */
+  left: 50%;
+  top: -2px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  border-radius: 4px;
+  background: var(--yellow);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+.dirt__steer-spoke {
+  position: absolute;
   left: 50%;
   top: 50%;
-  width: 46px;
-  height: 8px;
-  margin-inline-start: -46px;
-  margin-top: -4px;
-  background: rgba(255, 255, 255, 0.8);
-  border-radius: 4px;
-  transform-origin: 100% 50%;
+  height: 7px;
+  width: 38%;
+  margin-top: -3.5px;
+  background: rgba(248, 244, 236, 0.85);
+  border-radius: 5px;
+  transform-origin: 0 50%;
 }
-.dirt__wheel-spoke--left { transform: rotate(0deg); }
-.dirt__wheel-spoke--right { transform: rotate(180deg); }
-.dirt__wheel-spoke--down { transform: rotate(90deg); }
+.dirt__steer-spoke--l { transform: rotate(180deg); }
+.dirt__steer-spoke--r { transform: rotate(0deg); }
+.dirt__steer-spoke--d { transform: rotate(90deg); }
 
-.dirt__wheel-hub {
+.dirt__steer-hub {
   position: absolute;
-  inset-inline: 0;
+  left: 50%;
   top: 50%;
-  margin-inline: auto;
-  transform: translateY(-50%);
-  width: 42px;
-  height: 42px;
+  width: 30%;
+  height: 30%;
+  transform: translate(-50%, -50%);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.82);
-  color: var(--ink);
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 20px;
-  display: grid;
-  place-items: center;
+  background: rgba(248, 244, 236, 0.92);
+  box-shadow: inset 0 -3px 0 rgba(0, 0, 0, 0.22);
 }
 
-/* Reversed: the wheel goes violet and grows a ⇄ in its hub. It does *not*
- * turn the other way — see the note in `SteeringWheel.tsx`. */
-.dirt__wheel--reversed .dirt__wheel-rim {
-  border-color: var(--violet);
-  background: rgba(123, 108, 246, 0.35);
+/* Thumb grips at nine and three, so rotation reads even out of focus. */
+.dirt__steer-grip {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 24px;
+  margin-top: -12px;
+  border-radius: 5px;
+  background: rgba(20, 17, 15, 0.5);
 }
-.dirt__wheel--reversed .dirt__wheel-spoke { background: var(--violet); }
+.dirt__steer-grip--l { left: -2px; }
+.dirt__steer-grip--r { right: -2px; }
+
+/* Lock, as a bar filling out from centre. Reads faster than wheel angle when
+ * your eyes are on the road. */
+/* Lock as a bar, centred along the very bottom — read without moving your
+ * eyes far from the road. */
+.dirt__steer-gauge {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: max(6px, env(safe-area-inset-bottom));
+  width: min(52vw, 240px);
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(20, 17, 15, 0.45);
+  border: 2px solid rgba(248, 244, 236, 0.55);
+  overflow: hidden;
+}
+
+.dirt__steer-detent {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  margin-left: -1.5px;
+  background: rgba(248, 244, 236, 0.75);
+}
+
+.dirt__steer-fill {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+  background: var(--yellow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dirt__steer-rim { transition: none; }
+}
 
 .dirt__use {
   position: absolute;
@@ -6186,47 +6250,11 @@ strong,
 .dirt__use--empty { opacity: 0.4; }
 .dirt__use--speed { background: rgba(124, 255, 107, 0.72); color: var(--ink); text-shadow: none; }
 .dirt__use--mine { background: rgba(255, 212, 71, 0.78); color: var(--ink); text-shadow: none; }
-.dirt__use--reverse { background: rgba(199, 125, 255, 0.78); color: var(--ink); text-shadow: none; }
 
 /* The banner. Over the arena, because at 430 units a second nobody is looking
  * at the score rail. */
-.dirt__reversed {
-  position: absolute;
-  inset-inline: 0;
-  /* `inset-inline: 0` with `margin-inline: auto` centres in both directions.
-   * Never `inset-inline-start: 50%` plus a physical `translateX(-50%)` — the
-   * two disagree in Hebrew. See the layout notes in CLAUDE.md. */
-  margin-inline: auto;
-  width: max-content;
-  max-width: 92%;
-  top: 14%;
-  z-index: 5;
-  pointer-events: none;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 20px;
-  background: var(--violet);
-  color: #fff;
-  border: 3px solid var(--ink);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: clamp(15px, 3.4vw, 26px);
-  letter-spacing: 0.04em;
-  animation: dirt-reversed-pulse 620ms ease-in-out infinite alternate;
-}
-
-.dirt__reversed-glyph { font-size: 1.3em; }
-
-@keyframes dirt-reversed-pulse {
-  from { transform: scale(1); }
-  to { transform: scale(1.045); }
-}
 
 @media (prefers-reduced-motion: reduce) {
-  .dirt__reversed { animation: none; }
   .dirt__wheel-rim { transition: none; }
 }
 

@@ -4,7 +4,6 @@ import { useT } from '../../strings';
 import { SteeringWheel } from './SteeringWheel';
 
 interface Props {
-  reversed: boolean;
   /** What is in the boot, or null. The use button is dead without one. */
   item: DirtPowerup | null;
   onButton: (bit: number, down: boolean) => void;
@@ -24,7 +23,7 @@ interface Props {
  * a stuck button is indistinguishable from the game being broken, so every path
  * out of "held" is covered: lifting, cancellation, losing capture, and unmount.
  */
-export function DirtControls({ reversed, item, onButton, onSteer }: Props): JSX.Element {
+export function DirtControls({ item, onButton, onSteer }: Props): JSX.Element {
   const held = useRef(new Map<number, number>());
   const t = useT();
 
@@ -58,7 +57,7 @@ export function DirtControls({ reversed, item, onButton, onSteer }: Props): JSX.
 
   return (
     <div className="dirt__pad">
-      <SteeringWheel onSteer={steer} reversed={reversed} label={t.dirtWheel} />
+      <SteeringWheel onSteer={steer} label={t.dirtWheel} />
 
       <button
         type="button"

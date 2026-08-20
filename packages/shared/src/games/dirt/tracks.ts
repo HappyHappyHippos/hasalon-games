@@ -60,6 +60,18 @@ export const DIRT_TRACKS: Record<DirtTrackId, DirtTrackDef> = {
   canyon: {
     id: 'canyon',
     name: 'Canyon Run',
+    // Red rock and dry scrub: hot, dusty, high desert.
+    palette: {
+      scenery: '#6a3b28',
+      sceneryDetail: '#5b3122',
+      prop: '#8a4c33',
+      propShade: '#6d3a25',
+      offroad: '#9a6440',
+      track: '#c08a55',
+      trackWorn: '#b07c4b',
+      solid: '#8d5136',
+      solidTop: '#a9663f',
+    },
     backdropUrl: '/stages/dirt/dirt_track_canyon.png',
     path: [
       { x: 300, y: 686, w: 124 },
@@ -117,6 +129,18 @@ export const DIRT_TRACKS: Record<DirtTrackId, DirtTrackDef> = {
   grove: {
     id: 'grove',
     name: 'Pine Grove',
+    // Pine forest: deep green, cool shade, brown loam underfoot.
+    palette: {
+      scenery: '#22371f',
+      sceneryDetail: '#1b2d19',
+      prop: '#2f4a29',
+      propShade: '#233c1e',
+      offroad: '#4e6b32',
+      track: '#a3784c',
+      trackWorn: '#946c44',
+      solid: '#35502c',
+      solidTop: '#446435',
+    },
     backdropUrl: '/stages/dirt/dirt_track_grove.png',
     path: [
       { x: 350, y: 690, w: 124 },
@@ -176,6 +200,18 @@ export const DIRT_TRACKS: Record<DirtTrackId, DirtTrackDef> = {
   quarry: {
     id: 'quarry',
     name: 'The Quarry',
+    // Cut stone and grey spoil. The bleakest of the four, deliberately.
+    palette: {
+      scenery: '#3b3a3d',
+      sceneryDetail: '#323134',
+      prop: '#4d4b4f',
+      propShade: '#3e3c40',
+      offroad: '#6b6660',
+      track: '#948c81',
+      trackWorn: '#877f74',
+      solid: '#59565a',
+      solidTop: '#6e6a6d',
+    },
     backdropUrl: '/stages/dirt/dirt_track_quarry.png',
     path: [
       { x: 340, y: 702, w: 108 },
@@ -226,6 +262,18 @@ export const DIRT_TRACKS: Record<DirtTrackId, DirtTrackDef> = {
   saltflat: {
     id: 'saltflat',
     name: 'Salt Flat',
+    // Bleached salt and pale sand — bright, flat, and hard to judge distance on.
+    palette: {
+      scenery: '#cfc7ae',
+      sceneryDetail: '#c2b9a0',
+      prop: '#ded7c2',
+      propShade: '#c9c1a8',
+      offroad: '#d8d0b8',
+      track: '#b79b6f',
+      trackWorn: '#a98d62',
+      solid: '#e6dfcc',
+      solidTop: '#f2ecdd',
+    },
     backdropUrl: '/stages/dirt/dirt_track_saltflat.png',
     path: [
       { x: 300, y: 686, w: 124 },
