@@ -114,7 +114,13 @@ export class Analytics {
   record(name: AnalyticsEventName, fields: Record<string, unknown> = {}): void {
     try {
       const now = Date.now();
-      if (now - this.windowStart >= 1000) {
+      // Rolls over on a clock that moved *either* way. `>= 1000` alone only
+      // handles time going forwards, and `Date.now()` is not monotonic — an NTP
+      // correction stepping it back is the reason `serverClock.ts` exists. A
+      // backwards step leaves the difference permanently negative, so the window
+      // never rolls, `windowCount` climbs past the cap and stays there, and the
+      // usage log goes quiet for good rather than for a second.
+      if (now - this.windowStart >= 1000 || now < this.windowStart) {
         this.windowStart = now;
         this.windowCount = 0;
       }

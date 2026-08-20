@@ -8,7 +8,7 @@ import {
 
 /**
  * Gun Mayhem's key map. The sampler itself is `../bitInput.ts`, shared with
- * Tank Trouble and Gravity Guy — read that file for why input is sampled every
+ * Tank Trouble and Worms — read that file for why input is sampled every
  * tick and why taps are latched.
  */
 export const gmInput = createInputBuffer();

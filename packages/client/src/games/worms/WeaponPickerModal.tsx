@@ -40,7 +40,7 @@ export function WeaponPickerModal({
             type="button"
             className="worms__picker-close"
             onClick={onClose}
-            aria-label="Close"
+            aria-label={t.close}
           >
             ✕
           </button>
@@ -89,7 +89,7 @@ export function WeaponPickerModal({
               <span className="worms__picker-info-name">{activeName}</span>
               {activeSpec.ammo >= 0 && (
                 <span className="worms__picker-info-badge">
-                  {ammo[activeId] ?? activeSpec.ammo} left
+                  {t.wormsAmmoLeft(ammo[activeId] ?? activeSpec.ammo)}
                 </span>
               )}
             </div>

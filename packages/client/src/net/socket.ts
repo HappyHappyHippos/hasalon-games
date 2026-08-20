@@ -32,6 +32,10 @@ import {
   type ServerMessage,
 } from '@mg/shared';
 import { feed } from './feed';
+// The HUD only needs a few updates a second; the canvas has the rest. The rule
+// for which snapshot survives that throttle lives on its own so it can be
+// tested — see `hudThrottle.ts` for the two things it must never drop.
+import { shouldMirrorHud } from './hudThrottle';
 // Game-specific, and the only such import here. See `inkBus` for why this
 // cannot ride the throttled HUD mirror like everything else does.
 import { receiveSkribbl, resetInk } from '../games/skribbl/inkBus';
@@ -43,7 +47,12 @@ import type { WormsTerrainPrivate } from '@mg/shared/worms';
 import type { MemesPrivate } from '@mg/shared/memes';
 import type { TelephonePrivate, TelephonePrivateCatchUp } from '@mg/shared/telephone';
 import { receiveTelephoneCatchUp, resetTelephoneDraftInk } from '../games/telephone/draftBus';
+// Telephone's chains, kept as the reveal walks past them so the end card can
+// show them again. Outside the HUD throttle for the same reason Skribbl's ink
+// is: a chain's last step lands in exactly one snapshot.
+import { receiveTelephoneChains, resetTelephoneAlbum } from '../games/telephone/albumBus';
 import { clock } from './clock';
+import { readHashCode, setHashCode } from './hashLink';
 import { voice } from './voice';
 import { delayed, readNetSim } from './netsim';
 import { sfx } from '../audio';
@@ -75,8 +84,6 @@ const PING_FAST_COUNT = 12;
 const PING_INTERVAL_MS = 1000;
 const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
-/** The HUD only needs a few updates a second; the canvas has the rest. */
-const HUD_INTERVAL_MS = 120;
 
 function socketUrl(): string {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -90,6 +97,17 @@ class GameSocket {
   private pingTimer: number | null = null;
   private pingsSent = 0;
   private lastHudAt = 0;
+  /**
+   * The phase of the last snapshot that actually reached the store.
+   *
+   * The throttle below drops most snapshots, which is the point — but a value
+   * that only exists in the *first* snapshot of a phase is then dropped four
+   * times out of five. Meme Machine's end-of-match gallery was exactly that:
+   * `matchOver` is the last phase the tick loop broadcasts, so if its snapshot
+   * landed inside the 120 ms window the gallery never reached the HUD and the
+   * "look through them again" button was never rendered at all.
+   */
+  private lastHudPhase = '';
   /** Dev only, via `?netsim=delay,jitter`. Null in production builds. */
   private readonly netsim = readNetSim();
   private sendDelayed: ((encoded: string) => void) | null = null;
@@ -420,7 +438,9 @@ class GameSocket {
         feed.reset();
         resetInk();
         resetTelephoneDraftInk();
+        resetTelephoneAlbum();
         this.lastCountdown = 0;
+        this.lastHudPhase = '';
         // `resumed` is the catch-up copy sent to a socket that reconnected into
         // a running match, and reconnects happen on a half-second backoff. Only
         // the real thing bumps the counter the intro splash watches.
@@ -437,11 +457,18 @@ class GameSocket {
         // chat are drained server-side — each appears in exactly one snapshot —
         // so anything the 120 ms throttle skips is lost for good.
         if (message.snap.game === 'skribbl') receiveSkribbl(message.snap);
+        if (message.snap.game === 'telephone') receiveTelephoneChains(message.snap);
         this.mirrorHud(message.snap);
         return;
 
       case 'matchEnded':
         store.onMatchEnded(message.room, message.winnerSeat);
+        // `resumed` is the catch-up copy, replayed to a socket that arrived
+        // after the match was already over — a reload on the end screen. It
+        // restores what the screen shows and must fire none of the things that
+        // happen once per match: the sting would play on every refresh, and the
+        // report below would describe a match this socket never played.
+        if (message.resumed) return;
         if (!message.skipped) sfx.win();
         // How the match this player just finished actually felt on their link.
         // The server cannot measure this — round trip is a client-side number —
@@ -540,7 +567,7 @@ class GameSocket {
       // sends this. `undefined` is "no room yet", which clears the same way.
       case 'achtung':
       case 'bombit':
-      case 'gravity':
+      case 'dirt':
       case 'gunmayhem':
       case 'tanks':
       case undefined:
@@ -560,9 +587,11 @@ class GameSocket {
   /** Throttled copy of snapshot data that the React HUD actually needs. */
   private mirrorHud(snap: GameSnapshot): void {
     const now = performance.now();
-    const isTransition = 'events' in snap && snap.events.length > 0;
-    if (!isTransition && now - this.lastHudAt < HUD_INTERVAL_MS) return;
+    if (!shouldMirrorHud({ lastAt: this.lastHudAt, lastPhase: this.lastHudPhase }, snap, now)) {
+      return;
+    }
     this.lastHudAt = now;
+    this.lastHudPhase = snap.phase;
 
     // Rides the HUD throttle rather than getting its own path. These change
     // slowly and are displayed as whole milliseconds; pushing them at the
@@ -615,11 +644,19 @@ class GameSocket {
           alive: p.al === 1,
         }));
         break;
-      case 'gravity':
-        players = snap.players.map((p) => ({
-          seat: p.s,
-          score: p.p,
-          alive: p.al === 1,
+      case 'dirt':
+        players = snap.cars.map((c) => ({
+          seat: c.s,
+          score: c.p,
+          // Nobody is eliminated in a race. Crossing the line is the closest
+          // thing, and the rail greys a finished car the way it greys a dead
+          // one everywhere else.
+          alive: c.fp === 0,
+          lap: c.l,
+          position: c.pos,
+          item: c.it,
+          // The one effect that has to be unmissable. See `DirtScreen`.
+          effects: c.rv ? ['reverse'] : undefined,
         }));
         break;
       case 'bombit':
@@ -736,17 +773,6 @@ voice.announceListening = (on) => socket.setListening(on);
 // two form a cycle.
 setReportSender((report) => socket.sendLog(report));
 
-// ---------------------------------------------------------------------------
-// Shareable #/room/CODE links
-// ---------------------------------------------------------------------------
-
-export function readHashCode(): string | null {
-  const match = /^#\/room\/(\d{4})$/u.exec(location.hash);
-  return match ? match[1]! : null;
-}
-
-export function setHashCode(code: string | null): void {
-  const next = code ? `#/room/${code}` : '';
-  if (location.hash === next) return;
-  history.replaceState(null, '', next || location.pathname + location.search);
-}
+// Re-exported so `App.tsx` and everything else keep importing the wire surface
+// from one place; the implementation lives in `hashLink.ts` so it can be tested.
+export { readHashCode, setHashCode };

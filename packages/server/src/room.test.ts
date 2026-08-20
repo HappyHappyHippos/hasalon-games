@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GAMES, SERIES_BREAK_MS, TICK_MS } from '@mg/shared';
 import type {
+  AnalyticsEvent,
   GameConfig,
   GameInstance,
   GameSnapshot,
@@ -11,6 +12,7 @@ import type {
 import { COUNTDOWN_TICKS, IN_RIGHT } from '@mg/shared/gunmayhem';
 import { Room, type RoomPlayer } from './Room';
 import { Client } from './Client';
+import { analytics } from './Analytics';
 
 /** Nobody here is testing hats, so they stay at the default. */
 function identity(name: string, colorIndex: number): Identity {
@@ -414,6 +416,91 @@ describe('Room match gating', () => {
     expect(players.filter((p) => p.seat < 0)).toHaveLength(2);
     room.dispose();
   });
+
+  /**
+   * The two people a full room cannot seat are not the same two people every
+   * match. Join order used to decide it outright, so in a room of eight playing
+   * Gun Mayhem the last to arrive readied up all evening and watched all
+   * evening — while the lobby told them they would rotate in next.
+   */
+  it('seats whoever sat out last time when the room outgrows the game', () => {
+    const room = new Room('TEST');
+    room.setGame('gunmayhem');
+
+    const players = Array.from({ length: 8 }, (_, i) =>
+      room.addPlayer(fakeClient(), identity(`P${i}`, i))!,
+    );
+    const readyAll = (): void => {
+      for (const p of players) room.setReady(p, true);
+    };
+    const watching = (): string[] => players.filter((p) => p.seat < 0).map((p) => p.name);
+
+    readyAll();
+    expect(room.start()).toBe(true);
+    expect(watching()).toEqual(['P6', 'P7']);
+
+    room.rematch();
+    readyAll();
+    expect(room.start()).toBe(true);
+    // The two who waited are in, and two who have just played step out.
+    expect(watching()).toEqual(['P4', 'P5']);
+
+    room.rematch();
+    readyAll();
+    expect(room.start()).toBe(true);
+    expect(watching()).toEqual(['P2', 'P3']);
+
+    // The whole room goes round, not just the tail of it. Paying a match off
+    // the credit of everyone who played is what reaches the two who joined
+    // first — clearing the benched player's credit instead leaves P0 and P1
+    // playing every match forever.
+    room.rematch();
+    readyAll();
+    expect(room.start()).toBe(true);
+    expect(watching()).toEqual(['P0', 'P1']);
+
+    // Four matches, four pairs, and back to where it started.
+    room.rematch();
+    readyAll();
+    expect(room.start()).toBe(true);
+    expect(watching()).toEqual(['P6', 'P7']);
+
+    // Seat numbers still follow join order, so nobody's spawn moves about
+    // because the selection did.
+    const seated = players.filter((p) => p.seat >= 0);
+    expect(seated.map((p) => p.seat)).toEqual([0, 1, 2, 3, 4, 5]);
+    room.dispose();
+  });
+
+  it('leaves the queue alone when the game seats everybody', () => {
+    // Bomb It seats all eight, so a match of it owes nobody anything and must
+    // not shuffle who is next in line for a Gun Mayhem seat.
+    const room = new Room('TEST');
+    room.setGame('gunmayhem');
+    const players = Array.from({ length: 8 }, (_, i) =>
+      room.addPlayer(fakeClient(), identity(`P${i}`, i))!,
+    );
+    const readyAll = (): void => {
+      for (const p of players) room.setReady(p, true);
+    };
+
+    readyAll();
+    expect(room.start()).toBe(true);
+    expect(players.filter((p) => p.seat < 0).map((p) => p.name)).toEqual(['P6', 'P7']);
+
+    room.rematch();
+    room.setGame('bombit');
+    readyAll();
+    expect(room.start()).toBe(true);
+    expect(players.every((p) => p.seat >= 0)).toBe(true);
+
+    room.rematch();
+    room.setGame('gunmayhem');
+    readyAll();
+    expect(room.start()).toBe(true);
+    expect(players.filter((p) => p.seat < 0).map((p) => p.name)).toEqual(['P4', 'P5']);
+    room.dispose();
+  });
 });
 
 describe('Room pause', () => {
@@ -798,7 +885,7 @@ describe('Room series', () => {
   it('draws once the unfit game is out of the hat', () => {
     const { room, players } = lobby(7, {
       rounds: 5,
-      pool: ['tanks', 'achtung', 'gravity', 'skribbl', 'memes'],
+      pool: ['tanks', 'achtung', 'bombit', 'skribbl', 'memes'],
     });
     for (let run = 0; run < 50; run++) {
       expect(room.unfitPoolGames()).toEqual([]);
@@ -823,7 +910,7 @@ describe('Room series', () => {
   });
 
   it('clamps the lineup to the games actually available', () => {
-    const { room } = lobby(3, { rounds: 6, pool: ['tanks', 'gravity'] });
+    const { room } = lobby(3, { rounds: 6, pool: ['tanks', 'bombit'] });
     expect(room.startSeries()).toBe(true);
     expect(room.seriesView!.lineup).toHaveLength(2);
     room.dispose();
@@ -888,7 +975,7 @@ describe('Room series', () => {
   it('advances to the next leg when the break elapses, keeping seats stable', () => {
     vi.useFakeTimers();
     try {
-      const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+      const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'bombit', 'achtung'] });
       expect(room.startSeries()).toBe(true);
       beginDrawnLeg(room);
 
@@ -914,7 +1001,7 @@ describe('Room series', () => {
   });
 
   it('records each leg winner by player id', () => {
-    const { room, players } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
+    const { room, players } = lobby(3, { rounds: 2, pool: ['tanks', 'bombit'] });
     expect(room.startSeries()).toBe(true);
     beginDrawnLeg(room);
 
@@ -930,7 +1017,7 @@ describe('Room series', () => {
   it('crowns the series after the last leg and arms nothing', () => {
     vi.useFakeTimers();
     try {
-      const { room } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
+      const { room } = lobby(3, { rounds: 2, pool: ['tanks', 'bombit'] });
       expect(room.startSeries()).toBe(true);
       beginDrawnLeg(room);
 
@@ -956,7 +1043,7 @@ describe('Room series', () => {
   it('ends the series early when the next leg cannot be seated', () => {
     vi.useFakeTimers();
     try {
-      const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+      const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'bombit', 'achtung'] });
       expect(room.startSeries()).toBe(true);
       beginDrawnLeg(room);
 
@@ -983,7 +1070,7 @@ describe('Room series', () => {
   it('lets the host skip a break, and ignores a second press', () => {
     vi.useFakeTimers();
     try {
-      const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+      const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'bombit', 'achtung'] });
       expect(room.startSeries()).toBe(true);
       beginDrawnLeg(room);
 
@@ -1008,7 +1095,7 @@ describe('Room series', () => {
   it('cancels a pending break when the host goes back to the lobby', () => {
     vi.useFakeTimers();
     try {
-      const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+      const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'bombit', 'achtung'] });
       expect(room.startSeries()).toBe(true);
       beginDrawnLeg(room);
       endMatch(room, 0);
@@ -1030,7 +1117,7 @@ describe('Room series', () => {
   it('leaves no timer behind when a room with a pending break is disposed', () => {
     vi.useFakeTimers();
     try {
-      const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+      const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'bombit', 'achtung'] });
       expect(room.startSeries()).toBe(true);
       beginDrawnLeg(room);
       endMatch(room, 0);
@@ -1046,7 +1133,7 @@ describe('Room series', () => {
   });
 
   it('refuses a restart during a break, so a scored leg cannot be scored twice', () => {
-    const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+    const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'bombit', 'achtung'] });
     expect(room.startSeries()).toBe(true);
     beginDrawnLeg(room);
 
@@ -1061,7 +1148,7 @@ describe('Room series', () => {
   });
 
   it('still allows a restart mid-leg', () => {
-    const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+    const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'bombit', 'achtung'] });
     expect(room.startSeries()).toBe(true);
     beginDrawnLeg(room);
     expect(room.seriesView!.phase).toBe('leg');
@@ -1072,7 +1159,7 @@ describe('Room series', () => {
   });
 
   it('skips a live leg without awarding points and records it in the run', () => {
-    const { room, players } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
+    const { room, players } = lobby(3, { rounds: 2, pool: ['tanks', 'bombit'] });
     expect(room.startSeries()).toBe(true);
     beginDrawnLeg(room);
 
@@ -1091,7 +1178,7 @@ describe('Room series', () => {
   });
 
   it('will not let the picker or a plain start fight the lineup', () => {
-    const { room } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
+    const { room } = lobby(3, { rounds: 2, pool: ['tanks', 'bombit'] });
     expect(room.startSeries()).toBe(true);
 
     const drawn = room.gameId;
@@ -1103,14 +1190,14 @@ describe('Room series', () => {
   });
 
   it('keeps the host roulette settings for a second spin', () => {
-    const { room } = lobby(3, { rounds: 2, pace: 'quick', pool: ['tanks', 'gravity'] });
+    const { room } = lobby(3, { rounds: 2, pace: 'quick', pool: ['tanks', 'bombit'] });
     expect(room.startSeries()).toBe(true);
     room.rematch();
 
     expect(room.seriesView).toBeNull();
     const setup = room.view().seriesSetup;
     expect(setup).toMatchObject({ enabled: true, rounds: 2, pace: 'quick' });
-    expect(setup.pool).toEqual(['tanks', 'gravity']);
+    expect(setup.pool).toEqual(['tanks', 'bombit']);
 
     room.dispose();
   });
@@ -1240,6 +1327,127 @@ describe('Room input handover', () => {
 
       room.dispose();
     } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('replays the winner and the final snapshot to a reload on the end screen', () => {
+    vi.useFakeTimers();
+    try {
+      const { room } = match();
+      skipCountdown(room);
+      vi.advanceTimersByTime(200);
+
+      // End it the way the clock's `finished` hook does, with a real winner.
+      (room as unknown as { endMatch(seat: number | null): void }).endMatch(1);
+      expect(room.phase).toBe('matchOver');
+      const final = (room as unknown as { lastSnapshot: GameSnapshot }).lastSnapshot;
+
+      const reloaded = fakeClient();
+      const rejoiner = room.addPlayer(reloaded, identity('D', 3))!;
+      reloaded.sent.length = 0;
+      room.sendCatchUp(rejoiner);
+
+      // `matchEnded` is otherwise a broadcast, so it only ever reached sockets
+      // that were connected at the instant it went out. Without this a reload
+      // on the end screen showed a champion card that said nobody won.
+      const ended = reloaded.sent.filter((m) => m.t === 'matchEnded');
+      expect(ended).toHaveLength(1);
+      expect(ended[0]).toMatchObject({ winnerSeat: 1, resumed: true });
+
+      // And the final snapshot — the only one that ever carries Meme Machine's
+      // whole gallery, which is the end screen's entire point.
+      const snapshots = reloaded.sent.filter((m) => m.t === 'snapshot');
+      expect(snapshots).toHaveLength(1);
+      expect(snapshots[0]).toMatchObject({ snap: { tick: final.tick } });
+
+      // Never `matchStarted`: that message means a match is running, and the
+      // client resets its HUD to a countdown on it.
+      expect(reloaded.sent.some((m) => m.t === 'matchStarted')).toBe(false);
+
+      room.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('ready', () => {
+  it('does not broadcast when the flag has not actually changed', () => {
+    // A `ready` message is answered with a room view sent to everyone, so a
+    // client that re-sends its current state on each broadcast feeds itself.
+    // That is the obvious way to write a client, too — `rematch` clears the
+    // flag, so it does have to be re-sent sometimes. `setVoice` and
+    // `setListening` have always guarded against this; this did not, and a
+    // test bot written that way reached `RATE_LIMITED` in under a second.
+    const room = new Room('TEST');
+    const host = room.addPlayer(fakeClient(), identity('Ohad', 0))!;
+    const guest = room.addPlayer(fakeClient(), identity('Yoni', 1))!;
+    const client = guest.client as ReturnType<typeof fakeClient>;
+
+    const before = client.sent.filter((m) => m.t === 'room').length;
+    room.setReady(guest, true);
+    const afterChange = client.sent.filter((m) => m.t === 'room').length;
+    room.setReady(guest, true);
+    room.setReady(guest, true);
+    const afterRepeats = client.sent.filter((m) => m.t === 'room').length;
+
+    expect(afterChange).toBe(before + 1);
+    expect(afterRepeats).toBe(afterChange);
+
+    // And a genuine change still goes out.
+    room.setReady(guest, false);
+    expect(client.sent.filter((m) => m.t === 'room').length).toBe(afterRepeats + 1);
+    expect(host.ready).toBe(true);
+  });
+});
+
+describe('how a match is written down', () => {
+  /**
+   * A match that ran its whole length and ended level is still a match that
+   * ran its whole length.
+   *
+   * `endMatch` used to infer the reason from the winner, so a null one meant
+   * "the room dropped below the minimum". Three of the nine games crown nobody
+   * on a draw — Skribbl, Meme Machine and this one — so every tied match was
+   * filed as abandoned, and the dashboard renders that column as "the share
+   * that ran to a real conclusion". The games most likely to end level were
+   * reported as the ones most often given up on.
+   *
+   * Broken Telephone with nobody hearting anything is the shortest route to a
+   * genuine draw: everyone finishes on zero.
+   */
+  it('records a drawn match as finished, not as one cut short', () => {
+    vi.useFakeTimers();
+    const seen: AnalyticsEvent[] = [];
+    const stop = analytics.subscribe((event) => seen.push(event));
+    try {
+      const room = new Room('TEST');
+      const host = room.addPlayer(fakeClient(), identity('Ohad', 0))!;
+      const guest = room.addPlayer(fakeClient(), identity('Yoni', 1))!;
+      room.setGame('telephone');
+      room.setReady(host, true);
+      room.setReady(guest, true);
+      expect(room.start()).toBe(true);
+
+      // Both players answer every contribution immediately, so the phase ends
+      // on the last submission rather than on its clock.
+      for (const kind of ['submitText', 'submitDrawing'] as const) {
+        vi.advanceTimersByTime(TICK_MS * 200);
+        for (const player of [host, guest]) room.input(player, { k: kind, text: 'x' });
+      }
+
+      // Then the reveal, which is on a clock and which nobody votes in.
+      vi.advanceTimersByTime(TICK_MS * 60 * 90);
+
+      expect(room.phase).toBe('matchOver');
+      const close = seen.find((event) => event.e === 'match_close')!;
+      expect(close).toMatchObject({ game: 'telephone', why: 'finished' });
+      expect(close.winner).toBeUndefined();
+
+      room.dispose();
+    } finally {
+      stop();
       vi.useRealTimers();
     }
   });

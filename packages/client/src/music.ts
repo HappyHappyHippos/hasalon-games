@@ -49,7 +49,6 @@ const TRACKS: Record<MusicTrack, string> = {
   achtung: '/music/achtung.mp3',
   memes: '/music/memes.mp3',
   tanks: '/music/tanks.mp3',
-  gravity: '/music/gravity.mp3',
   // ── ASSET SWAP POINT ──────────────────────────────────────────────────────
   // Bomb It borrows Gun Mayhem's bed until a track of its own is sourced. This
   // deliberately points at a file that *exists*: an entry pointing at a missing
@@ -59,6 +58,13 @@ const TRACKS: Record<MusicTrack, string> = {
   // add it to ATTRIBUTION.md.
   // ──────────────────────────────────────────────────────────────────────────
   bombit: '/music/gunmayhem.mp3',
+  // ── ASSET SWAP POINT ──────────────────────────────────────────────────────
+  // Dirt Racing borrows Tank Trouble's bed until a track of its own is sourced.
+  // Pointing at a file that *exists* is deliberate — see the Bomb It note above
+  // for what a missing one costs. Drop a `dirt.mp3` in `public/music/`, change
+  // this one line, and add it to ATTRIBUTION.md.
+  // ──────────────────────────────────────────────────────────────────────────
+  dirt: '/music/tanks.mp3',
   // Skribbl deliberately shares the quiet lo-fi lobby bed. `play` notices the
   // URL is unchanged and lets it continue rather than restarting on match start.
   skribbl: '/music/lobby.mp3',

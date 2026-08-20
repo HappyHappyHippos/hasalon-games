@@ -4,7 +4,7 @@
  * Getting either one backwards is a shipped bug that looks like the other
  * problem: smoothing everything makes jumps and gravity flips read as floaty,
  * and smoothing nothing makes every remote body step once per snapshot. Both
- * were live in Tank Trouble and Gravity Guy before this class existed.
+ * were live in Tank Trouble before this class existed.
  */
 import { describe, expect, it } from 'vitest';
 import { RemoteBodies } from './RemoteBodies';

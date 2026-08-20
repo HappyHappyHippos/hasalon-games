@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { GameId } from './gameModule';
+import { GAMES } from './registry';
 import {
   DEFAULT_SERIES_ROUNDS,
   MAX_SERIES_ROUNDS,
@@ -15,7 +16,7 @@ import {
 const ALL: GameId[] = [
   'achtung',
   'bombit',
-  'gravity',
+  'dirt',
   'gunmayhem',
   'memes',
   'skribbl',
@@ -105,14 +106,14 @@ describe('drawLineup', () => {
   });
 
   it('only ever draws from what it was given', () => {
-    const pool: GameId[] = ['tanks', 'gravity', 'achtung'];
+    const pool: GameId[] = ['tanks', 'bombit', 'achtung'];
     for (let run = 0; run < 100; run++) {
       for (const id of drawLineup(pool, 3)) expect(pool).toContain(id);
     }
   });
 
   it('clamps to the size of the hat rather than repeating or failing', () => {
-    const pool: GameId[] = ['tanks', 'gravity'];
+    const pool: GameId[] = ['tanks', 'bombit'];
     expect(drawLineup(pool, 6)).toHaveLength(2);
     expect(new Set(drawLineup(pool, 6)).size).toBe(2);
   });
@@ -125,21 +126,21 @@ describe('drawLineup', () => {
   });
 
   it('does not mutate the list it was handed', () => {
-    const pool: GameId[] = ['tanks', 'gravity', 'achtung', 'memes'];
+    const pool: GameId[] = ['tanks', 'bombit', 'achtung', 'memes'];
     const before = [...pool];
     drawLineup(pool, 3);
     expect(pool).toEqual(before);
   });
 
   it('is a pure function of the random source', () => {
-    const pool: GameId[] = ['achtung', 'gravity', 'gunmayhem', 'memes'];
+    const pool: GameId[] = ['achtung', 'bombit', 'gunmayhem', 'memes'];
     // Fisher-Yates walks i = 3, 2, 1 and picks j = floor(random * (i + 1)), so
     // an all-zero source swaps each tail element with index 0 in turn:
-    //   [achtung, gravity, gunmayhem, memes]
-    //   i=3 -> [memes, gravity, gunmayhem, achtung]
-    //   i=2 -> [gunmayhem, gravity, memes, achtung]
-    //   i=1 -> [gravity, gunmayhem, memes, achtung]
-    expect(drawLineup(pool, 4, scripted([0]))).toEqual(['gravity', 'gunmayhem', 'memes', 'achtung']);
+    //   [achtung, bombit, gunmayhem, memes]
+    //   i=3 -> [memes, bombit, gunmayhem, achtung]
+    //   i=2 -> [gunmayhem, bombit, memes, achtung]
+    //   i=1 -> [bombit, gunmayhem, memes, achtung]
+    expect(drawLineup(pool, 4, scripted([0]))).toEqual(['bombit', 'gunmayhem', 'memes', 'achtung']);
     // Just-under-1 leaves every element where it is.
     expect(drawLineup(pool, 4, scripted([0.999]))).toEqual(pool);
   });
@@ -198,5 +199,32 @@ describe('revealDurationMs', () => {
 
   it('is positive even with nothing to reveal', () => {
     expect(revealDurationMs(0)).toBeGreaterThan(0);
+  });
+});
+
+describe('MAX_SERIES_ROUNDS tracks the catalogue', () => {
+  /**
+   * A roulette run draws *distinct* games, so the ceiling on how many legs the
+   * host may ask for is exactly how many games there are. It is a hand-written
+   * literal — `registry.ts` says to bump it when adding a game, and nothing
+   * made that true.
+   *
+   * Both directions matter and neither announces itself. Too low and a tenth
+   * game is registered, playable and in the hat, but the round stepper still
+   * stops at nine, so the longest run the room can ask for is one leg short of
+   * what it has. Too high and the stepper offers a number `drawLineup` will
+   * quietly clamp, so the host picks ten and gets nine with no explanation.
+   */
+  it('is exactly the number of registered games', () => {
+    expect(MAX_SERIES_ROUNDS).toBe(Object.keys(GAMES).length);
+  });
+
+  it('covers every game, so the whole catalogue can be drawn in one run', () => {
+    const everything = Object.keys(GAMES) as GameId[];
+    // Eight players is the only size every game seats, so this is the widest
+    // pool that is actually drawable in one go.
+    const lineup = drawLineup(eligibleGames(everything, 8), MAX_SERIES_ROUNDS);
+    expect(new Set(lineup).size).toBe(lineup.length);
+    expect(lineup.length).toBe(eligibleGames(everything, 8).length);
   });
 });

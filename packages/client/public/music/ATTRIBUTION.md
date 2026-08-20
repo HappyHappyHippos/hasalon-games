@@ -9,7 +9,6 @@ Background loops, each picked to match the screen or game it plays under.
 | `achtung.mp3` | Sneaky Quirky | leberch | Pixabay Content License | https://pixabay.com/music/sneaky-sneaky-quirky-375837/ |
 | `memes.mp3` | Funky Chill | The_Mountain | Pixabay Content License | https://pixabay.com/music/funk-funky-chill-138615/ |
 | `tanks.mp3` | Retro Games (Glitch Technology Synthwave) | FASSounds | Pixabay Content License | https://pixabay.com/music/video-games-retro-games-glitch-technology-synthwave-199939/ |
-| `gravity.mp3` | Interstellar Chase Theme with Glitchy Synths | DesiFreeMusic | Pixabay Content License | https://pixabay.com/music/upbeat-interstellar-chase-theme-with-glitchy-synths-385801/ |
 | `worms.mp3` | Celtic Winds | Psychronic | Pixabay Content License | https://pixabay.com/music/folk-celtic-winds-439101/ |
 | `telephone.mp3` | Playful Happy Background Music | JorisVermeer | Pixabay Content License | https://pixabay.com/music/instrumental-playful-happy-background-music-579027/ |
 

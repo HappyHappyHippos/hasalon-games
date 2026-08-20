@@ -2,7 +2,7 @@ import type { GameConfig, GameId, GameSnapshot } from './gameModule';
 import type { RoomView } from './roomTypes';
 
 /** Bump when the message shapes change so stale tabs fail loudly, not weirdly. */
-export const PROTOCOL_VERSION = 27;
+export const PROTOCOL_VERSION = 28;
 
 export const WS_PATH = '/ws';
 
@@ -158,7 +158,19 @@ export type ServerMessage =
    * last.
    */
   | { t: 'matchStarted'; room: RoomView; resumed?: true }
-  | { t: 'matchEnded'; room: RoomView; winnerSeat: number | null; skipped?: true }
+  /**
+   * `resumed` is the same idea as on `matchStarted` above: the catch-up copy,
+   * replayed to one socket that arrived after the match had already finished,
+   * rather than the broadcast that goes out when it actually ends.
+   *
+   * A reload on the end screen used to get nothing at all — no winner, and for
+   * Meme Machine no gallery, because both live in the final snapshot and the
+   * catch-up only ran for a match still in progress. Anything that fires once
+   * per match keys off the absence of this flag: the victory sting, and the
+   * round-trip report, which describes the match this player just played and
+   * must not be re-sent by somebody refreshing the page.
+   */
+  | { t: 'matchEnded'; room: RoomView; winnerSeat: number | null; skipped?: true; resumed?: true }
   /**
    * Game state for this socket alone — the half of the world a snapshot cannot
    * carry, because a snapshot is encoded once and sent to everybody.

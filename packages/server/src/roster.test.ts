@@ -10,6 +10,8 @@ import {
   expiredSeats,
   freeColor,
   nextHostId,
+  pickSeats,
+  recordBench,
   seatedCount,
   takenColors,
   type RoomPlayer,
@@ -36,6 +38,7 @@ function player(over: Partial<RoomPlayer> = {}): RoomPlayer {
     client: fakeClient(),
     disconnectedAt: null,
     seat: -1,
+    benchCredit: 0,
     score: 0,
     totalScore: 0,
     voice: false,
@@ -177,5 +180,62 @@ describe('counts', () => {
     ];
     expect(connectedPlayers(players).map((p) => p.id)).toEqual(['a', 'c']);
     expect(seatedCount(players)).toBe(2);
+  });
+});
+
+describe('the queue for a seat', () => {
+  /** Hand out `max` seats, settle up, and report who was left watching. */
+  function playMatch(players: RoomPlayer[], max: number): string[] {
+    const seated = pickSeats(players, max);
+    for (const p of players) p.seat = -1;
+    seated.forEach((p, i) => {
+      p.seat = i;
+    });
+    recordBench(players);
+    return players.filter((p) => p.seat < 0).map((p) => p.id);
+  }
+
+  it('seats everybody when they fit, and does not disturb the queue', () => {
+    const players = [player({ id: 'a' }), player({ id: 'b', benchCredit: 3 })];
+    expect(pickSeats(players, 8)).toHaveLength(2);
+    expect(playMatch(players, 8)).toEqual([]);
+    expect(players.map((p) => p.benchCredit)).toEqual([0, 3]);
+  });
+
+  it('takes the most-owed first, breaking ties by list order', () => {
+    const players = [
+      player({ id: 'a' }),
+      player({ id: 'b', benchCredit: 2 }),
+      player({ id: 'c' }),
+      player({ id: 'd', benchCredit: 2 }),
+    ];
+    expect(pickSeats(players, 2).map((p) => p.id)).toEqual(['b', 'd']);
+    expect(pickSeats(players, 3).map((p) => p.id)).toEqual(['a', 'b', 'd']);
+  });
+
+  it('walks a whole room through the rotation, not just its tail', () => {
+    const players = Array.from({ length: 5 }, (_, i) => player({ id: `p${i}` }));
+    const benched = Array.from({ length: 5 }, () => playMatch(players, 4));
+    // Five people, four seats, five matches: everyone sits out exactly once.
+    expect(benched.flat().sort()).toEqual(['p0', 'p1', 'p2', 'p3', 'p4']);
+  });
+
+  it('puts a latecomer at the back of the queue rather than the front', () => {
+    const players = [player({ id: 'a' }), player({ id: 'b' }), player({ id: 'c' })];
+    // 'c' has been watching for two matches and is owed one apiece.
+    playMatch(players, 2);
+    playMatch(players, 2);
+    expect(players[2]!.benchCredit).toBeGreaterThan(0);
+
+    const late = player({ id: 'late' });
+    players.push(late);
+    // The person already owed goes in; the newcomer waits their turn.
+    expect(playMatch(players, 3)).toEqual(['late']);
+  });
+
+  it('ignores anybody whose socket has gone', () => {
+    const players = [player({ id: 'a' }), player({ id: 'gone', client: null })];
+    playMatch(players, 1);
+    expect(players[1]!.benchCredit).toBe(0);
   });
 });

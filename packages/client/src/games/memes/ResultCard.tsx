@@ -3,8 +3,7 @@ import type { RoomView } from '@mg/shared';
 import type { MemesStageEntry } from '@mg/shared/memes';
 import { useT } from '../../strings';
 import { Avatar } from '../../ui/Avatar';
-import { Button } from '../../ui/Button';
-import { downloadMeme } from './download';
+import { MemeDownloadButton } from './MemeViewer';
 
 export function ResultCard({ room, stage }: { room: RoomView; stage: MemesStageEntry }): JSX.Element {
   return (
@@ -13,7 +12,7 @@ export function ResultCard({ room, stage }: { room: RoomView; stage: MemesStageE
       authorSeat={stage.authorSeat}
       tally={stage.tally ?? [0, 0, 0]}
       award={stage.award}
-      footer={<MemeDownload stage={stage} />}
+      footer={<MemeDownloadButton meme={stage} />}
     />
   );
 }
@@ -60,29 +59,5 @@ export function RatingResultCard({ room, authorSeat, tally, award, footer, label
       <output className="memes__award">{(awardText ?? t.memesAward)(shownAward)}</output>
       {footer}
     </section>
-  );
-}
-
-function MemeDownload({ stage }: { stage: MemesStageEntry }): JSX.Element {
-  const t = useT();
-  const [downloading, setDownloading] = useState(false);
-  const [downloadFailed, setDownloadFailed] = useState(false);
-  return (
-    <div className="memes__download">
-        <Button
-          size="sm"
-          disabled={downloading}
-          onClick={() => {
-            setDownloading(true);
-            setDownloadFailed(false);
-            void downloadMeme(stage)
-              .catch(() => setDownloadFailed(true))
-              .finally(() => setDownloading(false));
-          }}
-        >
-          {downloading ? t.memesDownloading : t.memesDownload}
-        </Button>
-        {downloadFailed && <span role="status">{t.memesDownloadFailed}</span>}
-    </div>
   );
 }

@@ -463,6 +463,15 @@ strong,
   overflow: hidden;
   box-shadow: var(--shadow-sm);
   background: var(--surface);
+  /* `flex: none` because of the `overflow: hidden` two lines up.
+     A flex item's automatic minimum size — the thing that normally stops it
+     being squeezed below its own content — only applies while `overflow` is
+     `visible`. The hidden overflow is here to clip the buttons to the rounded
+     corners, and the side effect is that this box will shrink to nothing and
+     clip a 44px button in half instead. In a narrow `.setting` row (a phone in
+     landscape puts three of them across) the plus button lost 11px.
+     The label beside it wraps instead, which is the right thing to give up. */
+  flex: none;
 }
 
 .number-stepper__button {
@@ -1685,7 +1694,7 @@ strong,
   position: fixed;
   z-index: 15;
   inset-inline-end: calc(100px + env(safe-area-inset-right));
-  bottom: 12px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
   width: 38px;
   height: 38px;
   display: grid;
@@ -1774,8 +1783,13 @@ strong,
 .fullscreenbtn__wrap {
   position: fixed;
   z-index: 15;
-  bottom: 12px;
-  inset-inline-end: 56px;
+  bottom: calc(12px + env(safe-area-inset-bottom));
+  /* The inset matters as much as the offset. These three share one row and
+     only the microphone was reserving the cutout, so on a phone held in
+     landscape the row went 12 / 56 / 144 instead of 12 / 56 / 100: one 44px
+     gap, then a doubled one, with the gear itself sitting inside the housing.
+     Mid-match (`.app--playing`, below) every button already did this. */
+  inset-inline-end: calc(56px + env(safe-area-inset-right));
   display: flex;
   flex-direction: row-reverse;
   align-items: center;
@@ -1968,58 +1982,6 @@ strong,
   font-size: 13px;
 }
 
-/* Gravity Guy's one button.
- *
- * The whole arena is the target, because with a single control there is nothing
- * to aim at and a small button would only be a way to miss. The label fades once
- * the round is under way — it is an instruction for the first few seconds, not a
- * permanent overlay on the thing you are trying to watch. */
-.tapcontrol {
-  position: absolute;
-  inset: 0;
-  pointer-events: auto;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  touch-action: none;
-  -webkit-tap-highlight-color: transparent;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.tapcontrol:active {
-  background: rgba(255, 210, 63, 0.12);
-}
-
-.tapcontrol__hint {
-  margin-bottom: calc(18px + env(safe-area-inset-bottom));
-  padding: 6px 18px;
-  border-radius: 999px;
-  border: 3px solid rgba(255, 255, 255, 0.6);
-  background: rgba(20, 17, 15, 0.55);
-  color: #fff;
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 14px;
-  letter-spacing: 0.04em;
-  opacity: 0.85;
-  animation: tapfade 1.2s ease-out 3.5s forwards;
-}
-
-@keyframes tapfade {
-  to {
-    opacity: 0.18;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .tapcontrol__hint {
-    animation: none;
-    opacity: 0.4;
-  }
-}
-
 /* ==========================================================================
    Overlays
    ========================================================================== */
@@ -2030,7 +1992,17 @@ strong,
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  /* Per side, and never less than the cutout. On a phone `.screenbox` is
+     `inset: 0` with no border, so this backdrop runs to the physical edges of
+     the display — a plain `padding: 16px` puts the card under the camera
+     housing in landscape and under the status bar and home indicator in
+     portrait. `.rail` in the same media query already reserves these; this is
+     the same reservation for everything that opens over the arena: the
+     match-over standings, the pause card, the roulette reveal, the series
+     interstitial and champion cards, and Skribbl's word picker. */
+  padding:
+    max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   /* This backdrop covers the whole screen, so it is the last line of defence
      against a sideways drag — landscape mobile is where it mattered: a
      `position: sticky` footer inside `.overlay__card` (added for the
@@ -2223,19 +2195,39 @@ strong,
   }
 }
 
+/*
+ * One grid for the whole table, and each row a `subgrid` of it — so the two
+ * numbers line up into columns down the card.
+ *
+ * It used to be a flex row per `li` with `flex: 1` on the name, which packed
+ * the score and the total tight against the end of whatever the name happened
+ * to be. Every row then put its numbers somewhere slightly different: on a
+ * phone with real Hebrew names the totals wandered by 20-40px row to row, and
+ * the only one that looked deliberate was your own, because that row is the
+ * highlighted one. Columns declared once up here cannot do that.
+ */
 .standings {
   list-style: none;
   margin: 0;
   padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
+  display: grid;
+  /* rank | dot | name | score | total */
+  grid-template-columns: auto auto minmax(0, 1fr) auto auto;
+  row-gap: 5px;
+  column-gap: 10px;
+}
+
+/* The roulette table has no running total — four cells, four columns, and no
+   empty fifth track leaving a gap hanging off the end of every row. */
+.standings--series {
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
 }
 
 .standings li {
-  display: flex;
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 10px;
   padding: 8px 10px;
   border-radius: 10px;
   border: 2.5px solid var(--ink);
@@ -2262,15 +2254,32 @@ strong,
   font-weight: 600;
 }
 
+/* Both numbers align on their end edge with tabular figures, so a 4 and a 1450
+   sit in the same column rather than shoving the row around. */
 .standings__score {
   font-family: var(--font-display);
   font-weight: 800;
+  text-align: end;
+  font-variant-numeric: tabular-nums;
 }
 
 .standings__total {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
   color: var(--ink-soft);
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Sized from the text it sits beside rather than a fixed px, so it keeps its
+   proportions if that ever changes. */
+.standings__trophy {
+  flex: none;
+  width: 1.35em;
+  height: 1.35em;
 }
 
 /* Sitting out is the one state people mistake for the game being broken, so it
@@ -2466,7 +2475,12 @@ strong,
 
 .toast {
   position: fixed;
-  top: 12px;
+  /* Reserve the notch. Installed to the home screen there is no browser chrome
+     above this, so `top: 12px` put the toast behind the Dynamic Island — and
+     this is the only channel the app has for "connection lost", "that room is
+     full" and "this page is out of date, please reload". Every other
+     top-pinned element already adds this inset. */
+  top: calc(12px + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   z-index: 20;
@@ -2517,8 +2531,8 @@ strong,
 
 .options {
   position: fixed;
-  inset-inline-end: 12px;
-  bottom: 12px;
+  inset-inline-end: calc(12px + env(safe-area-inset-right));
+  bottom: calc(12px + env(safe-area-inset-bottom));
   z-index: 15;
   width: 38px;
   height: 38px;
@@ -2772,18 +2786,21 @@ strong,
 }
 
 @media (max-height: 560px) {
+  /* Tighter, but still never inside the cutout — 6px where there is no cutout,
+     the cutout's own width where there is.
+     `.overlay` and `.options__overlay` are both single class selectors, so a
+     bare `padding: 6px` here silently beat the safe-area padding the options
+     overlay sets at full size. A phone held in landscape for a match is
+     exactly `max-height: 560px` and *not* `max-width: 760px` (it is ~812
+     wide), so it matched here and nowhere else, and the menu ran under the
+     side camera cutout. The same shorthand was doing it to every *other*
+     overlay too — the match-over card is 760px wide in landscape, which on a
+     notched phone reaches ~19px under the housing, and the standings sit in
+     the column nearest it. One rule on `.overlay` now covers both. */
   .overlay {
-    padding: 6px;
-  }
-  /* `.overlay` and `.options__overlay` are both single class selectors, so this
-     `padding: 6px` shorthand — later in the file — silently beat the
-     safe-area padding on the options overlay whenever it applied. A phone held
-     in landscape for a match is exactly `max-height: 560px` and *not*
-     `max-width: 760px` (it is ~812 wide), so it matched here and nowhere else,
-     and the menu ran under the side camera cutout. Restate the reservation:
-     6px when there is no cutout, the cutout's own width when there is. */
-  .options__overlay {
-    padding: max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right)) max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
+    padding:
+      max(6px, env(safe-area-inset-top)) max(6px, env(safe-area-inset-right))
+      max(6px, env(safe-area-inset-bottom)) max(6px, env(safe-area-inset-left));
   }
   .overlay__card,
   .options__panel {
@@ -2826,7 +2843,11 @@ strong,
     grid-column: 2;
     grid-row: 1 / span 12;
     align-self: stretch;
-    justify-content: center;
+    /* `align-content`, not `justify-content`: the table is a grid now, and its
+       rows run down the block axis. `justify-content` centred nothing (the
+       columns already fill the width) while the rows stretched to fill the
+       card's height instead of sitting together in the middle of it. */
+    align-content: center;
     overflow: hidden;
   }
   .matchover .standings li,
@@ -3025,9 +3046,16 @@ strong,
     z-index: 4;
     top: calc(6px + env(safe-area-inset-top));
     inset-inline-start: calc(8px + env(safe-area-inset-left));
-    /* Stops short of the options gear and the maximize button, which share this
-       corner mid-match. */
-    inset-inline-end: calc(150px + env(safe-area-inset-right));
+    /* Stops short of the fixed buttons that share this corner mid-match, via
+       the token that measures them rather than a number of its own. The
+       hardcoded 150px this replaces was one button out of date: the row is
+       gear, pause, maximize *and* microphone, the last of which ends at 178px,
+       so the rail's own box ran 28px underneath it. Cards are
+       `pointer-events: auto`, so a full roster put one over the microphone and
+       took the tap. `--chrome-gutter` is also what every game header already
+       reserves, and it drops to 140px by itself in a standalone app where
+       there is no maximize button. */
+    inset-inline-end: calc(var(--chrome-gutter) + env(safe-area-inset-right));
     width: auto;
     flex-direction: row;
     align-items: center;
@@ -3042,6 +3070,15 @@ strong,
 
   .rail__head {
     flex: none;
+    /* No gutter here. The desktop rail is a sidebar and its head reserves
+       `--chrome-gutter` so the round label clears the fixed buttons. On a phone
+       the rail is a floating row that *already* stops short of them, via its own
+       `inset-inline-end` above — so keeping the padding reserved the same
+       184px twice. The head became 247px of mostly-nothing inside a 183px rail
+       and, being `flex: none`, refused to give any of it back: every score card
+       after it was pushed out of the rail and off the left edge of the screen,
+       the local player's own card ending up underneath the button row. */
+    padding-inline-end: 0;
   }
 
   .rail__round {
@@ -3107,11 +3144,18 @@ strong,
   .netbadge {
     position: fixed;
     z-index: 3;
-    inset-inline-start: 50%;
+    /* Auto margins, not `inset-inline-start: 50%` with a `translateX(-50%)`:
+       one is logical and the other physical, so they agree in English and
+       cancel out wrong in Hebrew — which is the language this site opens in.
+       Same fix as `.memes__back`. */
+    inset-inline: 0;
+    width: fit-content;
     bottom: calc(4px + env(safe-area-inset-bottom));
-    transform: translateX(-50%);
     display: flex;
-    margin: 0;
+    /* Longhand, because the base rule sets `margin-top: auto` and a plain
+       `margin: 0` shorthand here would take the centring back out again. */
+    margin-block: 0;
+    margin-inline: auto;
     padding: 2px 6px;
     gap: 4px;
     background: rgba(253, 246, 232, 0.68);
@@ -4342,7 +4386,11 @@ strong,
    mismatch by cutting off the photo's edges. */
 .meme-card--composer { width: min(100%, calc((var(--app-visible-height, 100dvh) - 150px) * var(--meme-aspect))); }
 .meme-card--stage { width: min(620px, 100%, calc(58dvh * var(--meme-aspect)), calc(560px * var(--meme-aspect))); animation: meme-card-deal 320ms cubic-bezier(0.22, 1.35, 0.4, 1) both; }
-.meme-card--thumb { width: 120px; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
+/* Fills its gallery cell rather than sitting at a fixed 120px. The grid column
+   is already `minmax(240px, 1fr)`, and captions are fitted to the box they are
+   drawn in — so a thumbnail half the width of its own card is one nobody can
+   read the joke on. Tapping it opens `.memes__viewer` for the full size. */
+.meme-card--thumb { width: 100%; border-radius: var(--radius-sm); box-shadow: var(--shadow-sm); }
 .meme-card--broken { display: grid; place-items: center; }
 .meme-card__fallback { color: var(--ink-soft); font: 800 18px/1.2 var(--font-display); }
 .meme-card__caption {
@@ -4508,9 +4556,19 @@ strong,
    End-of-match gallery
    ---------------------------------------------------------------------------
    Sits behind the champion card, which is a centred overlay — so the gallery
-   reserves `--chrome-gutter` at the top for the fixed gear/pause/maximize
-   buttons and simply scrolls under everything else. */
-.memes__phase--gallery {
+   reserves `--chrome-gutter` for the fixed gear/pause/maximize buttons and
+   simply scrolls under everything else.
+
+   The reservation belongs on the head row, not on the phase. Those buttons are
+   anchored near the *top* of the viewport, so the only thing they can collide
+   with is the first row — but reserving it on `.memes__phase--gallery` charged
+   `--chrome-gutter` to the full height of the scroller. On a 375px phone that
+   is 184px of the 375: the memes were squeezed into a 190px column down the
+   whole screen, and the filter button still ended up jammed against the very
+   buttons the padding was making room for. It was also silently lost in
+   landscape, where `.memes__phase` re-pads at equal specificity further down
+   this file and wins on source order. */
+.memes__gallery-head {
   padding-inline-end: calc(var(--chrome-gutter) + env(safe-area-inset-right));
 }
 
@@ -4557,14 +4615,29 @@ strong,
 .memes__gallery-head {
   flex: none;
   display: flex;
+  /* Wraps rather than squeezes. Once `--chrome-gutter` is reserved above, a
+     375px phone has ~180px left for a title and a control, and the two of them
+     do not both fit. Wrapping drops the filter onto its own line — still well
+     clear of the fixed buttons, which are only ever on the first one. */
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 6px 12px;
 }
 
+/* The title gives way, not the button: the count is nice to have and the filter
+   is the only control on this screen. */
 .memes__gallery-head h2 {
+  min-width: 0;
   margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-family: var(--font-display);
+}
+
+.memes__gallery-head .btn {
+  flex: none;
 }
 
 /* The scroller, and the only thing on this screen that scrolls. `min-height: 0`
@@ -4593,6 +4666,34 @@ strong,
   border: var(--outline);
   border-radius: var(--radius-sm);
   box-shadow: var(--shadow-sm);
+}
+
+/* The whole thumbnail is the "look at it properly" target. A bare button so the
+   meme inside is unchanged — no padding, no border, no background of its own. */
+.memes__gallery-open {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  cursor: zoom-in;
+  touch-action: manipulation;
+}
+.memes__gallery-open:focus-visible {
+  outline: 3px solid var(--violet);
+  outline-offset: 3px;
+}
+@media (hover: hover) {
+  .memes__gallery-open:hover .meme-card {
+    transform: translateY(-2px);
+  }
+}
+.memes__gallery-open .meme-card {
+  transition: transform 120ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .memes__gallery-open .meme-card { transition: none; }
 }
 
 .memes__gallery-item--top {
@@ -4624,6 +4725,129 @@ strong,
 .memes__gallery-award {
   margin-inline-start: auto;
   font-weight: 900;
+}
+
+/* ---------------------------------------------------------------------------
+   One meme, full size
+   ---------------------------------------------------------------------------
+   `position: fixed`, unlike `.overlay`, which is `absolute` and needs a
+   positioned ancestor — `.memes` is not one. Fixed also means the page behind
+   it cannot scroll this off the screen. */
+.memes__viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(10px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+    max(10px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+  background: rgba(12, 10, 9, 0.82);
+  animation: meme-viewer-in 140ms ease-out both;
+}
+
+.memes__viewer-card {
+  position: relative;
+  width: min(760px, 100%);
+  /* A *definite* height, and a percentage of the flex container's content box
+     — which already has the safe area subtracted. Never `dvh`, which knows
+     nothing about the padding above and would let the card grow taller than
+     the box that centres it.
+     `height` rather than `max-height` because `.memes__viewer-art` below is a
+     size container: it can only report a `cqh` for the meme to size itself
+     from if it has a height handed to it from out here. With a content-sized
+     card the two were circular and the art box resolved to zero — the meme
+     vanished and the viewer opened as a bare strip of caption. */
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  background: var(--surface);
+  border: var(--outline);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+/* The art takes the leftover height and the meme is sized to fit inside it,
+   rather than the card growing to whatever the template's aspect wants.
+   `container-type: size` so the card below can measure *this* box (`cqh`)
+   instead of guessing from the viewport — the same trick `.memes__preview`
+   uses, and for the same reason: this height depends on the footer's content,
+   which a `dvh` knows nothing about. */
+.memes__viewer-art {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+  container-type: size;
+}
+
+/* "Largest box that fits, aspect preserved" spelled out, because `.meme-card`
+   is not a replaced element and `object-fit` cannot do it for us. Height then
+   follows from the inline `aspect-ratio`. */
+.memes__viewer-art .meme-card {
+  width: min(100%, calc(100cqh * var(--meme-aspect)));
+  height: auto;
+  max-height: 100%;
+}
+
+.memes__viewer-foot {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  font-family: var(--font-display);
+  font-size: 13px;
+}
+
+/* Same shape as the thumbnail's caption, so a meme reads the same in both. */
+.memes__viewer-credit {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.memes__viewer-credit strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The inline *start* corner, which is the one the fixed gear/pause/maximize
+   buttons never use — they are anchored to `inset-inline-end` and paint above
+   every overlay in the app, so a close button in that corner is one the app's
+   own chrome sits on top of. */
+.memes__viewer-close {
+  position: absolute;
+  z-index: 1;
+  top: 6px;
+  inset-inline-start: 6px;
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border: var(--outline);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  color: var(--ink);
+  font: 900 17px/1 var(--font-display);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.memes__viewer-close:active {
+  transform: translateY(var(--lift-sm));
+  box-shadow: none;
+}
+
+@keyframes meme-viewer-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .memes__viewer { animation: none; }
 }
 
 @keyframes meme-deal { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
@@ -4716,6 +4940,11 @@ strong,
   .memes__fields h2 { font-size: 18px; }
   .memes__field textarea { min-height: 58px; font-size: 16px; }
   .meme-card--stage { width: min(100%, calc(50dvh * var(--meme-aspect))); }
+  /* Small enough that the title and the filter usually still share one line
+     inside what `--chrome-gutter` leaves; the wrap above covers when they
+     don't. */
+  .memes__gallery-head h2 { font-size: 17px; }
+  .memes__gallery-scroll { gap: 9px; }
   .memes__vote-button { min-height: 48px; padding: 5px; flex-direction: column; gap: 2px; }
   .memes__vote-button b { font-size: 12px; }
   .memes__result { grid-template-columns: auto 1fr; }
@@ -4836,7 +5065,18 @@ strong,
 @media (max-height: 560px) and (orientation: landscape) and (min-width: 600px) {
   .skribbl { height: 100%; overflow: hidden; }
   .skribbl__body {
-    grid-template-columns: minmax(100px, 0.35fr) minmax(280px, 1.55fr) minmax(180px, 0.65fr);
+    /* The three minimums still add up to 560px, exactly as before, so this
+       cannot overflow anywhere the previous split fitted. What changed is how
+       they are shared out.
+       0.35fr of this row resolves to less than the scoreboard's own minimum at
+       every width a phone has, so that column is always *exactly* its min —
+       and at 100px it was 30px short of holding what it contains. Rank, a 30px
+       avatar, the score and the gaps left the name flex 3px of a declared
+       48px, so `.skribbl__name`'s `max-width: 48px` below never came into
+       play and the scoreboard showed six ellipses and no names. 160px is what
+       lets that cap actually be reached; the drawing stage gives up 37px for
+       it and is still by far the largest region. */
+    grid-template-columns: minmax(160px, 0.35fr) minmax(240px, 1.55fr) minmax(160px, 0.65fr);
     grid-template-rows: minmax(0, 1fr);
   }
   .skribbl__side { max-height: none; }
@@ -5473,13 +5713,24 @@ strong,
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 16px;
+  /* Same reservation as `.overlay`: this is a fixed, edge-to-edge backdrop, so
+     on a notched phone in landscape a flat 16px puts the panel under the
+     camera housing. */
+  padding:
+    max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
 }
 
 .worms__picker-panel {
   width: 100%;
   max-width: 480px;
-  max-height: 85vh;
+  /* Bounded by the padded backdrop above, exactly like `.overlay__card`.
+     This was `85vh`, and `vh` is the one length that lies on a phone: iOS
+     resolves it against the *large* viewport, the one with the address bar
+     hidden, so with the bar showing the panel could be taller than the screen
+     and its head scrolled out of reach. Everything else here sizes from
+     `--app-visible-height` or a percentage of a padded parent for that reason. */
+  max-height: 100%;
   overflow-y: auto;
   background: var(--surface);
   border: 3px solid var(--ink);
@@ -5815,4 +6066,185 @@ strong,
 .bombit__bomb-btn {
   font-size: 15px;
   letter-spacing: 0.5px;
+}
+
+/* ===========================================================================
+ * Dirt Racing
+ *
+ * Two controls and one banner. The banner is the loud one, and deliberately:
+ * reversed steering is the only effect in the game a player cannot diagnose
+ * from what happened to them, because "the car turned" looks entirely normal.
+ * =========================================================================== */
+
+.dirt__pad {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* The wheel sits under the left thumb, the item button under the right — the
+ * same hand split as every other pad here. `touch-action: none` on both, or the
+ * browser steals the drag for a scroll. */
+.dirt__wheel {
+  position: absolute;
+  /* Physical `left`, not `inset-inline-start` — one of the documented
+   * exceptions to the logical-property rule (see CLAUDE.md). A steering wheel
+   * belongs under the same thumb whatever language the menus are in; using a
+   * logical property put the wheel on the right and the item button on the
+   * left the moment the UI was Hebrew, which is a different control layout for
+   * the same game. `.stick` and `.pad__btn` do the same, for the same reason. */
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(14px, env(safe-area-inset-bottom));
+  width: 178px;
+  height: 178px;
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  display: grid;
+  place-items: center;
+}
+
+.dirt__wheel-rim {
+  width: 132px;
+  height: 132px;
+  border-radius: 999px;
+  border: 9px solid rgba(255, 255, 255, 0.8);
+  background: rgba(20, 17, 15, 0.52);
+  position: relative;
+  /* Fast enough to feel connected to the thumb, slow enough to read as a
+   * wheel rather than a jump cut. Not a spring — the settle is in the input
+   * path, not here, so the drawn angle never lags what is being sent. */
+  transition: transform 60ms linear, border-color 120ms ease, background 120ms ease;
+}
+
+.dirt__wheel-spoke {
+  position: absolute;
+  /* Physical: this is the wheel's own drawing, not page layout. Mirroring it
+   * in RTL would rotate the spokes relative to the hub. */
+  left: 50%;
+  top: 50%;
+  width: 46px;
+  height: 8px;
+  margin-inline-start: -46px;
+  margin-top: -4px;
+  background: rgba(255, 255, 255, 0.8);
+  border-radius: 4px;
+  transform-origin: 100% 50%;
+}
+.dirt__wheel-spoke--left { transform: rotate(0deg); }
+.dirt__wheel-spoke--right { transform: rotate(180deg); }
+.dirt__wheel-spoke--down { transform: rotate(90deg); }
+
+.dirt__wheel-hub {
+  position: absolute;
+  inset-inline: 0;
+  top: 50%;
+  margin-inline: auto;
+  transform: translateY(-50%);
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 20px;
+  display: grid;
+  place-items: center;
+}
+
+/* Reversed: the wheel goes violet and grows a ⇄ in its hub. It does *not*
+ * turn the other way — see the note in `SteeringWheel.tsx`. */
+.dirt__wheel--reversed .dirt__wheel-rim {
+  border-color: var(--violet);
+  background: rgba(123, 108, 246, 0.35);
+}
+.dirt__wheel--reversed .dirt__wheel-spoke { background: var(--violet); }
+
+.dirt__use {
+  position: absolute;
+  /* Physical, and deliberately — see the note on `.dirt__wheel`. */
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(22px, env(safe-area-inset-bottom));
+  width: 108px;
+  height: 108px;
+  pointer-events: auto;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  border: 3px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  background: rgba(20, 17, 15, 0.6);
+  color: #fff;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 16px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.dirt__use:active { background: rgba(255, 210, 63, 0.7); color: var(--ink); text-shadow: none; }
+/* An empty slot is visibly dead rather than merely unresponsive — a button
+ * that does nothing when tapped reads as a bug. */
+.dirt__use--empty { opacity: 0.4; }
+.dirt__use--speed { background: rgba(124, 255, 107, 0.72); color: var(--ink); text-shadow: none; }
+.dirt__use--mine { background: rgba(255, 212, 71, 0.78); color: var(--ink); text-shadow: none; }
+.dirt__use--reverse { background: rgba(199, 125, 255, 0.78); color: var(--ink); text-shadow: none; }
+
+/* The banner. Over the arena, because at 430 units a second nobody is looking
+ * at the score rail. */
+.dirt__reversed {
+  position: absolute;
+  inset-inline: 0;
+  /* `inset-inline: 0` with `margin-inline: auto` centres in both directions.
+   * Never `inset-inline-start: 50%` plus a physical `translateX(-50%)` — the
+   * two disagree in Hebrew. See the layout notes in CLAUDE.md. */
+  margin-inline: auto;
+  width: max-content;
+  max-width: 92%;
+  top: 14%;
+  z-index: 5;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  background: var(--violet);
+  color: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: clamp(15px, 3.4vw, 26px);
+  letter-spacing: 0.04em;
+  animation: dirt-reversed-pulse 620ms ease-in-out infinite alternate;
+}
+
+.dirt__reversed-glyph { font-size: 1.3em; }
+
+@keyframes dirt-reversed-pulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.045); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dirt__reversed { animation: none; }
+  .dirt__wheel-rim { transition: none; }
+}
+
+/* Race position, in the score rail. Numerals with a fixed reading order, so
+ * they are pinned LTR in the JSX as well. */
+.dirt__pos {
+  min-width: 1.6em;
+  text-align: center;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--ink);
+  background: var(--paper-2, rgba(0, 0, 0, 0.06));
+  border-radius: 6px;
+  padding: 1px 5px;
+}
+
+.dirt__lap {
+  font-size: 11px;
+  opacity: 0.72;
 }

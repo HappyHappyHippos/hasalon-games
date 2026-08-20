@@ -20,7 +20,11 @@ export interface NetSim {
 }
 
 export function readNetSim(): NetSim | null {
-  if (!import.meta.env.DEV) return null;
+  // `import.meta.env.DEV` is also true under vitest, whose environment is
+  // `node` — so the DEV check alone is not enough to keep this from reading a
+  // `location` that does not exist. Without the second half, importing
+  // anything that reaches `socket.ts` throws at module load.
+  if (!import.meta.env.DEV || typeof location === 'undefined') return null;
 
   const raw = new URLSearchParams(location.search).get('netsim');
   if (!raw) return null;

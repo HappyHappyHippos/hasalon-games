@@ -20,7 +20,6 @@ way, and anyone over the limit spectates and rotates in next match.
 | **Gun Mayhem** | 2–6 | A platform fighter. Run, double-jump, shoot each other off the stage. Damage adds up and knockback scales with it. Nine stages, five weapons, bombs, crates. **This is the flagship** — it gets the most care. |
 | **Tank Trouble** | 2–8 | Top-down maze duel with shells that ricochet off the walls, which is mostly how you shoot yourself. |
 | **Achtung die Kurve** | 2–8 | Steer a curve, don't hit anything, be the last one going. Classic rules plus Curve Fever-style powerups. |
-| **Gravity Guy** | 2–8 | One button. Everyone runs right at the same speed; flipping gravity is the only thing you control. Elimination race. |
 | **Skribbl** | 2–8 | One player draws, everyone else guesses. Hebrew or English word lists. |
 | **Meme Machine** | 2–8 | Caption a template, then vote on everyone's but your own. |
 
@@ -115,9 +114,6 @@ inverted controls, and one that wipes every trail on the field.
 **Tank Trouble** — arrows or WASD to drive, <kbd>M</kbd> or <kbd>Space</kbd> to
 shoot. Shells bounce off walls and stay live for several seconds, so the main
 cause of death is your own last shot coming back.
-
-**Gravity Guy** — <kbd>Space</kbd>, <kbd>↑</kbd>, or tap anywhere. You cannot
-change speed; you flip which way is down. Last one still on the track wins.
 
 **Skribbl** — draw with a mouse or finger, type guesses in the chat. The drawer
 picks one of three words. Hebrew or English, set per room by the host.

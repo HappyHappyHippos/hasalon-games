@@ -1,6 +1,6 @@
 /**
  * A bitmask input sampler, shared by every game that drives with buttons —
- * Gun Mayhem, Tank Trouble and Gravity Guy. A game supplies its key map and a
+ * Gun Mayhem, Tank Trouble and Worms. A game supplies its key map and a
  * storage key; everything else about how input reaches the server is here, and
  * only here.
  *
@@ -92,6 +92,16 @@ export interface InputController {
   destroy(): void;
   /** Used by the touch controls; `down` toggles one button. */
   setButton(bit: number, down: boolean): void;
+  /**
+   * Set several bits at once to an already-shifted value — an analogue axis
+   * packed into the mask rather than a button.
+   *
+   * Deliberately *not* tap-latched. The latch exists so a button pressed and
+   * released inside one 16 ms sample still reaches the server; an axis position
+   * that existed for 16 ms is not something anybody meant, and latching one
+   * would leave the wheel pinned at whatever it brushed past.
+   */
+  setField(mask: number, value: number): void;
 }
 
 /** `changed` is false for the periodic repeat of an unchanged mask. */
@@ -171,6 +181,9 @@ export function attachBitInput({ buffer, keyBits, seqKey, onChange }: AttachOpti
     setButton(bit, down) {
       touchBits = down ? touchBits | bit : touchBits & ~bit;
       if (down) tapped |= bit;
+    },
+    setField(mask, value) {
+      touchBits = (touchBits & ~mask) | (value & mask);
     },
     destroy() {
       window.clearInterval(heartbeat);

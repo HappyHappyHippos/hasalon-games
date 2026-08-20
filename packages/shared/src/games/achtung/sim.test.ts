@@ -10,7 +10,7 @@ import {
   HOLE_MAX_GAP_TICKS,
 } from './constants';
 import { TICK_RATE } from '../../engine';
-import { stampCircle } from './grid';
+import { stampCircle, stampRadiusFor } from './grid';
 import { applyInput, createState, defaultConfig, stepTick } from './sim';
 import type { AchtungConfig, AchtungState, TurnDir } from './types';
 
@@ -161,6 +161,37 @@ describe('movement and collision', () => {
     expect(player.alive).toBe(false);
   });
 
+  it('lets a curve run alongside a line it is only just touching', () => {
+    // The close call this game is played for. The probes ride the head's own
+    // drawn outline rather than a ring outside it, so the separation that kills
+    // is the separation at which the two *drawn* lines meet — not the sliver of
+    // visible daylight before it, which is where a curve used to die.
+    const barrierY = 350;
+
+    const survives = (gap: number): boolean => {
+      const state = makeState(1, { powerupsEnabled: false });
+      skipCountdown(state);
+      // Somebody else's line, straight across the middle of the arena.
+      for (let x = 300; x < 700; x += 1) {
+        stampCircle(state.grid, x, barrierY, stampRadiusFor(BASE_RADIUS), 2);
+      }
+
+      const player = state.players[0]!;
+      player.x = 320;
+      player.y = barrierY - gap;
+      player.angle = 0;
+      player.untilHole = 100000;
+
+      for (let i = 0; i < 250 && player.alive && player.x < 680; i++) stepTick(state);
+      return player.alive;
+    };
+
+    // Drawn edge exactly against drawn edge.
+    expect(survives(2 * BASE_RADIUS)).toBe(true);
+    // Two units further in, which is a third of a line width of overlap.
+    expect(survives(2 * BASE_RADIUS - 2)).toBe(false);
+  });
+
   it('kills both curves in a head-on collision', () => {
     const state = makeState(2, { powerupsEnabled: false });
     skipCountdown(state);
@@ -226,11 +257,15 @@ describe('gaps', () => {
     player.trailBreaks.length = 0;
     player.lastStampTick = -1;
 
-    for (let i = 0; i < 40; i++) stepTick(state);
+    const ticks = HOLE_DURATION_TICKS * 2;
+    for (let i = 0; i < ticks; i++) stepTick(state);
 
     // One break for the first stamp, one for resuming after the gap.
     expect(player.trailBreaks.length).toBe(2);
-    expect(player.trailBuffer.length / 2).toBeGreaterThan(HOLE_DURATION_TICKS);
+    // Every tick stamps a point except the ones spent with the pen up.
+    expect(player.trailBuffer.length / 2).toBe(ticks - HOLE_DURATION_TICKS);
+    // And what resumed is a stroke rather than a lone dot.
+    expect(player.trailBreaks[1]).toBeLessThan(player.trailBuffer.length / 2 - 1);
   });
 });
 

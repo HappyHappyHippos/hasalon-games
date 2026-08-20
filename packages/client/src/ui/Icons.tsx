@@ -148,3 +148,61 @@ export function BellIcon(props: IconProps): JSX.Element {
     </svg>
   );
 }
+
+/**
+ * The running-total trophy, replacing the 🏆 emoji it used to be.
+ *
+ * Filled rather than stroked, unlike every icon above it: this one is drawn at
+ * roughly text size next to an 11px number, and a 2.2px outline on a 14px cup
+ * closes up into a blob. Flat shapes with one hard outline are the house style
+ * anyway — see the note at the top of `tokens.css`.
+ *
+ * Colours are its own (gold cup, ink outline) rather than `currentColor`,
+ * because the text beside it is deliberately `--ink-soft` and a grey trophy
+ * reads as a disabled one.
+ */
+export function TrophyIcon(props: IconProps): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      width="1em"
+      height="1em"
+      fill="none"
+      aria-hidden="true"
+      focusable="false"
+      {...props}
+    >
+      {/* Handles first, so the cup's outline sits on top of where they meet it. */}
+      <path
+        d="M6 5H3.6v2.2A4.4 4.4 0 0 0 8 11.6M18 5h2.4v2.2a4.4 4.4 0 0 1-4.4 4.4"
+        stroke="var(--ink)"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
+      {/* The cup: straight shoulders, then a bowl that tapers to the stem. */}
+      <path
+        d="M6 3h12v6.2a6 6 0 0 1-12 0Z"
+        fill="var(--yellow)"
+        stroke="var(--ink)"
+        strokeWidth="1.9"
+        strokeLinejoin="round"
+      />
+      {/* Stem and foot. */}
+      <path
+        d="M12 15.2v2.6"
+        stroke="var(--ink)"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+      />
+      <path
+        d="M7.6 21.2c0-1.9 1.5-3.4 3.4-3.4h2c1.9 0 3.4 1.5 3.4 3.4Z"
+        fill="var(--yellow)"
+        stroke="var(--ink)"
+        strokeWidth="1.9"
+        strokeLinejoin="round"
+      />
+      {/* One highlight, on the left the way every other light source here is. */}
+      <path d="M8.7 5.2v4a3.3 3.3 0 0 0 1.1 2.5" stroke="#fff" strokeWidth="1.4" strokeLinecap="round" opacity="0.65" />
+    </svg>
+  );
+}

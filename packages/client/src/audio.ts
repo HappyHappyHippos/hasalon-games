@@ -237,21 +237,6 @@ class Sfx {
     this.tone({ freq: 1400, to: 2200, duration: 0.035, gain: 0.05, type: 'square' });
   }
 
-  // -------------------------------------------------------------------------
-  // Gravity Guy
-  // -------------------------------------------------------------------------
-
-  /** The gravity flip — a swoop whose direction follows the one you flipped to. */
-  flip(down = true): void {
-    this.tone({
-      freq: down ? 700 : 300,
-      to: down ? 300 : 700,
-      duration: 0.14,
-      gain: 0.11,
-      type: 'triangle',
-    });
-  }
-
   /** Running into a wall. Blunter and shorter than `crash`. */
   crush(): void {
     this.tone({ freq: 180, to: 45, duration: 0.22, gain: 0.18, type: 'square' });

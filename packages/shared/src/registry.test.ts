@@ -31,7 +31,7 @@ describe('registry', () => {
     expect(ids.sort()).toEqual([
       'achtung',
       'bombit',
-      'gravity',
+      'dirt',
       'gunmayhem',
       'memes',
       'skribbl',

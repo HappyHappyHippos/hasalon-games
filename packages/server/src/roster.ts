@@ -38,6 +38,14 @@ export interface RoomPlayer {
   disconnectedAt: number | null;
   /** Seat in the running match, or -1 if not playing this match. */
   seat: number;
+  /**
+   * How far ahead of the room this player is in the queue for a seat.
+   *
+   * Only ever consulted when a room holds more people than the chosen game
+   * seats — see `pickSeats` and `recordBench`. Zero for everybody in a room
+   * that has never had to leave anyone out, which is most of them.
+   */
+  benchCredit: number;
   score: number;
   /**
    * Never reset between matches or game switches; the one exception is starting
@@ -98,6 +106,7 @@ export function createPlayer(client: Client, identity: Identity, colorIndex: num
     client,
     disconnectedAt: null,
     seat: -1,
+    benchCredit: 0,
     score: 0,
     totalScore: 0,
     voice: false,
@@ -131,6 +140,58 @@ export function connectedPlayers(players: readonly RoomPlayer[]): RoomPlayer[] {
 
 export function seatedCount(players: readonly RoomPlayer[]): number {
   return players.filter((p) => p.seat >= 0).length;
+}
+
+/**
+ * Which of the people who are in actually get a seat.
+ *
+ * A room holds eight and Gun Mayhem seats six, so a full room playing it has to
+ * leave two of them out. This decides which two: whoever the room owes most,
+ * ties broken by join order. It used to be the first six in join order flat,
+ * which meant the same two people were told they were only watching every
+ * single match, having readied up every single time — while the lobby told the
+ * room they would "rotate in next".
+ *
+ * Returned in the caller's order rather than in credit order: seat numbers
+ * decide spawn points and turn order, and there is no reason for those to churn
+ * just because the *selection* did.
+ */
+export function pickSeats(candidates: readonly RoomPlayer[], max: number): RoomPlayer[] {
+  if (candidates.length <= max) return [...candidates];
+  const chosen = new Set(
+    [...candidates].sort((a, b) => b.benchCredit - a.benchCredit).slice(0, max),
+  );
+  return candidates.filter((p) => chosen.has(p));
+}
+
+/**
+ * Settle up after a match: sitting one out earns a place in the queue, playing
+ * one spends it.
+ *
+ * Both halves are needed, and the second is the subtle one. *Clearing* a
+ * benched player's credit when they finally play — rather than paying one match
+ * off it — makes the queue only two deep: in a room of eight, four people take
+ * six seats forever while the other four trade the two spare ones between them.
+ * Docking everybody who played is what walks the whole room through.
+ *
+ * The credits are then shifted so the smallest is zero. That changes no
+ * ordering — only the differences are ever read — but it keeps the numbers from
+ * drifting across an evening, and it settles what a newcomer's zero *means*:
+ * level with whoever the room owes least, which is the back of the queue
+ * without being stuck behind it. A game that seats everybody present therefore
+ * leaves the queue exactly as it found it.
+ *
+ * Somebody watching who never readied settles up too. They were here and they
+ * did not play, which is all the next `pickSeats` needs to know.
+ */
+export function recordBench(players: readonly RoomPlayer[]): void {
+  const present = connectedPlayers(players);
+  if (present.length === 0) return;
+
+  for (const p of present) p.benchCredit += p.seat >= 0 ? -1 : 1;
+
+  const floor = Math.min(...present.map((p) => p.benchCredit));
+  for (const p of present) p.benchCredit -= floor;
 }
 
 /** Seats whose grace period has run out and should now be released. */

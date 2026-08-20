@@ -17,7 +17,7 @@
  * 3. **Freeze** — what a run of lost snapshots looks like: coasting and
  *    rejoining, or stopping dead and teleporting.
  *
- * Tank Trouble and Gravity Guy failed (1) outright before `RemoteBodies`
+ * Tank Trouble failed (1) outright before `RemoteBodies`
  * existed — a remote runner stepped up to 19 units in a frame where smooth
  * motion is 4.
  */
@@ -29,10 +29,8 @@ import { RemoteBodies } from '../game/RemoteBodies';
 // than one of them cannot coexist in a file.
 import * as gm from '@mg/shared/gunmayhem';
 import * as tk from '@mg/shared/tanks';
-import * as gv from '@mg/shared/gravity';
 import * as gmAdvance from '../games/gunmayhem/advance';
 import * as tkPredictor from '../games/tanks/predictor';
-import * as gvPredictor from '../games/gravity/predictor';
 import {
   CELLULAR,
   WIFI,
@@ -238,78 +236,12 @@ function tanks(link: Link, seed: number): Scenario {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Gravity Guy
-// ---------------------------------------------------------------------------
-
-function gravity(link: Link, seed: number): Scenario {
-  const state = gv.createState(
-    [
-      { id: 'p0', name: 'P0', colorIndex: 0 },
-      { id: 'p1', name: 'P1', colorIndex: 1 },
-    ],
-    gv.defaultConfig(),
-    seed,
-  );
-  const track = state.track;
-
-  const authored: Array<{ snap: unknown; serverAt: number }> = [];
-  const truth: Point[] = [];
-  let seq = 0;
-
-  for (let tick = 0; tick < TICKS; tick++) {
-    // No flip: the runner just runs. A flip is an event, same as a jump.
-    gv.applyInput(state, 'p1', ++seq, 0);
-    gv.stepTick(state);
-
-    const player = state.players.find((p) => p.seat === SEAT)!;
-    truth.push({ x: player.x, y: player.y });
-    if (tick % SNAPSHOT_EVERY === 0) {
-      authored.push({ snap: gv.makeSnapshot(state, []), serverAt: tick * TICK_MS });
-    }
-  }
-
-  const arrivals = ship(authored, link, rng(seed));
-
-  return {
-    name: 'Gravity Guy',
-    arrivals,
-    truth: (now) => truth[Math.round(now / TICK_MS)] ?? null,
-    steady(now) {
-      const newest = newestBy(arrivals, now);
-      if (!newest) return false;
-      const snap = newest.snap as import('@mg/shared/gravity').GravitySnapshot;
-      const player = snap.players.find((p) => p.s === SEAT);
-      return !!player && player.al === 1 && player.gr === 1;
-    },
-    draw(now, remotes) {
-      const newest = newestBy(arrivals, now);
-      if (!newest) return null;
-      const snap = newest.snap as import('@mg/shared/gravity').GravitySnapshot;
-      const player = snap.players.find((p) => p.s === SEAT);
-      if (!player) return null;
-      const body = gvPredictor.advanceRunner(
-        player,
-        track,
-        gvPredictor.ticksBehind(now, newest.serverAt),
-        player.sp,
-        snap.phase === 'playing',
-      );
-      if (!body) return null;
-      remotes.beginFrame(newest.serverAt);
-      return remotes.draw(SEAT, body.x, body.y, { vx: 0, vy: body.vy }, now);
-    },
-    stutterBudget: 8,
-  };
-}
-
-const BUILDERS = [gunMayhem, tanks, gravity];
+const BUILDERS = [gunMayhem, tanks];
 
 /** Per-game event thresholds, matching what each renderer constructs. */
 const THRESHOLD: Record<string, number> = {
   'Gun Mayhem': 260,
   'Tank Trouble': 90,
-  'Gravity Guy': 300,
 };
 
 function windowMs(): { fromMs: number; toMs: number } {
@@ -361,7 +293,7 @@ describe('remote playback across every real-time game', () => {
       const smoothed = new RemoteBodies(THRESHOLD[scenario.name]!);
       const withSmoothing = stutterRatio(frameDeltas(scenario, smoothed, FPS));
 
-      // And with smoothing off, which is what Tank Trouble and Gravity Guy
+      // And with smoothing off, which is what Tank Trouble
       // actually shipped. A threshold of -1 classifies every step as an event,
       // so nothing is ever absorbed — the behaviour being replaced.
       const never = new RemoteBodies(-1);

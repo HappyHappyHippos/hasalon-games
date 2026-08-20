@@ -248,6 +248,10 @@ const he = {
   playingThis: 'משחקים את זה',
   prevGame: 'המשחק הקודם',
   nextGame: 'המשחק הבא',
+  // The stage carousels inside a game's settings, which are a different
+  // carousel from the game picker above.
+  prevStage: 'הזירה הקודמת',
+  nextStage: 'הזירה הבאה',
 
   // Game names stay as they are — they are proper nouns in both languages.
   games: {
@@ -313,6 +317,21 @@ const he = {
         'מי שצובר הכי הרבה נקודות מנצח.',
       ],
     },
+    dirt: {
+      name: 'מרוץ עפר',
+      tagline: 'רק לאחוז בהגה. הגז מחזיק את עצמו',
+      controls: 'שמאלה וימינה להיגוי · רווח להפעלת פריט',
+      rules: [
+        'המכונית נוסעת לבד. כל מה שאתם עושים זה להגות.',
+        'עפר ודשא איטיים בהרבה מהמסלול, אז קיצור דרך בפינה כמעט תמיד עולה יותר ממה שהוא חוסך.',
+        'סלעים, עצים ומחסומים עוצרים אתכם במקום. כל מה שמעבר לשולי המסלול הוא אחד מהם.',
+        'סיבוב חד במהירות מוציא את הזנב. סחרור מהיר יותר מבלימה — אם תופסים אותו בזמן.',
+        'אפשר לדחוף. גם אתכם ידחפו, ובגלל זה הפינות הרחבות הן המעניינות.',
+        'עוברים על משטח כדי לאסוף פריט אחד: בוסט, מוקש להשאיר מאחור, או היפוך היגוי לכל השאר.',
+        'אם נתקעתם, מחזירים אתכם למסלול בכיוון הנכון. זה עולה לכם בזמן, לא במרוץ.',
+        'נקודות לפי מקום הסיום בכל מרוץ. הכי הרבה נקודות בסוף המרוץ האחרון מנצח.',
+      ],
+    },
     tanks: {
       name: 'אוי טנק!',
       tagline: 'לירות מעבר לפינה, בדרך כלל על עצמכם',
@@ -340,19 +359,6 @@ const he = {
         'אפשר לרדת מהפצצה שהנחתם, אבל אי אפשר לחזור דרכה.',
         'בארגזים מסתתרים שדרוגים: עוד פצצות, פיצוץ ארוך יותר, מהירות, מגן — ושניים שמתפוצצים דווקא לכולם חוץ מכם.',
         'השחקן האחרון ששורד מנצח בסיבוב. הולכים יחד — ואף אחד לא מנצח.',
-        'הראשון שמגיע למספר הסיבובים שנקבע מנצח במשחק.',
-      ],
-    },
-    gravity: {
-      name: 'הפוך על הפוך',
-      tagline: 'כפתור אחד. לרוץ זה חובה, ליפול זה בחירה',
-      controls: 'רווח, חץ למעלה, או נגיעה במסך כדי להפוך כיוון',
-      rules: [
-        'אתם רצים ימינה לבד ואי אפשר לעצור. כפתור אחד הופך את כיוון הכבידה.',
-        'הפיכת כיוון בזמן שאתם על משטח משגרת אתכם לצד השני. אין קפיצה.',
-        'נפילה לתוך בור או התנגשות בקיר מוציאה אתכם מהסיבוב.',
-        'כולם רצים באותה מהירות, והיא רק הולכת ועולה.',
-        'האחרון שממשיך לרוץ מנצח בסיבוב — או הראשון שמגיע לסוף המסלול.',
         'הראשון שמגיע למספר הסיבובים שנקבע מנצח במשחק.',
       ],
     },
@@ -419,6 +425,16 @@ const he = {
   blockDensityLabels: ['מעט', 'רגיל', 'מלא'],
   bombitKit: (bombs: number, range: number) => `${bombs} פצצות, טווח ${range}`,
   bombitEffects: { slow: 'אטיות', reverse: 'כיוונים הפוכים' },
+  dirtWheel: 'הגה',
+  dirtNoItem: 'אין פריט',
+  dirtItems: { speed: 'בוסט', mine: 'מוקש', reverse: 'היפוך' },
+  dirtReversed: 'ההיגוי הפוך!',
+  dirtLap: (lap: number) => `הקפה ${lap}`,
+  dirtTrack: 'מסלול',
+  dirtTrackNames: ['ערוץ הקניון', 'חורשת האורנים', 'המחצבה', 'מישור המלח'],
+  dirtLaps: 'הקפות למרוץ',
+  dirtRaces: 'מרוצים במשחק',
+  dirtPowerups: 'פריטים',
   setWeaponCrates: 'ארגזי נשק',
   setBombs: 'פצצות',
   setLivesEach: 'חיים לכל אחד',
@@ -447,6 +463,7 @@ const he = {
   wormsPickTarget: 'בחרו יעד על המפה',
   wormsSelectWeapon: 'בחירת נשק',
   wormsUnlimited: 'ללא הגבלה',
+  wormsAmmoLeft: (n: number) => `נשארו ${n}`,
   wormsWeaponNames: {
     bazooka: 'בזוקה',
     grenade: 'רימון יד',
@@ -551,6 +568,9 @@ const he = {
   memesDownload: 'הורדת המם',
   memesDownloading: 'מכינים תמונה…',
   memesDownloadFailed: 'לא הצלחנו להוריד את המם',
+  memesViewerOpen: 'להגדיל את המם',
+  memesViewerTitle: 'המם בגדול',
+  memesViewerClose: 'סגירה',
 
   telephoneWriteTime: 'זמן לכתיבה ולניחוש',
   telephoneDrawTime: 'זמן לציור',
@@ -589,11 +609,23 @@ const he = {
   telephoneShowPrompt: 'הציגו את המשפט',
   telephoneBrowseChains: 'הביטו שוב בשרשראות',
   telephoneBackToResults: 'חזרה לתוצאות',
+  telephonePrevChain: 'השרשרת הקודמת',
+  telephoneNextChain: 'השרשרת הבאה',
 
   colorNames: ['אדום', 'ירוק', 'כחול', 'צהוב', 'כתום', 'סגול', 'תכלת', 'ורוד'],
   colorTaken: (name: string) => `${name} — תפוס`,
-  hatNames: ['בלי כובע', 'קסקט', 'כתר', 'מגבעת', 'קרניים', 'סרט', 'הילה', 'גרבון'],
-  faceNames: ['רגיל', 'שמח', 'כועס', 'משקפיים', 'מסוחרר', 'ציקלופ'],
+  // One entry per `HATS` / `FACES`, in that order — `appearanceNames.test.ts`
+  // keeps them in step, because a short array reads as `undefined`.
+  hatNames: ['בלי כובע', 'קסקט', 'כתר', 'מגבעת', 'קרניים', 'סרט', 'הילה', 'גרבון',
+    'ברט', 'כובע יום הולדת', 'כובע בוקרים', 'כובע פיראטים', 'כובע חג', 'כובע סיום'],
+  faceNames: ['רגיל', 'שמח', 'כועס', 'משקפיים', 'מסוחרר', 'ציקלופ', 'מופתע', 'עייף', 'קורץ'],
+  prevHat: 'הכובע הקודם',
+  nextHat: 'הכובע הבא',
+  prevFace: 'הפרצוף הקודם',
+  nextFace: 'הפרצוף הבא',
+  prevColour: 'הצבע הקודם',
+  nextColour: 'הצבע הבא',
+  appearanceNow: (hat: string, face: string, colour: string) => `${colour}, ${face}, ${hat}`,
 
   // -------------------------------------------------------------------------
   // Errors and connection
@@ -827,6 +859,8 @@ const en: Dict = {
   playingThis: 'Playing this',
   prevGame: 'Previous game',
   nextGame: 'Next game',
+  prevStage: 'Previous stage',
+  nextStage: 'Next stage',
 
   games: {
     achtung: {
@@ -891,6 +925,21 @@ const en: Dict = {
         'The player with the most points wins.',
       ],
     },
+    dirt: {
+      name: 'Dirt Racing',
+      tagline: 'Hold the wheel. The throttle holds itself.',
+      controls: 'Left and right to steer · Space to use an item',
+      rules: [
+        'Your car drives itself. All you do is steer.',
+        'Dirt and grass are much slower than the track, so cutting a corner usually costs more than it saves.',
+        'Rocks, trees and barriers stop you dead. Everything past the edge of the course is one of them.',
+        'Turn hard at speed and the back steps out. A drift is faster than a scrub if you catch it.',
+        'Bumping works. So does being bumped, which is why the wide corners are the interesting ones.',
+        'Drive over a pad to pick up one item: a boost, a mine to drop behind you, or a reverse to inflict on everyone else.',
+        'Get stuck and you are put back on the track facing the right way. It costs you time, not the race.',
+        'Points by finishing position each race. Most points at the end of the last one wins.',
+      ],
+    },
     tanks: {
       name: 'Tank Trouble',
       tagline: 'Shoot round corners. Mostly at yourself.',
@@ -918,19 +967,6 @@ const en: Dict = {
         'You can step off your own bomb, but you cannot walk back through it.',
         'Crates hide powerups: more bombs, longer blast, more speed, a shield — and two that go off in everyone else’s hands.',
         'Last player alive wins the round. Go together and nobody does.',
-        'First to the target number of rounds wins the match.',
-      ],
-    },
-    gravity: {
-      name: 'Gravity Guy',
-      tagline: 'One button. Falling is optional; running is not.',
-      controls: 'Space, Up, or tap anywhere to flip',
-      rules: [
-        'You run to the right on your own and you cannot stop. One button flips gravity.',
-        'Flipping while stuck to a surface throws you at the other one. There is no jump.',
-        'Fall through a gap or run into a wall and you are out for the round.',
-        'Everyone runs at the same speed, and it keeps going up.',
-        'Last one running wins the round — or the first to reach the end of the track.',
         'First to the target number of rounds wins the match.',
       ],
     },
@@ -994,6 +1030,16 @@ const en: Dict = {
   blockDensityLabels: ['Sparse', 'Normal', 'Packed'],
   bombitKit: (bombs: number, range: number) => `${bombs} bombs, range ${range}`,
   bombitEffects: { slow: 'Slowed', reverse: 'Reversed controls' },
+  dirtWheel: 'Steering wheel',
+  dirtNoItem: 'No item',
+  dirtItems: { speed: 'Boost', mine: 'Mine', reverse: 'Reverse' },
+  dirtReversed: 'STEERING REVERSED',
+  dirtLap: (lap: number) => `Lap ${lap}`,
+  dirtTrack: 'Track',
+  dirtTrackNames: ['Canyon Run', 'Pine Grove', 'The Quarry', 'Salt Flat'],
+  dirtLaps: 'Laps per race',
+  dirtRaces: 'Races per match',
+  dirtPowerups: 'Powerups',
   setWeaponCrates: 'Weapon crates',
   setBombs: 'Bombs',
   setLivesEach: 'Lives each',
@@ -1022,6 +1068,7 @@ const en: Dict = {
   wormsPickTarget: 'Pick a spot on the map',
   wormsSelectWeapon: 'Select Weapon',
   wormsUnlimited: 'Unlimited',
+  wormsAmmoLeft: (n: number) => `${n} left`,
   wormsWeaponNames: {
     bazooka: 'Bazooka',
     grenade: 'Grenade',
@@ -1123,6 +1170,9 @@ const en: Dict = {
   memesDownload: 'Download meme',
   memesDownloading: 'Preparing image…',
   memesDownloadFailed: 'Could not download this meme',
+  memesViewerOpen: 'Open this meme bigger',
+  memesViewerTitle: 'Meme, full size',
+  memesViewerClose: 'Close',
 
   telephoneWriteTime: 'Writing and guessing time',
   telephoneDrawTime: 'Drawing time',
@@ -1161,11 +1211,21 @@ const en: Dict = {
   telephoneShowPrompt: 'Show the prompt',
   telephoneBrowseChains: 'Look back at the chains',
   telephoneBackToResults: 'Back to the results',
+  telephonePrevChain: 'Previous chain',
+  telephoneNextChain: 'Next chain',
 
   colorNames: ['Red', 'Green', 'Blue', 'Yellow', 'Orange', 'Purple', 'Cyan', 'Pink'],
   colorTaken: (name: string) => `${name} — taken`,
-  hatNames: ['No hat', 'Cap', 'Crown', 'Top hat', 'Horns', 'Headband', 'Halo', 'Beanie'],
-  faceNames: ['Normal', 'Happy', 'Angry', 'Shades', 'Dizzy', 'Cyclops'],
+  hatNames: ['No hat', 'Cap', 'Crown', 'Top hat', 'Horns', 'Headband', 'Halo', 'Beanie',
+    'Beret', 'Birthday hat', 'Cowboy hat', 'Pirate hat', 'Santa hat', 'Graduation cap'],
+  faceNames: ['Normal', 'Happy', 'Angry', 'Shades', 'Dizzy', 'Cyclops', 'Surprised', 'Tired', 'Wink'],
+  prevHat: 'Previous hat',
+  nextHat: 'Next hat',
+  prevFace: 'Previous face',
+  nextFace: 'Next face',
+  prevColour: 'Previous colour',
+  nextColour: 'Next colour',
+  appearanceNow: (hat: string, face: string, colour: string) => `${colour}, ${face}, ${hat}`,
 
   lostConnection: 'Lost the connection — trying again…',
   dismiss: 'Dismiss',

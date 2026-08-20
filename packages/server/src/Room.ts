@@ -32,6 +32,8 @@ import {
   expiredSeats,
   freeColor,
   nextHostId,
+  pickSeats,
+  recordBench,
   seatedCount,
   takenColors,
   type RoomPlayer,
@@ -125,6 +127,16 @@ export class Room {
   private lastPrivate = new Map<string, string>();
   /** When that snapshot was authored. Replayed with it, so it stays honest about its age. */
   private lastSnapshotAt = 0;
+  /**
+   * Who won the match that just finished, kept for `sendCatchUp`.
+   *
+   * `matchEnded` is a broadcast, so it only ever reaches sockets that were
+   * connected at the moment it went out. Somebody who reloads on the end screen
+   * gets `welcome` — which clears the winner — and nothing to put back, so the
+   * champion card said nobody won. Meaningless outside `matchOver`, and reset
+   * whenever a match begins.
+   */
+  private lastWinnerSeat: number | null = null;
   private readyNudgeUntil = 0;
 
   /**
@@ -141,8 +153,8 @@ export class Room {
       this.instance?.stepTick();
       return this.instance?.status() !== 'over';
     },
-    snapshot: () => this.broadcastSnapshot(),
-    finished: () => this.endMatch(this.instance?.winnerSeat() ?? null),
+    snapshot: (final) => this.broadcastSnapshot(final),
+    finished: () => this.endMatch(this.instance?.winnerSeat() ?? null, 'finished'),
     pauseLapsed: () => this.broadcastRoom(),
   });
 
@@ -175,7 +187,7 @@ export class Room {
     this.settingsByGame = {
       achtung: GAMES.achtung.defaultConfig(2),
       bombit: GAMES.bombit.defaultConfig(2),
-      gravity: GAMES.gravity.defaultConfig(2),
+      dirt: GAMES.dirt.defaultConfig(2),
       gunmayhem: GAMES.gunmayhem.defaultConfig(2),
       memes: GAMES.memes.defaultConfig(3),
       skribbl: GAMES.skribbl.defaultConfig(2),
@@ -371,7 +383,7 @@ export class Room {
     // Dropping below the minimum mid-match ends it rather than leaving one
     // person alone in the arena.
     if (this.phase === 'playing' && this.seatedCount() < this.module.meta.minPlayers) {
-      this.endMatch(null);
+      this.endMatch(null, 'short');
     } else {
       this.broadcastRoom();
     }
@@ -437,7 +449,19 @@ export class Room {
     this.broadcastRoom();
   }
 
+  /**
+   * Only a real change gets a broadcast, the same rule `setVoice` and
+   * `setListening` below already follow.
+   *
+   * Without it, `ready` was an amplifier: the answer to a `ready` message is a
+   * room view sent to *everyone*, and a client that re-sends its current state
+   * on each of those — which is the obvious way to write one, since `rematch`
+   * clears the flag and it does have to be re-sent then — feeds itself. A test
+   * bot written exactly that way took itself to `RATE_LIMITED` in under a
+   * second, with the room broadcasting to all eight players the whole way.
+   */
   setReady(player: RoomPlayer, ready: boolean): void {
+    if (player.ready === ready) return;
     player.ready = ready;
     this.broadcastRoom();
   }
@@ -526,9 +550,18 @@ export class Room {
     this.broadcastRoom();
   }
 
-  /** Ready players who will actually get a seat, in join order. */
+  /**
+   * Ready players who will actually get a seat, in join order.
+   *
+   * Which is not always all of them: a room holds `ROOM_MAX_PLAYERS` and a game
+   * seats `meta.maxPlayers`, and Gun Mayhem's six is the one place those differ.
+   * `pickSeats` is what stops that landing on the same two people every match.
+   */
   seatCandidates(): RoomPlayer[] {
-    return this.activePlayers.filter((p) => p.ready).slice(0, this.module.meta.maxPlayers);
+    return pickSeats(
+      this.activePlayers.filter((p) => p.ready),
+      this.module.meta.maxPlayers,
+    );
   }
 
   canStart(): boolean {
@@ -634,7 +667,12 @@ export class Room {
     // running; without this the old one would never be written down.
     this.closeMatch('restart');
 
+    // Seats are already handed out by the time either caller gets here, which
+    // is what makes this the one place that sees every match start.
+    recordBench(this.players);
+
     this.lastSnapshot = null;
+    this.lastWinnerSeat = null;
     this.legConfig = config;
     this.instance = this.module.create(
       seated.map((p) => ({ id: p.id, name: p.name, colorIndex: p.colorIndex })),
@@ -810,6 +848,7 @@ export class Room {
     this.clock.stop();
     this.clock.clearPause();
     this.phase = 'matchOver';
+    this.lastWinnerSeat = null;
     this.series.legWinners.push(null);
     this.series.skippedLegs.push(this.series.index);
     this.clearReady();
@@ -868,14 +907,23 @@ export class Room {
     this.instance.applyInput(player.id, raw);
   }
 
-  private broadcastSnapshot(): void {
+  /**
+   * `final` is the last snapshot of the match, and it is never droppable.
+   *
+   * `droppableSnapshots` says a snapshot is safe to skip for a backed-up socket
+   * because the next one restores everything it carried. The last one has no
+   * next one — and it is the only snapshot that ever carries Meme Machine's
+   * end-of-match gallery, so skipping it costs a connected player the gallery
+   * for good. `sendCatchUp` only helps somebody who reloads.
+   */
+  private broadcastSnapshot(final = false): void {
     if (!this.instance) return;
     this.lastSnapshot = this.instance.snapshot();
     this.lastSnapshotAt = serverNow();
 
     // Encoded once for the whole room rather than once per recipient.
     const encoded = encode({ t: 'snapshot', snap: this.lastSnapshot, st: this.lastSnapshotAt });
-    const droppable = this.module.meta.droppableSnapshots;
+    const droppable = this.module.meta.droppableSnapshots && !final;
     for (const p of this.players) p.client?.sendSnapshot(encoded, droppable);
 
     for (const p of this.players) this.sendPrivate(p);
@@ -918,15 +966,24 @@ export class Room {
     this.lastPrivate.delete(playerId);
   }
 
-  private endMatch(winnerSeat: number | null): void {
+  /**
+   * `why` comes from the caller, not from whether there is a winner.
+   *
+   * It used to be inferred — a null winner meant the room had dropped below the
+   * minimum — and that reads three games backwards. Skribbl, Meme Machine and
+   * Broken Telephone all crown nobody on a draw, so every tied match was
+   * written down as one that never went the distance. The dashboard turns that
+   * column into "the share that ran to a real conclusion", which meant the
+   * games most likely to end level were the ones reported as most often
+   * abandoned. Only two callers can reach here and each of them knows which it
+   * is, so neither has to guess.
+   */
+  private endMatch(winnerSeat: number | null, why: 'finished' | 'short'): void {
     this.clock.stop();
     this.clock.clearPause();
 
-    // A winner means it ran to a real conclusion; a null one here means the room
-    // dropped below the minimum and the match was ended for it. Distinguishing
-    // the two is what turns the games table into a verdict rather than a count.
     const winner = this.players.find((p) => p.seat === winnerSeat) ?? null;
-    this.closeMatch(winnerSeat === null ? 'short' : 'finished', winner);
+    this.closeMatch(why, winner);
 
     if (this.instance) {
       const scores = this.instance.scores();
@@ -944,6 +1001,7 @@ export class Room {
     }
 
     this.phase = 'matchOver';
+    this.lastWinnerSeat = winnerSeat;
     this.clearReady();
 
     // Before the broadcast, not after: `matchEnded` carries a room view, and
@@ -1041,7 +1099,33 @@ export class Room {
    * one person reconnecting would eat another person's kill effects.
    */
   sendCatchUp(player: RoomPlayer): void {
-    if (this.phase !== 'playing' || !this.instance) return;
+    if (!this.instance) return;
+
+    // A finished match is worth replaying too, and used to be replayed to
+    // nobody. Everything the end screen shows lives in two messages that were
+    // both broadcasts — the winner in `matchEnded`, and for Meme Machine the
+    // entire gallery in the final snapshot, which is the only snapshot that
+    // ever carries it. Reload on that screen and you got `welcome`, which
+    // clears the winner, and then silence: no champion, no gallery, no way to
+    // look back through the match you just played.
+    //
+    // Deliberately not the `matchStarted` path below. That message means a
+    // match is running, and the client resets its HUD to a countdown on it.
+    if (this.phase === 'matchOver') {
+      player.client?.send({
+        t: 'matchEnded',
+        room: this.view(),
+        winnerSeat: this.lastWinnerSeat,
+        resumed: true,
+      });
+      if (this.lastSnapshot) {
+        player.client?.send({ t: 'snapshot', snap: this.lastSnapshot, st: this.lastSnapshotAt });
+      }
+      this.sendPrivate(player);
+      return;
+    }
+
+    if (this.phase !== 'playing') return;
     // `resumed` so the client can tell this from the broadcast that goes out
     // when a match really starts — see the note on the message in protocol.ts.
     player.client?.send({ t: 'matchStarted', room: this.view(), resumed: true });

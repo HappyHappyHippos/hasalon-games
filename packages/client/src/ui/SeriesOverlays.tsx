@@ -37,7 +37,7 @@ function SeriesTable({ room, mySeat }: { room: RoomView; mySeat: number }): JSX.
   const standings = seriesStandings(room);
 
   return (
-    <ol className="standings">
+    <ol className="standings standings--series">
       {standings.map((player, index) => (
         <li key={player.id} className={player.seat === mySeat ? 'standings--me' : undefined}>
           <span className="standings__rank">{index + 1}</span>

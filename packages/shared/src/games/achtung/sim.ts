@@ -29,6 +29,7 @@ import {
   createGrid,
   probeMove,
   stampCircle,
+  stampRadiusFor,
 } from './grid';
 import { activeEffects, applyPowerup, rollNextPickupDelay, spawnPickup } from './powerups';
 import { makeRng, nextInt, nextRange } from './rng';
@@ -371,7 +372,7 @@ function stepPlaying(state: AchtungState): void {
     p.angle = m.angle;
 
     if (p.drawing) {
-      stampCircle(state.grid, p.x, p.y, p.radius, p.seat + 1);
+      stampCircle(state.grid, p.x, p.y, stampRadiusFor(p.radius), p.seat + 1);
       // Record the point for the client. A skipped tick (gap, ghost, first
       // stamp of a round) means the pen was lifted, so the stroke restarts.
       if (p.lastStampTick !== state.tick - 1) {

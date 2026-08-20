@@ -347,10 +347,19 @@ function approach(value: number, target: number, maxDelta: number): number {
 }
 
 /**
- * Calculates knockback impulse magnitude based on target damage percentage and weapon knockback multiplier.
- * Impulse starts at full strength at 0% damage, and extra pushback per damage % grows at 50% of the previous rate.
+ * How hard a hit throws someone: a base shove plus `KB_PER_DAMAGE` for every
+ * point of damage they have already taken, scaled by the weapon.
+ *
+ * `KB_PER_DAMAGE` is applied whole. It used to be halved here, which is the
+ * kind of thing only arithmetic notices: `constants.ts` says the value was
+ * raised from 9.5 to 13.6 so a stock lasts ~30% fewer hits (issue #32), and
+ * halving it shipped an effective 6.8 — weaker than the tuning #32 replaced.
+ * The ratio test in `sim.test.ts` could not see it either, because it patches
+ * `KB_PER_DAMAGE` on both sides of the comparison and any constant factor
+ * cancels out. Scale knockback by moving the constant, never by folding a
+ * multiplier in here.
  */
 export function calculateKnockback(damage: number, kbMul: number = 1): number {
-  return (KB_BASE + damage * (KB_PER_DAMAGE * 0.5)) * kbMul;
+  return (KB_BASE + damage * KB_PER_DAMAGE) * kbMul;
 }
 

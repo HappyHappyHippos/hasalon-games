@@ -66,7 +66,7 @@ export function StageCarousel({ value, disabled, onChange }: Props): JSX.Element
           className="stage-carousel__btn stage-carousel__btn--prev"
           onClick={handlePrev}
           disabled={disabled}
-          aria-label="Previous Stage"
+          aria-label={t.prevStage}
         >
           <svg
             width="24"
@@ -120,7 +120,7 @@ export function StageCarousel({ value, disabled, onChange }: Props): JSX.Element
           className="stage-carousel__btn stage-carousel__btn--next"
           onClick={handleNext}
           disabled={disabled}
-          aria-label="Next Stage"
+          aria-label={t.nextStage}
         >
           <svg
             width="24"

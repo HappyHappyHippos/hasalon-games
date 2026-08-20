@@ -94,7 +94,7 @@ export function Controls({
           type="button"
           className="worms__weapon-trigger"
           onClick={onOpenPicker}
-          aria-label="Select weapon"
+          aria-label={t.wormsSelectWeapon}
         >
           <WormsWeaponIcon id={currentWeapon} size={24} />
           <span className="worms__weapon-trigger-ammo">

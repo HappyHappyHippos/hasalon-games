@@ -10,6 +10,7 @@ import {
   BOMB_SIZE,
   CRATE_SIZE,
   GM_POWERUPS,
+  KO_DAMAGE,
   PISTOL_RELOAD_TICKS,
   PLAYER_HALF_H,
   PLAYER_HALF_W,
@@ -572,7 +573,16 @@ export class GunMayhemRenderer {
       // Out of the game, or waiting to drop back in.
       const gone = player.rt > 0 || player.k <= 0;
       if (gone) {
+        // Whichever body it is, let go of it. A death and the respawn that
+        // follows are the server placing someone outright, and a smoother still
+        // holding where they died spends the first frames of the next life
+        // sliding out of the grave — with a velocity from the moment of death
+        // deciding whether it even counts as an event. Tank Trouble and Gravity
+        // Guy both forget the seat here; this was the one that did not, so it
+        // was the one where dying on the spot (a 100% KO, rather than being
+        // thrown off the stage) respawned you with a slide across the arena.
         if (isLocal) this.releaseLocalBody();
+        else this.remotes.forget(player.s);
         continue;
       }
 
@@ -616,6 +626,7 @@ export class GunMayhemRenderer {
       }
       if (!body) {
         if (isLocal) this.releaseLocalBody();
+        else this.remotes.forget(player.s);
         continue;
       }
 
@@ -635,7 +646,7 @@ export class GunMayhemRenderer {
         // its own. A jump, a knockback or a landing all arrive as a velocity
         // step no guess could have contained; sliding into those is what made
         // jumping feel broken. `RemoteBodies` owns that distinction — Tank
-        // Trouble and Gravity Guy need exactly the same rule.
+        // Trouble needs exactly the same rule.
         const drawn = this.remotes.draw(
           player.s,
           body.x,
@@ -1008,7 +1019,11 @@ export class GunMayhemRenderer {
     const { ctx } = this.stage;
     const damage = player.d;
     // Damage colours from white through yellow to red as you get launchier.
-    const heat = Math.min(1, damage / 160);
+    // Against `KO_DAMAGE`, because that is where a life actually ends: ramping
+    // to a hard-coded 160 meant the reddest anyone ever got was the 0.625 of
+    // the way up that 99% reached, so "one more hit" and "halfway there" were
+    // painted nearly the same colour.
+    const heat = Math.min(1, damage / KO_DAMAGE);
     const color = `rgb(255, ${Math.round(255 - heat * 190)}, ${Math.round(255 - heat * 225)})`;
 
     // Above the head, and above the hat: below the feet it would sit inside

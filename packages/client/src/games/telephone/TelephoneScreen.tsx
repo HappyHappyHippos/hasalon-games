@@ -8,6 +8,7 @@ import { socket } from '../../net/socket';
 import { sfx } from '../../audio';
 import { IDENTITY_VIEW, MIN_ZOOM, type StageView } from '../../game/canvasView';
 import { Button } from '../../ui/Button';
+import { telephoneAlbum } from './albumBus';
 import { Avatar } from '../../ui/Avatar';
 import { MatchEndOverlay, Paused } from '../../ui/MatchOverlays';
 import { InkSurface } from '../skribbl/InkSurface';
@@ -297,14 +298,36 @@ function ChainMessage({ step, room, index, mySeat }: { step: TelephoneRevealStep
  * **stops following the moment somebody scrolls up**, for the same reason a
  * chat app does: the next message must not steal the thing you were reading.
  */
-function Reveal({ room, mySeat }: { room: RoomView; mySeat: number }): JSX.Element {
+/**
+ * The reveal, and — once the match is over — the same view browsing the album.
+ *
+ * `browse` is the chain the player has paged to. During the match the steps
+ * come from `revealed`, which holds the chain being read out; afterwards
+ * `revealed` is empty and they come from `album`, which is on the final
+ * snapshot for exactly this.
+ */
+function Reveal({
+  room,
+  mySeat,
+  browse,
+}: {
+  room: RoomView;
+  mySeat: number;
+  browse?: { index: number; onStep: (delta: number) => void };
+}): JSX.Element {
   const t = useT();
   const view = useStore((state) => state.hud.telephone);
   const chatRef = useRef<HTMLDivElement>(null);
   const followRef = useRef(true);
-  const complete = view?.phase === 'chainComplete';
-  const revealed = view?.revealed.length ?? 0;
-  const chainIndex = view?.revealChainIndex ?? 0;
+  // Accumulated from the reveal rather than sent again at the end — see
+  // `albumBus.ts` for the size arithmetic that rules the snapshot out.
+  const album = telephoneAlbum();
+  const browsing = browse !== undefined && album.length > 0;
+  const complete = browsing || view?.phase === 'chainComplete';
+  const steps = browsing ? (album[browse.index] ?? []) : (view?.revealed ?? []);
+  const revealed = steps.length;
+  const chainIndex = browsing ? browse.index : (view?.revealChainIndex ?? 0);
+  const chainCount = browsing ? album.length : (view?.revealChainCount ?? 0);
 
   // A new chain starts at the top and follows again.
   useEffect(() => { followRef.current = true; }, [chainIndex]);
@@ -323,8 +346,16 @@ function Reveal({ room, mySeat }: { room: RoomView; mySeat: number }): JSX.Eleme
   return (
     <section className="telephone__album" aria-live="polite">
       <header className="telephone__album-head">
-        <p className="eyebrow">{t.telephoneChain(view.revealChainIndex + 1, view.revealChainCount)}</p>
+        <p className="eyebrow">{t.telephoneChain(chainIndex + 1, chainCount)}</p>
         <h1>{complete ? t.telephoneFullLineage : t.telephoneRevealTitle}</h1>
+        {browse && chainCount > 1 && (
+          <div className="telephone__album-nav">
+            <Button variant="ghost" size="sm" aria-label={t.telephonePrevChain}
+              disabled={browse.index === 0} onClick={() => browse.onStep(-1)}>‹</Button>
+            <Button variant="ghost" size="sm" aria-label={t.telephoneNextChain}
+              disabled={browse.index >= chainCount - 1} onClick={() => browse.onStep(1)}>›</Button>
+          </div>
+        )}
       </header>
       <div
         className="telephone__chat"
@@ -334,7 +365,7 @@ function Reveal({ room, mySeat }: { room: RoomView; mySeat: number }): JSX.Eleme
           followRef.current = chat.scrollHeight - chat.scrollTop - chat.clientHeight < 90;
         }}
       >
-        {view.revealed.map((step, index) => <ChainMessage key={`${view.revealChainIndex}-${index}`} step={step} room={room} index={index} mySeat={mySeat} />)}
+        {steps.map((step, index) => <ChainMessage key={`${chainIndex}-${index}`} step={step} room={room} index={index} mySeat={mySeat} />)}
         {complete && <p className="telephone__complete">{t.telephoneChainComplete}</p>}
       </div>
     </section>
@@ -351,8 +382,9 @@ export function TelephoneScreen({ room, mySeat }: { room: RoomView; mySeat: numb
   // back through the chains is exactly what a room wants to do next — so the
   // card steps aside rather than burying it.
   const [browsing, setBrowsing] = useState(false);
+  const [browseIndex, setBrowseIndex] = useState(0);
   const over = room.phase === 'matchOver';
-  useEffect(() => { if (!over) setBrowsing(false); }, [over]);
+  useEffect(() => { if (!over) { setBrowsing(false); setBrowseIndex(0); } }, [over]);
 
   const seconds = Math.ceil((view?.phaseTicks ?? 0) / TICK_RATE);
   const contributing = view?.phase === 'contributing';
@@ -376,7 +408,7 @@ export function TelephoneScreen({ room, mySeat }: { room: RoomView; mySeat: numb
 
   return (
     <main className={`telephone telephone--${phaseClass}`}>
-      {!over && !drawing && (
+      {!over && (
         <header className="telephone__top">
           <div>
             {clock}
@@ -394,13 +426,16 @@ export function TelephoneScreen({ room, mySeat }: { room: RoomView; mySeat: numb
             ? <div className="telephone__waiting"><h2>{t.telephoneSpectating}</h2></div>
             : view?.phase === 'intro'
               ? <div className="telephone__intro"><span aria-hidden="true">☎</span><h1>{t.telephoneIntro}</h1></div>
-              : <Reveal room={room} mySeat={mySeat} />}
+              : (
+              <Reveal
+                room={room}
+                mySeat={mySeat}
+                browse={browsing
+                  ? { index: browseIndex, onStep: (delta) => setBrowseIndex((i) => i + delta) }
+                  : undefined}
+              />
+            )}
       </div>
-
-      {/* The clock floats over the sheet while drawing, so the board can have
-          the whole screen. Top-start: the fixed gear/pause/maximize buttons own
-          the other corner. */}
-      {drawing && <div className="telephone__float-clock">{clock}</div>}
 
       {room.paused && room.phase === 'playing' && <Paused room={room} spectating={mySeat < 0} />}
       {over && !browsing && (

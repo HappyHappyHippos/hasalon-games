@@ -46,6 +46,10 @@ export interface HudPlayer {
   range?: number;
   /** Bomb It: explosions this seat can still walk away from. */
   shields?: number;
+  /** Dirt Racing: lap, race position, and whatever is in the boot. */
+  lap?: number;
+  position?: number;
+  item?: string;
 }
 
 /**
@@ -461,7 +465,13 @@ export const useStore = create<AppState>((set) => ({
 }));
 
 // Handy when poking at lobby/connection state from the browser console.
-if (import.meta.env.DEV) {
+//
+// The `typeof window` guard is not defensive padding: `import.meta.env.DEV` is
+// true under vitest too, and the test environment is `node`, so without it
+// merely *importing* this module throws `window is not defined`. That reaches
+// much further than the store — anything importing a screen imports this — and
+// it is why the client registry had no test until now.
+if (import.meta.env.DEV && typeof window !== 'undefined') {
   (window as unknown as { mgStore: typeof useStore }).mgStore = useStore;
 }
 

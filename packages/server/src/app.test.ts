@@ -510,7 +510,20 @@ describe('match', () => {
         m.data !== null &&
         Array.isArray((m.data as { c?: unknown }).c) &&
         (m.data as { c: unknown[] }).c.length > 0,
-      35_000,
+      // Generous on purpose. Which worm is active first comes from the match
+      // seed, which is `Math.random()` in `Room.beginMatch` and cannot be
+      // pinned from out here, so this wait has two normal durations: ~10s when
+      // the opening turn belongs to the client holding fire, and ~33s when it
+      // has to wait for the turn to come back round. Measured over six runs
+      // each, both before and after the `setReady` guard, the split is roughly
+      // 2:1 between them.
+      //
+      // The budget was 35s. Against a 33s path that is two seconds of margin,
+      // and it spent them the moment the machine had anything else to do — the
+      // failure showed up only in a full-suite run, never on its own, which is
+      // exactly what a marginal timeout looks like and exactly what makes it
+      // get blamed on whatever was committed last.
+      55_000,
     );
     const holding = setInterval(() => {
       shooter.send({ t: 'input', i: { seq: seq++, bits: IN_FIRE } });
@@ -1007,7 +1020,7 @@ describe('roulette series', () => {
     const stop = spiral(clients);
 
     try {
-      const drawn = await reveal(host!, { rounds: 2, pool: ['achtung', 'gravity'] });
+      const drawn = await reveal(host!, { rounds: 2, pool: ['achtung', 'tanks'] });
       const lineup = drawn.room.series!.lineup;
       expect(lineup).toHaveLength(2);
       expect(new Set(lineup).size).toBe(2);
