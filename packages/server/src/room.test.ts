@@ -416,6 +416,91 @@ describe('Room match gating', () => {
     expect(players.filter((p) => p.seat < 0)).toHaveLength(2);
     room.dispose();
   });
+
+  /**
+   * The two people a full room cannot seat are not the same two people every
+   * match. Join order used to decide it outright, so in a room of eight playing
+   * Gun Mayhem the last to arrive readied up all evening and watched all
+   * evening — while the lobby told them they would rotate in next.
+   */
+  it('seats whoever sat out last time when the room outgrows the game', () => {
+    const room = new Room('TEST');
+    room.setGame('gunmayhem');
+
+    const players = Array.from({ length: 8 }, (_, i) =>
+      room.addPlayer(fakeClient(), identity(`P${i}`, i))!,
+    );
+    const readyAll = (): void => {
+      for (const p of players) room.setReady(p, true);
+    };
+    const watching = (): string[] => players.filter((p) => p.seat < 0).map((p) => p.name);
+
+    readyAll();
+    expect(room.start()).toBe(true);
+    expect(watching()).toEqual(['P6', 'P7']);
+
+    room.rematch();
+    readyAll();
+    expect(room.start()).toBe(true);
+    // The two who waited are in, and two who have just played step out.
+    expect(watching()).toEqual(['P4', 'P5']);
+
+    room.rematch();
+    readyAll();
+    expect(room.start()).toBe(true);
+    expect(watching()).toEqual(['P2', 'P3']);
+
+    // The whole room goes round, not just the tail of it. Paying a match off
+    // the credit of everyone who played is what reaches the two who joined
+    // first — clearing the benched player's credit instead leaves P0 and P1
+    // playing every match forever.
+    room.rematch();
+    readyAll();
+    expect(room.start()).toBe(true);
+    expect(watching()).toEqual(['P0', 'P1']);
+
+    // Four matches, four pairs, and back to where it started.
+    room.rematch();
+    readyAll();
+    expect(room.start()).toBe(true);
+    expect(watching()).toEqual(['P6', 'P7']);
+
+    // Seat numbers still follow join order, so nobody's spawn moves about
+    // because the selection did.
+    const seated = players.filter((p) => p.seat >= 0);
+    expect(seated.map((p) => p.seat)).toEqual([0, 1, 2, 3, 4, 5]);
+    room.dispose();
+  });
+
+  it('leaves the queue alone when the game seats everybody', () => {
+    // Bomb It seats all eight, so a match of it owes nobody anything and must
+    // not shuffle who is next in line for a Gun Mayhem seat.
+    const room = new Room('TEST');
+    room.setGame('gunmayhem');
+    const players = Array.from({ length: 8 }, (_, i) =>
+      room.addPlayer(fakeClient(), identity(`P${i}`, i))!,
+    );
+    const readyAll = (): void => {
+      for (const p of players) room.setReady(p, true);
+    };
+
+    readyAll();
+    expect(room.start()).toBe(true);
+    expect(players.filter((p) => p.seat < 0).map((p) => p.name)).toEqual(['P6', 'P7']);
+
+    room.rematch();
+    room.setGame('bombit');
+    readyAll();
+    expect(room.start()).toBe(true);
+    expect(players.every((p) => p.seat >= 0)).toBe(true);
+
+    room.rematch();
+    room.setGame('gunmayhem');
+    readyAll();
+    expect(room.start()).toBe(true);
+    expect(players.filter((p) => p.seat < 0).map((p) => p.name)).toEqual(['P4', 'P5']);
+    room.dispose();
+  });
 });
 
 describe('Room pause', () => {

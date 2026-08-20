@@ -38,3 +38,17 @@ memoises. A mid-round joiner gets the arena from the first frame they receive.
 Tank-vs-tank shoving is the one place prediction is not exact — the predictor
 only knows the others as of the last snapshot. `PositionSmoother` absorbs it;
 don't add rollback for a shove.
+
+**The thumbstick is a travel control, not a heading control** (`stickBits.ts`).
+Point it behind the tank and the tank *reverses* toward it — it aims its tail at
+the stick and drives `back` — rather than swinging the hull through a half
+circle, which in a corridor a tank barely fits down is how you die in the corner
+you were leaving. Three latches, not two: drive, turn, and which end of the tank
+is doing the aiming. That third one has a deliberately wide hysteresis band
+(115°/65°) because it decides which way the tank *travels*, and a thumb resting
+near the crossover would otherwise rock it back and forth on the spot.
+
+`TouchPad.tsx:STICK_BITS` has to list every bit the stick can emit, `IN_BACK`
+included. It is the set the pointer diff walks, so a bit missing from it is
+never pressed *and never released*. The desktop keys are unaffected: they were
+always fwd/back/turn, and there is no "opposite direction" to interpret.

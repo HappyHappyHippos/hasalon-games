@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type JSX, type PointerEvent } from 'react';
-import { IN_FIRE, IN_FWD, IN_TLEFT, IN_TRIGHT } from '@mg/shared/tanks';
+import { IN_BACK, IN_FIRE, IN_FWD, IN_TLEFT, IN_TRIGHT } from '@mg/shared/tanks';
 import { feed } from '../../net/feed';
 import { Thumbstick, type StickVector } from '../../ui/Thumbstick';
 import { useT } from '../../strings';
@@ -23,8 +23,14 @@ function currentAngle(mySeat: number): number {
   return snap.players.find((p) => p.s === mySeat)?.a ?? 0;
 }
 
-/** Every bit the stick owns, so releasing it can clear them in one pass. */
-const STICK_BITS = [IN_FWD, IN_TLEFT, IN_TRIGHT];
+/**
+ * Every bit the stick owns, so releasing it can clear them in one pass.
+ *
+ * `IN_BACK` is one of them — the stick reverses when it points behind the tank.
+ * A bit missing from here is not simply un-driveable: the diff below only ever
+ * looks at bits in this list, so it would also never be *released*.
+ */
+const STICK_BITS = [IN_FWD, IN_BACK, IN_TLEFT, IN_TRIGHT];
 
 /**
  * On-screen controls: thumbstick to drive, one big trigger to fire.

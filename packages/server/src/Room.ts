@@ -32,6 +32,8 @@ import {
   expiredSeats,
   freeColor,
   nextHostId,
+  pickSeats,
+  recordBench,
   seatedCount,
   takenColors,
   type RoomPlayer,
@@ -547,9 +549,18 @@ export class Room {
     this.broadcastRoom();
   }
 
-  /** Ready players who will actually get a seat, in join order. */
+  /**
+   * Ready players who will actually get a seat, in join order.
+   *
+   * Which is not always all of them: a room holds `ROOM_MAX_PLAYERS` and a game
+   * seats `meta.maxPlayers`, and Gun Mayhem's six is the one place those differ.
+   * `pickSeats` is what stops that landing on the same two people every match.
+   */
   seatCandidates(): RoomPlayer[] {
-    return this.activePlayers.filter((p) => p.ready).slice(0, this.module.meta.maxPlayers);
+    return pickSeats(
+      this.activePlayers.filter((p) => p.ready),
+      this.module.meta.maxPlayers,
+    );
   }
 
   canStart(): boolean {
@@ -654,6 +665,10 @@ export class Room {
     // `restart` and a series leg both begin a match while one is already
     // running; without this the old one would never be written down.
     this.closeMatch('restart');
+
+    // Seats are already handed out by the time either caller gets here, which
+    // is what makes this the one place that sees every match start.
+    recordBench(this.players);
 
     this.lastSnapshot = null;
     this.lastWinnerSeat = null;

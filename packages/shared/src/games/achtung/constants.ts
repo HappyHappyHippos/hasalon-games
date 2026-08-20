@@ -19,26 +19,37 @@ export const ARENA_HEIGHT = 700;
 // Movement
 // ---------------------------------------------------------------------------
 
-/** Units per second. One tick of travel is BASE_SPEED * DT ≈ 2.03 units. */
-export const BASE_SPEED = 122;
+/** Units per second. One tick of travel is BASE_SPEED * DT ≈ 1.73 units. */
+export const BASE_SPEED = 103.7;
 
 /**
  * Radians per second. Turning circle radius = BASE_SPEED / BASE_TURN_RATE ≈ 38u.
  *
- * This has to move whenever BASE_SPEED does. Left where it was, a faster curve
- * gets a *wider* turning circle and the game feels less responsive rather than
- * more — the opposite of what raising the speed was for.
+ * This has to move whenever BASE_SPEED does, by the same factor. Left where it
+ * was, a faster curve gets a *wider* turning circle and the game feels less
+ * responsive rather than more — the opposite of what raising the speed was for.
+ * Moving both together keeps the circle the same *size* while the whole game
+ * plays out slower, which is what "slower" is normally asked for.
  */
-export const BASE_TURN_RATE = 3.25;
+export const BASE_TURN_RATE = 2.76;
 
-/** Half the line width, so a curve is 6.0 units across. */
-export const BASE_RADIUS = 3.0;
+/** Half the line width, so a curve is 7.2 units across. */
+export const BASE_RADIUS = 3.6;
 
 // ---------------------------------------------------------------------------
 // Collision probing (see grid.ts)
 // ---------------------------------------------------------------------------
 
-/** How far beyond the head circle the collision probes sit. */
+/**
+ * Clearance between a probe and the trail the same player just stamped.
+ *
+ * Taken out of the *stamp*, not added to the probe: the grid trail is laid down
+ * at `radius - PROBE_EPS` while the probes ride the head's drawn outline at
+ * exactly `radius` (see `grid.ts:stampRadiusFor`). Both halves of the pair have
+ * to move together — the geometry only needs their difference, and it needs it
+ * to clear one cell diagonal (0.707) so a probe sitting on the rim of its own
+ * last stamp cannot quantise into a filled cell.
+ */
 export const PROBE_EPS = 0.75;
 
 /** Probes fan out this far either side of the heading. Must stay <= 90°. */
@@ -67,12 +78,17 @@ export const HOLE_MAX_GAP_TICKS = 115;
  * How many ticks a hole lasts.
  *
  * The head travels `HOLE_DURATION_TICKS * BASE_SPEED * DT` with the pen up —
- * 32.5 units at normal speed — and the stamped circle at each end eats one
- * radius of that, leaving ~26.5 units of daylight to thread at radius 3.0.
+ * 39.7 units at normal speed — and the stamped circle at each end eats one
+ * radius of that, leaving ~32.5 units of daylight to thread at radius 3.6.
  * Comfortably over four line widths, which is what it takes to go through at an
  * angle rather than only dead-on.
+ *
+ * It is four line widths that matters, not the tick count, so this moves
+ * whenever the speed or the radius does: it was 16 at 122 u/s and radius 3.0,
+ * and a slower, fatter curve threading the same *number of ticks* of gap would
+ * have had barely half the daylight it needs.
  */
-export const HOLE_DURATION_TICKS = 16;
+export const HOLE_DURATION_TICKS = 23;
 /** No gap can start during the first moments of a round. */
 export const HOLE_FIRST_MIN_TICKS = 30;
 

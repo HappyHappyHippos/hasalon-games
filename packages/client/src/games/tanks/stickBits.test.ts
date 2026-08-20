@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { IN_FWD, IN_TLEFT, IN_TRIGHT } from '@mg/shared/tanks';
+import { IN_BACK, IN_FWD, IN_TLEFT, IN_TRIGHT } from '@mg/shared/tanks';
 import { newStickState, stickToTankBits } from './stickBits';
 
 const CENTRE = { x: 0, y: 0 };
@@ -32,12 +32,58 @@ describe('stickToTankBits', () => {
     expect(bits & IN_FWD).toBe(IN_FWD);
   });
 
-  it('pointing 180 degrees away turns and, if large, drives', () => {
-    // Facing +x, stick pushed along -x: fully behind, still no reverse bit —
-    // the stick can only ever ask for a turn plus forward.
+  it('pointing 180 degrees away reverses instead of turning around', () => {
+    // Facing +x, stick pushed along -x: fully behind, so the tank backs up
+    // rather than swinging the hull through half a circle. The tail is already
+    // pointed at the stick, so there is nothing left to steer.
     const bits = stickToTankBits({ x: -1, y: 0 }, 0, newStickState());
-    expect(bits & (IN_TLEFT | IN_TRIGHT)).not.toBe(0);
-    expect(bits & IN_FWD).toBe(IN_FWD);
+    expect(bits & IN_BACK).toBe(IN_BACK);
+    expect(bits & IN_FWD).toBe(0);
+    expect(bits & (IN_TLEFT | IN_TRIGHT)).toBe(0);
+  });
+
+  it('steers the tail toward a stick pushed behind and off to one side', () => {
+    // Facing +x, stick behind and toward +y (screen "down"). Backing into it
+    // needs the tail — currently pointing -x — swung toward +y, which is a
+    // counter-clockwise turn of the hull.
+    const behindAndDown = Math.PI - 0.6;
+    const bits = stickToTankBits(
+      { x: Math.cos(behindAndDown), y: Math.sin(behindAndDown) },
+      0,
+      newStickState(),
+    );
+    expect(bits & IN_BACK).toBe(IN_BACK);
+    expect(bits & IN_TLEFT).toBe(IN_TLEFT);
+    expect(bits & IN_TRIGHT).toBe(0);
+  });
+
+  it('reverses without driving when the push is small', () => {
+    const bits = stickToTankBits({ x: -0.2, y: 0 }, 0, newStickState());
+    expect(bits & (IN_FWD | IN_BACK)).toBe(0);
+  });
+
+  it('does not flip between forward and reverse around the crossover', () => {
+    const state = newStickState();
+    const at = (offset: number): number =>
+      stickToTankBits({ x: Math.cos(offset), y: Math.sin(offset) }, 0, state);
+
+    // A right angle out is still forward — the reverse latch takes more.
+    expect(at(Math.PI / 2) & IN_FWD).toBe(IN_FWD);
+    // Past REVERSE_ON, it backs up.
+    expect(at(2.1) & IN_BACK).toBe(IN_BACK);
+    // Drifting back to a right angle keeps it backing up rather than lurching
+    // forward the moment the thumb wanders.
+    expect(at(Math.PI / 2) & IN_BACK).toBe(IN_BACK);
+    // Well inside REVERSE_OFF, forward again.
+    expect(at(0.5) & IN_FWD).toBe(IN_FWD);
+  });
+
+  it('judges every fresh push from scratch', () => {
+    const state = newStickState();
+    stickToTankBits({ x: -1, y: 0 }, 0, state);
+    expect(stickToTankBits(CENTRE, 0, state)).toBe(0);
+    // Straight ahead after a release drives forward, not backward.
+    expect(stickToTankBits({ x: 1, y: 0 }, 0, state) & IN_FWD).toBe(IN_FWD);
   });
 
   it('turns right when the target heading is clockwise of current', () => {
@@ -89,13 +135,14 @@ describe('stickToTankBits', () => {
     expect(stickToTankBits(CENTRE, 0, state)).toBe(0);
   });
 
-  it('never reports both turn directions at once', () => {
+  it('never reports two opposed bits at once', () => {
     const state = newStickState();
     for (let i = 0; i <= 40; i += 1) {
       const angle = (i / 40) * Math.PI * 2;
       const currentAngle = (i / 7) * Math.PI * 2 - Math.PI;
       const bits = stickToTankBits({ x: Math.cos(angle), y: Math.sin(angle) }, currentAngle, state);
       expect(bits & IN_TLEFT && bits & IN_TRIGHT).toBeFalsy();
+      expect(bits & IN_FWD && bits & IN_BACK).toBeFalsy();
     }
   });
 });

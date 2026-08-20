@@ -16,24 +16,33 @@ import {
  *
  * Each tick a player stamps a filled circle at their *current* head position,
  * then the next tick probes *ahead* of the new head before stamping again.
- * The probes sit at `radius + PROBE_EPS` from the head centre, fanned across
- * PROBE_ARC either side of the heading, and each one is swept from where it
- * was last tick to where it is now (so a fast curve cannot tunnel through a
- * thin one).
+ * The probes sit on the head's own outline — exactly `radius`, the same number
+ * the renderer uses for half the line width — fanned across PROBE_ARC either
+ * side of the heading, and each one is swept from where it was last tick to
+ * where it is now (so a fast curve cannot tunnel through a thin one).
  *
- * The key property: a probe is always at least `radius + PROBE_EPS` from the
- * head centre, while the previous stamp's centre is one tick of travel
- * *behind* the head. So every probe stays outside the circles the player
+ * The key property: a probe is always `PROBE_EPS` further out than the trail
+ * this player stamps, because the stamp is laid at `radius - PROBE_EPS` (see
+ * `stampRadiusFor`). So every probe stays outside the circles the player
  * stamped moments ago and a curve never kills itself just by moving forward.
  * That holds as long as the arc stays under 90° — beyond that the probes swing
  * sideways and eventually backwards into the player's own line.
+ *
+ * That clearance used to be added to the probe instead of taken out of the
+ * stamp, which is arithmetically the same for self-collision and *not* the same
+ * for everything else: it put the lethal radius `PROBE_EPS` outside the drawn
+ * head, so a curve died with a visible sliver of daylight still between it and
+ * the line, and a graze that looked survivable never was. This way round the
+ * error runs the other way — you may clip the outer `PROBE_EPS` of a drawn
+ * line, and drive right up to a wall — which is the side a party game should be
+ * wrong on, and the same call `bombit/constants.ts:PLAYER_HIT_HALF` makes.
  *
  * The one case the geometry does not cover is a *shrinking* radius: old fat
  * stamps can reach past the new, closer probes. `SELF_GRACE_TICKS` in the sim
  * handles that by ignoring self-owned hits for a moment after any radius change.
  *
- * Because stamping is not delayed, the grid matches exactly what the client
- * draws — no phantom trail near the heads.
+ * Because stamping is not delayed, the grid matches what the client draws to
+ * within that one clearance — no phantom trail near the heads.
  */
 
 export const CELL_EMPTY = 0;
@@ -46,6 +55,17 @@ export function createGrid(): Uint8Array {
 
 export function clearGrid(grid: Uint8Array): void {
   grid.fill(CELL_EMPTY);
+}
+
+/**
+ * How wide a curve of this radius is *in the grid*, as opposed to on screen.
+ *
+ * Every stamp goes through here. The gap between this and the radius the probes
+ * ride is the whole of the self-collision guarantee, so a caller that stamps a
+ * raw radius silently kills the player who stamped it.
+ */
+export function stampRadiusFor(radius: number): number {
+  return radius - PROBE_EPS;
 }
 
 /** Stamp a filled circle of trail. Silently clips at the arena edges. */
@@ -128,8 +148,10 @@ export function probeMove(
   nextRadius: number,
   ignoreOwner: number,
 ): number {
-  const prevReach = prevRadius + PROBE_EPS;
-  const nextReach = nextRadius + PROBE_EPS;
+  // The head's own outline, not a ring around it — the clearance that keeps a
+  // probe off this player's last stamp is taken out of `stampRadiusFor`.
+  const prevReach = prevRadius;
+  const nextReach = nextRadius;
   // PROBE_RAYS is an odd number >= 3, so this always includes a ray dead ahead.
   const stepAngle = (2 * PROBE_ARC) / (PROBE_RAYS - 1);
 

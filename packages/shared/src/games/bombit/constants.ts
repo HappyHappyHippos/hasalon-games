@@ -66,13 +66,30 @@ export const ALIGN_EPS = 0.05;
 // Bombs
 // ---------------------------------------------------------------------------
 
-export const FUSE_TICKS = seconds(2.4);
+/**
+ * How long a bomb sits before it goes off.
+ *
+ * The floor is the escape promise every map makes (`maps.test.ts`): the
+ * furthest any spawn sits from a tile off both its axes is three tiles, which
+ * the slowest the game can make a player (level zero, slowed) walks in 1.4s. At
+ * 1.8s that still leaves four tenths of a second of reaction in the worst case
+ * a second round can deal, and about a second at ordinary speed.
+ */
+export const FUSE_TICKS = seconds(1.8);
 /** How long a tile burns. Long enough to read, short enough to run past. */
 export const FLAME_TICKS = seconds(0.5);
 
 export const START_BOMBS = 1;
 export const MAX_BOMBS = 8;
-export const START_RANGE = 2;
+/**
+ * Blast arms, in tiles, before anyone has picked up a `range`.
+ *
+ * Three rather than two: at two, an opening bomb reaches one crate in each
+ * direction and the first half-minute is spent widening your own pocket. The
+ * spawn escape is unaffected at any range — it is off both of the spawn's axes
+ * by construction, which is the whole reason `validateMap` insists on it.
+ */
+export const START_RANGE = 3;
 export const MAX_RANGE = 8;
 export const MAX_SHIELDS = 3;
 
@@ -101,14 +118,20 @@ export const POWERUP_CHANCE = 0.36;
  * where nobody grew is a round of two people poking at each other from across
  * the map. The two that reach across the arena are rare: they are the ones that
  * decide a fight rather than tilt it.
+ *
+ * Bombs and speed lead the field. They are the two that change how you *play* a
+ * board — more bombs is more shapes you can trap somebody in, more speed is
+ * more of the board you can be on — where range mostly makes the same play
+ * reach further, and it already starts a tile higher (`START_RANGE`). Together
+ * the two are a shade under three drops in five, up from a shade under half.
  */
 export const POWERUP_WEIGHTS: Record<string, number> = {
-  bomb: 26,
-  range: 26,
-  speed: 18,
-  shield: 12,
-  slow: 9,
-  reverse: 9,
+  bomb: 38,
+  range: 24,
+  speed: 32,
+  shield: 11,
+  slow: 8,
+  reverse: 8,
 };
 
 export const SLOW_DURATION = seconds(7);
