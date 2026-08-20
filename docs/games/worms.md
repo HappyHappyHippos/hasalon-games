@@ -210,8 +210,8 @@ that as the weapon being unreliable rather than as physics.
 - Touch and desktop controls use translucent fills with no backdrop blur. They
   must remain readable over every stage, but should never hide a worm beneath
   an opaque control panel.
-- **The camera is a local, per-client spring**, and that is a deliberate
-  divergence from `gravity/camera.ts`, whose whole point is being identical
+- **The camera is a local, per-client spring**, deliberately unlike a game
+  where everyone shares one window and the camera has to be identical
   everywhere. Free pan and zoom is a feature here and two players looking at
   different parts of the battlefield is the intended state.
 - The camera transform **composes on top of `CanvasStage`**, which is

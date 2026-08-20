@@ -5,9 +5,9 @@ import { TICK_MS } from '@mg/shared';
  * time sits between the instant a snapshot was authored and now.
  *
  * This existed four times, under two names and with three clamping behaviours —
- * `ticksBehind` in Gun Mayhem (clamped), Tank Trouble and Gravity Guy
- * (unclamped), and `ticksAhead` in Achtung (clamped), for the identical
- * quantity. Grepping for one found three of the four.
+ * `ticksBehind` in Gun Mayhem (clamped) and Tank Trouble (unclamped), and
+ * `ticksAhead` in Achtung (clamped), for the identical quantity. Grepping for
+ * one found three of the four.
  *
  * **Fractional, and that matters.** Rounding to a whole number pins every drawn
  * position to a tick boundary, so a body advances in jumps of one tick of
@@ -19,10 +19,10 @@ import { TICK_MS } from '@mg/shared';
  *
  * `maxTicks` is left to the caller rather than baked in, because where each
  * game clamps is a real difference and not an accident: Gun Mayhem and Achtung
- * clamp here, while Tank Trouble and Gravity Guy pass the raw value on and
- * clamp inside `advanceTank`/`advanceRunner`, which need the whole/fractional
- * split anyway. Both are correct; hiding the choice inside this function is
- * what made the four copies drift.
+ * clamp here, while Tank Trouble passes the raw value on and clamps inside
+ * `advanceTank`, which needs the whole/fractional split anyway. Both are
+ * correct; hiding the choice inside this function is what made the copies
+ * drift.
  */
 export function ticksBehind(
   now: number,

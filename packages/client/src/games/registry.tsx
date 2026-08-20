@@ -33,9 +33,6 @@ import { TanksSettings } from './tanks/Settings';
 import { WormsBoxArt } from './worms/BoxArt';
 import { WormsScreen } from './worms/WormsScreen';
 import { WormsSettings } from './worms/Settings';
-import { GravityBoxArt } from './gravity/BoxArt';
-import { GravityScreen } from './gravity/GravityScreen';
-import { GravitySettings } from './gravity/Settings';
 import { TelephoneBoxArt } from './telephone/BoxArt';
 import { TelephoneScreen } from './telephone/TelephoneScreen';
 import { TelephoneSettings } from './telephone/Settings';
@@ -107,13 +104,6 @@ export const CLIENT_GAMES: Record<GameId, ClientGame> = {
     Settings: BombitSettings,
     accent: 'var(--orange)',
   },
-  gravity: {
-    meta: GAMES.gravity.meta,
-    BoxArt: GravityBoxArt,
-    Screen: GravityScreen,
-    Settings: GravitySettings,
-    accent: 'var(--yellow)',
-  },
   telephone: {
     meta: GAMES.telephone.meta,
     BoxArt: TelephoneBoxArt,
@@ -140,7 +130,6 @@ export const CLIENT_GAME_IDS: GameId[] = [
   'worms',
   'tanks',
   'achtung',
-  'gravity',
   'skribbl',
   'telephone',
   'memes',

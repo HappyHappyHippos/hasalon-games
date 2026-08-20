@@ -1,6 +1,6 @@
 /**
  * A bitmask input sampler, shared by every game that drives with buttons —
- * Gun Mayhem, Tank Trouble and Gravity Guy. A game supplies its key map and a
+ * Gun Mayhem, Tank Trouble and Worms. A game supplies its key map and a
  * storage key; everything else about how input reaches the server is here, and
  * only here.
  *

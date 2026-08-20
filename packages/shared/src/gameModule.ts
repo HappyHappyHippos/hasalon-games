@@ -1,6 +1,5 @@
 import type { AchtungConfig, AchtungSnapshot } from './games/achtung/types';
 import type { BombitConfig, BombitSnapshot } from './games/bombit/types';
-import type { GravityConfig, GravitySnapshot } from './games/gravity/types';
 import type { GunMayhemConfig, GunMayhemSnapshot } from './games/gunmayhem/types';
 import type { MemesConfig, MemesSnapshot } from './games/memes/types';
 import type { SkribblConfig, SkribblSnapshot } from './games/skribbl/types';
@@ -12,7 +11,6 @@ import type { WormsConfig, WormsSnapshot } from './games/worms/types';
 export type GameId =
   | 'achtung'
   | 'bombit'
-  | 'gravity'
   | 'gunmayhem'
   | 'memes'
   | 'skribbl'
@@ -28,7 +26,6 @@ export type GameId =
 export type GameConfig =
   | AchtungConfig
   | BombitConfig
-  | GravityConfig
   | GunMayhemConfig
   | MemesConfig
   | SkribblConfig
@@ -38,7 +35,6 @@ export type GameConfig =
 export type GameSnapshot =
   | AchtungSnapshot
   | BombitSnapshot
-  | GravitySnapshot
   | GunMayhemSnapshot
   | MemesSnapshot
   | SkribblSnapshot

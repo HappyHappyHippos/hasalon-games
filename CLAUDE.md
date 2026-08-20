@@ -12,8 +12,7 @@ this is the flagship game and should get the most care), **Bomb It** (2–8 play
 grid-based bomber with kickable bombs), **Worms** (up to
 8-player turn-based artillery on destructible terrain), **Tank Trouble** (up to
 8-player top-down maze duel with ricocheting shells), **Achtung die Kurve** (up
-to 8-player curve/Snake game), **Gravity Guy** (up to 8-player one-button
-auto-run elimination race), **Skribbl** (up to 8-player draw and guess, Hebrew
+to 8-player curve/Snake game), **Skribbl** (up to 8-player draw and guess, Hebrew
 or English), **Broken Telephone** (2–8 player draw/guess chains) and **Meme Machine**.
 
 npm workspaces monorepo. Git repo with `origin` at
@@ -302,13 +301,13 @@ same-input-log, byte-identical-output test — if you touch tick logic, that
 test is the one that catches drift.
 
 **Remote bodies are smoothed through one shared rule** (`game/RemoteBodies.ts`),
-used by Gun Mayhem, Tank Trouble and Gravity Guy. Every frame re-extrapolates
+used by Gun Mayhem and Tank Trouble. Every frame re-extrapolates
 everyone from the newest snapshot, so on the frame a new one lands their drawn
 position steps by however wrong the last guess was — thirty times a second. The
 rule has two halves and both matter: **slide across ordinary drift**, and
 **snap on a velocity event** (a jump, a landing, a gravity flip, a tank hitting
 a wall). Smoothing the events too is what made jumping feel floaty in Gun
-Mayhem; smoothing nothing is what made Tank Trouble and Gravity Guy stutter —
+Mayhem; smoothing nothing is what made Tank Trouble stutter —
 Tanks had per-seat smoothers wired up but passed `jumped` as
 `mine && predictor.resynced`, so for every remote seat it was a no-op.
 
@@ -375,7 +374,6 @@ things that cost real debugging time to learn.
 - **Gun Mayhem** — [`docs/games/gunmayhem.md`](docs/games/gunmayhem.md)
 - **Worms** — [`docs/games/worms.md`](docs/games/worms.md)
 - **Tank Trouble** — [`docs/games/tanks.md`](docs/games/tanks.md)
-- **Gravity Guy** — [`docs/games/gravity.md`](docs/games/gravity.md)
 - **Skribbl** — [`docs/games/skribbl.md`](docs/games/skribbl.md)
 - **Broken Telephone** — [`docs/games/telephone.md`](docs/games/telephone.md)
 - **Meme Machine** — no separate notes; `packages/shared/src/games/memes/` is
@@ -408,7 +406,7 @@ resize/letterbox transform, screen↔arena coordinate mapping),
 
 Each game's `Renderer.ts` owns a `requestAnimationFrame` loop calling
 `stage.begin()` then drawing; `predictor.ts` (Gun Mayhem, Tank Trouble and
-Gravity Guy — Achtung predicts inline in its renderer) does the reconciliation
+Achtung predicts inline in its renderer) does the reconciliation
 math. The renderer instance is constructed once per mount in a `useEffect` with
 an empty dep array (see the HMR gotcha below before "fixing" that pattern).
 

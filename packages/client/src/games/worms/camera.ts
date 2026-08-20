@@ -1,14 +1,13 @@
 /**
  * The camera: where you are looking, and how it gets there.
  *
- * **This is a local, per-client spring, and that is a deliberate divergence
- * from `gravity/camera.ts`.** Gravity Guy's camera must be identical on every
- * screen — everyone shares one window onto the track — so it is derived from
- * the snapshot and the synced clock and explicitly *not* from a smoother. Worms
- * is the opposite game: free pan and zoom is a feature, map-targeting weapons
- * require it, and two players looking at different parts of the battlefield is
- * the intended state. So this one eases, locally, and no other client is
- * affected by where you point it.
+ * **This is a local, per-client spring, and that is deliberate.** A game where
+ * everyone shares one window onto the world has to derive its camera from the
+ * snapshot and the synced clock, never from a smoother, or two screens disagree
+ * about what is visible. Worms is the opposite game: free pan and zoom is a
+ * feature, map-targeting weapons require it, and two players looking at
+ * different parts of the battlefield is the intended state. So this one eases,
+ * locally, and no other client is affected by where you point it.
  *
  * The follow order is the whole design: the shot is more interesting than the
  * shooter, the crater is more interesting than the shot, and once the dust has

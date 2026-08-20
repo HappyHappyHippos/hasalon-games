@@ -49,7 +49,6 @@ const TRACKS: Record<MusicTrack, string> = {
   achtung: '/music/achtung.mp3',
   memes: '/music/memes.mp3',
   tanks: '/music/tanks.mp3',
-  gravity: '/music/gravity.mp3',
   // ── ASSET SWAP POINT ──────────────────────────────────────────────────────
   // Bomb It borrows Gun Mayhem's bed until a track of its own is sourced. This
   // deliberately points at a file that *exists*: an entry pointing at a missing

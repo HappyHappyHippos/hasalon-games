@@ -567,7 +567,6 @@ class GameSocket {
       // sends this. `undefined` is "no room yet", which clears the same way.
       case 'achtung':
       case 'bombit':
-      case 'gravity':
       case 'gunmayhem':
       case 'tanks':
       case undefined:
@@ -638,13 +637,6 @@ class GameSocket {
         }));
         break;
       case 'tanks':
-        players = snap.players.map((p) => ({
-          seat: p.s,
-          score: p.p,
-          alive: p.al === 1,
-        }));
-        break;
-      case 'gravity':
         players = snap.players.map((p) => ({
           seat: p.s,
           score: p.p,

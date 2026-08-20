@@ -16,7 +16,6 @@ import {
 const ALL: GameId[] = [
   'achtung',
   'bombit',
-  'gravity',
   'gunmayhem',
   'memes',
   'skribbl',
@@ -106,14 +105,14 @@ describe('drawLineup', () => {
   });
 
   it('only ever draws from what it was given', () => {
-    const pool: GameId[] = ['tanks', 'gravity', 'achtung'];
+    const pool: GameId[] = ['tanks', 'bombit', 'achtung'];
     for (let run = 0; run < 100; run++) {
       for (const id of drawLineup(pool, 3)) expect(pool).toContain(id);
     }
   });
 
   it('clamps to the size of the hat rather than repeating or failing', () => {
-    const pool: GameId[] = ['tanks', 'gravity'];
+    const pool: GameId[] = ['tanks', 'bombit'];
     expect(drawLineup(pool, 6)).toHaveLength(2);
     expect(new Set(drawLineup(pool, 6)).size).toBe(2);
   });
@@ -126,21 +125,21 @@ describe('drawLineup', () => {
   });
 
   it('does not mutate the list it was handed', () => {
-    const pool: GameId[] = ['tanks', 'gravity', 'achtung', 'memes'];
+    const pool: GameId[] = ['tanks', 'bombit', 'achtung', 'memes'];
     const before = [...pool];
     drawLineup(pool, 3);
     expect(pool).toEqual(before);
   });
 
   it('is a pure function of the random source', () => {
-    const pool: GameId[] = ['achtung', 'gravity', 'gunmayhem', 'memes'];
+    const pool: GameId[] = ['achtung', 'bombit', 'gunmayhem', 'memes'];
     // Fisher-Yates walks i = 3, 2, 1 and picks j = floor(random * (i + 1)), so
     // an all-zero source swaps each tail element with index 0 in turn:
-    //   [achtung, gravity, gunmayhem, memes]
-    //   i=3 -> [memes, gravity, gunmayhem, achtung]
-    //   i=2 -> [gunmayhem, gravity, memes, achtung]
-    //   i=1 -> [gravity, gunmayhem, memes, achtung]
-    expect(drawLineup(pool, 4, scripted([0]))).toEqual(['gravity', 'gunmayhem', 'memes', 'achtung']);
+    //   [achtung, bombit, gunmayhem, memes]
+    //   i=3 -> [memes, bombit, gunmayhem, achtung]
+    //   i=2 -> [gunmayhem, bombit, memes, achtung]
+    //   i=1 -> [bombit, gunmayhem, memes, achtung]
+    expect(drawLineup(pool, 4, scripted([0]))).toEqual(['bombit', 'gunmayhem', 'memes', 'achtung']);
     // Just-under-1 leaves every element where it is.
     expect(drawLineup(pool, 4, scripted([0.999]))).toEqual(pool);
   });

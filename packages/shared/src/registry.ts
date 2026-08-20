@@ -1,7 +1,6 @@
 import type { GameId, GameModule } from './gameModule';
 import { achtungModule } from './games/achtung/module';
 import { bombitModule } from './games/bombit/module';
-import { gravityModule } from './games/gravity/module';
 import { gunMayhemModule } from './games/gunmayhem/module';
 import { memesModule } from './games/memes/module';
 import { skribblModule } from './games/skribbl/module';
@@ -18,8 +17,9 @@ import { wormsModule } from './games/worms/module';
  * `tsc` finds all of them, and CLAUDE.md's "Adding a game" list has the ones it
  * cannot.
  *
- * Adding one also means bumping `series.ts:MAX_SERIES_ROUNDS`: a roulette run's
- * legs are distinct, so the ceiling is exactly the number of entries below.
+ * Adding or removing one also means moving `series.ts:MAX_SERIES_ROUNDS`: a
+ * roulette run's legs are distinct, so the ceiling is exactly the number of
+ * entries below. `series.test.ts` checks that rather than trusting it.
  *
  * Two things that are deliberately *not* here, because having a second copy is
  * how they drift:
@@ -31,7 +31,6 @@ import { wormsModule } from './games/worms/module';
 export const GAMES: Record<GameId, GameModule> = {
   achtung: achtungModule,
   bombit: bombitModule,
-  gravity: gravityModule,
   gunmayhem: gunMayhemModule,
   memes: memesModule,
   skribbl: skribblModule,

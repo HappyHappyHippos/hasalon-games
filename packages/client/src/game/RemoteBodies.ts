@@ -1,9 +1,9 @@
 /**
  * Drawing other players at the present without making them step once a snapshot.
  *
- * Every game that extrapolates remote players — Gun Mayhem, Tank Trouble,
- * Gravity Guy — has the same artifact and needs the same two-part rule, so it
- * lives here once rather than three times.
+ * Every game that extrapolates remote players — Gun Mayhem and Tank Trouble —
+ * has the same artifact and needs the same two-part rule, so it lives here once
+ * rather than twice.
  *
  * The artifact: each frame re-extrapolates everyone from the *newest* snapshot
  * (see `gunmayhem/advance.ts` for why nothing is accumulated across frames). So

@@ -800,7 +800,7 @@ describe('Room series', () => {
   it('draws once the unfit game is out of the hat', () => {
     const { room, players } = lobby(7, {
       rounds: 5,
-      pool: ['tanks', 'achtung', 'gravity', 'skribbl', 'memes'],
+      pool: ['tanks', 'achtung', 'bombit', 'skribbl', 'memes'],
     });
     for (let run = 0; run < 50; run++) {
       expect(room.unfitPoolGames()).toEqual([]);
@@ -825,7 +825,7 @@ describe('Room series', () => {
   });
 
   it('clamps the lineup to the games actually available', () => {
-    const { room } = lobby(3, { rounds: 6, pool: ['tanks', 'gravity'] });
+    const { room } = lobby(3, { rounds: 6, pool: ['tanks', 'bombit'] });
     expect(room.startSeries()).toBe(true);
     expect(room.seriesView!.lineup).toHaveLength(2);
     room.dispose();
@@ -890,7 +890,7 @@ describe('Room series', () => {
   it('advances to the next leg when the break elapses, keeping seats stable', () => {
     vi.useFakeTimers();
     try {
-      const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+      const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'bombit', 'achtung'] });
       expect(room.startSeries()).toBe(true);
       beginDrawnLeg(room);
 
@@ -916,7 +916,7 @@ describe('Room series', () => {
   });
 
   it('records each leg winner by player id', () => {
-    const { room, players } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
+    const { room, players } = lobby(3, { rounds: 2, pool: ['tanks', 'bombit'] });
     expect(room.startSeries()).toBe(true);
     beginDrawnLeg(room);
 
@@ -932,7 +932,7 @@ describe('Room series', () => {
   it('crowns the series after the last leg and arms nothing', () => {
     vi.useFakeTimers();
     try {
-      const { room } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
+      const { room } = lobby(3, { rounds: 2, pool: ['tanks', 'bombit'] });
       expect(room.startSeries()).toBe(true);
       beginDrawnLeg(room);
 
@@ -958,7 +958,7 @@ describe('Room series', () => {
   it('ends the series early when the next leg cannot be seated', () => {
     vi.useFakeTimers();
     try {
-      const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+      const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'bombit', 'achtung'] });
       expect(room.startSeries()).toBe(true);
       beginDrawnLeg(room);
 
@@ -985,7 +985,7 @@ describe('Room series', () => {
   it('lets the host skip a break, and ignores a second press', () => {
     vi.useFakeTimers();
     try {
-      const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+      const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'bombit', 'achtung'] });
       expect(room.startSeries()).toBe(true);
       beginDrawnLeg(room);
 
@@ -1010,7 +1010,7 @@ describe('Room series', () => {
   it('cancels a pending break when the host goes back to the lobby', () => {
     vi.useFakeTimers();
     try {
-      const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+      const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'bombit', 'achtung'] });
       expect(room.startSeries()).toBe(true);
       beginDrawnLeg(room);
       endMatch(room, 0);
@@ -1032,7 +1032,7 @@ describe('Room series', () => {
   it('leaves no timer behind when a room with a pending break is disposed', () => {
     vi.useFakeTimers();
     try {
-      const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+      const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'bombit', 'achtung'] });
       expect(room.startSeries()).toBe(true);
       beginDrawnLeg(room);
       endMatch(room, 0);
@@ -1048,7 +1048,7 @@ describe('Room series', () => {
   });
 
   it('refuses a restart during a break, so a scored leg cannot be scored twice', () => {
-    const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+    const { room, players } = lobby(3, { rounds: 3, pool: ['tanks', 'bombit', 'achtung'] });
     expect(room.startSeries()).toBe(true);
     beginDrawnLeg(room);
 
@@ -1063,7 +1063,7 @@ describe('Room series', () => {
   });
 
   it('still allows a restart mid-leg', () => {
-    const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'gravity', 'achtung'] });
+    const { room } = lobby(3, { rounds: 3, pool: ['tanks', 'bombit', 'achtung'] });
     expect(room.startSeries()).toBe(true);
     beginDrawnLeg(room);
     expect(room.seriesView!.phase).toBe('leg');
@@ -1074,7 +1074,7 @@ describe('Room series', () => {
   });
 
   it('skips a live leg without awarding points and records it in the run', () => {
-    const { room, players } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
+    const { room, players } = lobby(3, { rounds: 2, pool: ['tanks', 'bombit'] });
     expect(room.startSeries()).toBe(true);
     beginDrawnLeg(room);
 
@@ -1093,7 +1093,7 @@ describe('Room series', () => {
   });
 
   it('will not let the picker or a plain start fight the lineup', () => {
-    const { room } = lobby(3, { rounds: 2, pool: ['tanks', 'gravity'] });
+    const { room } = lobby(3, { rounds: 2, pool: ['tanks', 'bombit'] });
     expect(room.startSeries()).toBe(true);
 
     const drawn = room.gameId;
@@ -1105,14 +1105,14 @@ describe('Room series', () => {
   });
 
   it('keeps the host roulette settings for a second spin', () => {
-    const { room } = lobby(3, { rounds: 2, pace: 'quick', pool: ['tanks', 'gravity'] });
+    const { room } = lobby(3, { rounds: 2, pace: 'quick', pool: ['tanks', 'bombit'] });
     expect(room.startSeries()).toBe(true);
     room.rematch();
 
     expect(room.seriesView).toBeNull();
     const setup = room.view().seriesSetup;
     expect(setup).toMatchObject({ enabled: true, rounds: 2, pace: 'quick' });
-    expect(setup.pool).toEqual(['tanks', 'gravity']);
+    expect(setup.pool).toEqual(['tanks', 'bombit']);
 
     room.dispose();
   });

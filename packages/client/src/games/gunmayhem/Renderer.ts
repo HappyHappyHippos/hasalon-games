@@ -646,7 +646,7 @@ export class GunMayhemRenderer {
         // its own. A jump, a knockback or a landing all arrive as a velocity
         // step no guess could have contained; sliding into those is what made
         // jumping feel broken. `RemoteBodies` owns that distinction — Tank
-        // Trouble and Gravity Guy need exactly the same rule.
+        // Trouble needs exactly the same rule.
         const drawn = this.remotes.draw(
           player.s,
           body.x,

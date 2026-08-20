@@ -1020,7 +1020,7 @@ describe('roulette series', () => {
     const stop = spiral(clients);
 
     try {
-      const drawn = await reveal(host!, { rounds: 2, pool: ['achtung', 'gravity'] });
+      const drawn = await reveal(host!, { rounds: 2, pool: ['achtung', 'tanks'] });
       const lineup = drawn.room.series!.lineup;
       expect(lineup).toHaveLength(2);
       expect(new Set(lineup).size).toBe(2);

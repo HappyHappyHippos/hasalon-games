@@ -23,13 +23,10 @@ import { SNAPSHOT_EVERY, TICK_MS } from '@mg/shared';
 // Namespace imports: every game exports the same symbol names.
 import * as gm from '@mg/shared/gunmayhem';
 import * as tk from '@mg/shared/tanks';
-import * as gv from '@mg/shared/gravity';
 import { gmInput } from '../games/gunmayhem/input';
 import { tanksInput } from '../games/tanks/input';
-import { gravityInput } from '../games/gravity/input';
 import { GunMayhemPredictor } from '../games/gunmayhem/predictor';
 import { TanksPredictor } from '../games/tanks/predictor';
-import { GravityPredictor } from '../games/gravity/predictor';
 import { CELLULAR, NEARBY, type Link, type Point } from './lagHarness';
 
 const TICKS = 150;
@@ -188,47 +185,7 @@ const tanks: Probe = {
   },
 };
 
-const gravity: Probe = {
-  name: 'Gravity Guy',
-  idle: 0,
-  press: gv.IN_FLIP,
-  run(link, pressed, predict) {
-    const state = gv.createState(
-      [
-        { id: 'p0', name: 'P0', colorIndex: 0 },
-        { id: 'p1', name: 'P1', colorIndex: 1 },
-      ],
-      gv.defaultConfig(),
-      13,
-    );
-    for (let i = 0; i < gv.COUNTDOWN_TICKS; i++) gv.stepTick(state);
-    const track = state.track;
-
-    gravityInput.reset();
-    gravityInput.seq = 0;
-    const predictor = new GravityPredictor();
-
-    return drive({
-      link,
-      pressed,
-      predict,
-      idle: this.idle,
-      press: this.press,
-      serverApply: (seq, bits) => gv.applyInput(state, 'p0', seq, bits),
-      step: () => gv.stepTick(state),
-      snapshot: () => gv.makeSnapshot(state, []) as gv.GravitySnapshot,
-      record: (seq, bits, at) => gravityInput.history.push({ seq, bits, at }),
-      draw: (now, snap, withPrediction) => {
-        const me = snap.players.find((p) => p.s === 0);
-        if (!me) return null;
-        if (!withPrediction) return { x: me.x, y: me.y };
-        return predictor.update(now, track, me, me.sp, snap.phase === 'playing');
-      },
-    });
-  },
-};
-
-const PROBES = [gunMayhem, tanks, gravity];
+const PROBES = [gunMayhem, tanks];
 
 /** Ticks between the press and the first frame that shows it. */
 function reactionTicks(probe: Probe, link: Link, predict: boolean): number | null {
