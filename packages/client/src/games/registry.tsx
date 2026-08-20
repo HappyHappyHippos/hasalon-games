@@ -16,6 +16,9 @@ import { AchtungBoxArt } from './achtung/BoxArt';
 import { BombitBoxArt } from './bombit/BoxArt';
 import { BombitScreen } from './bombit/BombitScreen';
 import { BombitSettings } from './bombit/Settings';
+import { DirtBoxArt } from './dirt/BoxArt';
+import { DirtScreen } from './dirt/DirtScreen';
+import { DirtSettings } from './dirt/Settings';
 import { SkribblBoxArt } from './skribbl/BoxArt';
 import { SkribblScreen } from './skribbl/SkribblScreen';
 import { SkribblSettings } from './skribbl/Settings';
@@ -104,6 +107,13 @@ export const CLIENT_GAMES: Record<GameId, ClientGame> = {
     Settings: BombitSettings,
     accent: 'var(--orange)',
   },
+  dirt: {
+    meta: GAMES.dirt.meta,
+    BoxArt: DirtBoxArt,
+    Screen: DirtScreen,
+    Settings: DirtSettings,
+    accent: 'var(--yellow)',
+  },
   telephone: {
     meta: GAMES.telephone.meta,
     BoxArt: TelephoneBoxArt,
@@ -127,6 +137,7 @@ export const CLIENT_GAMES: Record<GameId, ClientGame> = {
 export const CLIENT_GAME_IDS: GameId[] = [
   'gunmayhem',
   'bombit',
+  'dirt',
   'worms',
   'tanks',
   'achtung',

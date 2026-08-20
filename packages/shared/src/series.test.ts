@@ -16,6 +16,7 @@ import {
 const ALL: GameId[] = [
   'achtung',
   'bombit',
+  'dirt',
   'gunmayhem',
   'memes',
   'skribbl',

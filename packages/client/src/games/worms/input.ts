@@ -114,6 +114,7 @@ export function attachWormsInput({ onBits, onCommand, getPower }: WormsInputHand
 
   return {
     setButton: bits.setButton,
+    setField: bits.setField,
     selectWeapon(weapon) {
       onCommand({ k: 'weapon', w: weapon });
     },

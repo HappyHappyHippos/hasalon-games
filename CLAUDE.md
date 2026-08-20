@@ -11,8 +11,9 @@ that ship today: **Gun Mayhem** (2–6 player platform fighter, the priority —
 this is the flagship game and should get the most care), **Bomb It** (2–8 player
 grid-based bomber with kickable bombs), **Worms** (up to
 8-player turn-based artillery on destructible terrain), **Tank Trouble** (up to
-8-player top-down maze duel with ricocheting shells), **Achtung die Kurve** (up
-to 8-player curve/Snake game), **Skribbl** (up to 8-player draw and guess, Hebrew
+8-player top-down maze duel with ricocheting shells), **Dirt Racing** (2–8
+player top-down arcade racer — auto-throttle, steer only), **Achtung die Kurve**
+(up to 8-player curve/Snake game), **Skribbl** (up to 8-player draw and guess, Hebrew
 or English), **Broken Telephone** (2–8 player draw/guess chains) and **Meme Machine**.
 
 npm workspaces monorepo. Git repo with `origin` at
@@ -365,12 +366,13 @@ obvious once you know they exist:
 ### Per-game notes
 
 The details that only matter when you are inside one game live next to a
-pointer instead of in this file, so every session does not pay for all nine.
+pointer instead of in this file, so every session does not pay for all ten.
 **Read the one you are touching before you touch it** — each is a list of
 things that cost real debugging time to learn.
 
 - **Achtung die Kurve** — [`docs/games/achtung.md`](docs/games/achtung.md)
 - **Bomb It** — [`docs/games/bombit.md`](docs/games/bombit.md)
+- **Dirt Racing** — [`docs/games/dirt.md`](docs/games/dirt.md)
 - **Gun Mayhem** — [`docs/games/gunmayhem.md`](docs/games/gunmayhem.md)
 - **Worms** — [`docs/games/worms.md`](docs/games/worms.md)
 - **Tank Trouble** — [`docs/games/tanks.md`](docs/games/tanks.md)

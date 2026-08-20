@@ -1,6 +1,7 @@
 import type { GameId, GameModule } from './gameModule';
 import { achtungModule } from './games/achtung/module';
 import { bombitModule } from './games/bombit/module';
+import { dirtModule } from './games/dirt/module';
 import { gunMayhemModule } from './games/gunmayhem/module';
 import { memesModule } from './games/memes/module';
 import { skribblModule } from './games/skribbl/module';
@@ -31,6 +32,7 @@ import { wormsModule } from './games/worms/module';
 export const GAMES: Record<GameId, GameModule> = {
   achtung: achtungModule,
   bombit: bombitModule,
+  dirt: dirtModule,
   gunmayhem: gunMayhemModule,
   memes: memesModule,
   skribbl: skribblModule,
