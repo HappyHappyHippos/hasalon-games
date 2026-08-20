@@ -28,10 +28,45 @@ const TIMEOUT_MS = 15_000;
 const target = process.argv[2] ?? DEFAULT_HOST;
 const wsUrl = target.replace(/^http/, 'ws').replace(/\/$/, '') + WS_PATH;
 
+/**
+ * The most recent room view each socket has been sent.
+ *
+ * Kept because `next` is an **edge** trigger — it attaches its listener when it
+ * is called, so it can only ever see what arrives afterwards. Plenty of what
+ * this script wants to assert is a **state**: "everyone is ready" is a fact
+ * about the room, not an event, and it is frequently already true by the time
+ * we get round to checking.
+ *
+ * That distinction is what broke this script. The host starts ready by design,
+ * so the room reaches all-ready the moment the *guest* readies. The host then
+ * sends its own `ready: true`, which changes nothing — and the server
+ * deliberately does not broadcast a room on a no-op ready (`Room.setReady`,
+ * added so a bot re-readying on every broadcast could not rate-limit itself).
+ * So the script sat waiting for a message that correctly never came, about a
+ * condition that had been satisfied for several seconds.
+ */
+const lastRoom = new WeakMap();
+
+/** A room view in one line, so a timeout says what the room actually looked like. */
+function describeRoom(room) {
+  if (!room) return 'no room seen yet';
+  const players = room.players
+    .map((p) => `${p.name}[${p.ready ? 'ready' : 'not-ready'},seat ${p.seat}]`)
+    .join(' ');
+  return `phase=${room.phase} game=${room.gameId} players: ${players}`;
+}
+
 /** Resolve on the first message matching `pred`, or reject with a useful name. */
 function next(ws, pred, label) {
   return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`timed out waiting for ${label}`)), TIMEOUT_MS);
+    const timer = setTimeout(() => {
+      // The last room state is almost always the thing you need to see to know
+      // why a wait failed, and reconstructing it from a bare label means
+      // re-running with a debugger attached.
+      reject(
+        new Error(`timed out waiting for ${label}\n    last room: ${describeRoom(lastRoom.get(ws))}`),
+      );
+    }, TIMEOUT_MS);
     const onMsg = (raw) => {
       const msg = JSON.parse(raw.toString());
       if (msg.t === 'error') {
@@ -48,11 +83,31 @@ function next(ws, pred, label) {
   });
 }
 
+/**
+ * Resolve once the socket's room satisfies `pred` — **now or later**.
+ *
+ * The state-shaped counterpart to `next`. Use this for anything phrased as "the
+ * room is in this condition"; use `next` only when the *arrival* of the message
+ * is the thing under test, such as proving a broadcast travelled from one
+ * client to another.
+ */
+function untilRoom(ws, pred, label) {
+  const current = lastRoom.get(ws);
+  if (current && pred(current)) return Promise.resolve({ t: 'room', room: current });
+  return next(ws, (m) => m.room !== undefined && pred(m.room), label);
+}
+
 function connect(label) {
   const ws = new WebSocket(wsUrl);
   ws.on('error', (err) => {
     console.error(`[${label}] socket error: ${err.message}`);
     process.exitCode = 1;
+  });
+  // Recorded from the socket's first byte, before anything awaits it, so no
+  // room view can slip past between one `await` and the next.
+  ws.on('message', (raw) => {
+    const msg = JSON.parse(raw.toString());
+    if (msg.room !== undefined) lastRoom.set(ws, msg.room);
   });
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error(`[${label}] connect timed out`)), TIMEOUT_MS);
@@ -85,7 +140,9 @@ const [welcomeGuest, roomView] = await Promise.all([
 ]);
 console.log(`  ✓ both players in room: ${roomView.room.players.map((p) => p.name).join(', ')}`);
 
-// Guest -> server -> host proves the reverse direction too.
+// Guest -> server -> host proves the reverse direction too. Deliberately `next`
+// rather than `untilRoom`: the *arrival* of this broadcast is the thing under
+// test, and a state check would pass without proving anything travelled.
 guest.send(JSON.stringify({ t: 'ready', ready: true }));
 await next(
   host,
@@ -144,8 +201,10 @@ await next(
   'deterministic smoke settings',
 );
 
+// The host is already ready by design, so this often changes nothing and
+// correctly produces no broadcast. Ask about the state, not an event.
 host.send(JSON.stringify({ t: 'ready', ready: true }));
-await next(host, (m) => m.t === 'room' && m.room.players.every((p) => p.ready), 'both ready');
+await untilRoom(host, (r) => r.players.every((p) => p.ready), 'both ready');
 host.send(JSON.stringify({ t: 'start' }));
 const started = await next(host, (m) => m.t === 'matchStarted', 'match started');
 const guestSeat = started.room.players.find((p) => p.name === 'SmokeGuest')?.seat ?? -1;
@@ -460,7 +519,7 @@ memeHost.send(JSON.stringify({ t: 'game', gameId: 'memes' }));
 await next(memeHost, (m) => m.t === 'room' && m.room.gameId === 'memes', 'Meme Machine selected');
 memeHost.send(JSON.stringify({ t: 'ready', ready: true }));
 memeGuest.send(JSON.stringify({ t: 'ready', ready: true }));
-await next(memeHost, (m) => m.t === 'room' && m.room.players.every((player) => player.ready), 'meme players ready');
+await untilRoom(memeHost, (r) => r.players.every((player) => player.ready), 'meme players ready');
 
 const memeHostPrivate = next(memeHost, (m) => m.t === 'private' && !!m.data?.templateId, 'meme host private template');
 const memeStarted = next(memeHost, (m) => m.t === 'matchStarted', 'meme match started');
@@ -568,7 +627,7 @@ wormHost.send(JSON.stringify({ t: 'settings', settings: { stageId: 'small_green'
 await next(wormHost, (m) => m.t === 'room' && m.room.settings.stageId === 'small_green', 'Worms stage pinned');
 wormHost.send(JSON.stringify({ t: 'ready', ready: true }));
 wormGuest.send(JSON.stringify({ t: 'ready', ready: true }));
-await next(wormHost, (m) => m.t === 'room' && m.room.players.every((player) => player.ready), 'worm players ready');
+await untilRoom(wormHost, (r) => r.players.every((player) => player.ready), 'worm players ready');
 
 const wormStarted = next(wormHost, (m) => m.t === 'matchStarted', 'worm match started');
 wormHost.send(JSON.stringify({ t: 'start' }));
