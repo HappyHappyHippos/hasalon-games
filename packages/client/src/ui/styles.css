@@ -6140,22 +6140,22 @@ strong,
   opacity: 0.72;
 }
 
-/* The two ways out of the lobby with a room code in hand. WhatsApp is first and
-   solid because it is how every invite here is actually sent; copying a link is
-   the fallback for the one person on a laptop. */
+/* The one way out of the lobby with a room code in hand. An `<a>` wearing the
+   button's clothes — see the note at its JSX for why it must stay an anchor —
+   so it needs the line-height and decoration a `<button>` gets for free. */
 .lobby__invite {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-}
-
-.lobby__whatsapp {
+  /* `btn--primary` only names the fill; `Button` supplies it as an inline
+     custom property, which a hand-written anchor does not get. Without this the
+     button renders paper-coloured and stops reading as the main action. */
+  --btn-fill: var(--yellow);
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
+  text-decoration: none;
+  line-height: 1.1;
 }
-.lobby__whatsapp svg {
+.lobby__invite svg {
   display: block;
   flex: none;
 }

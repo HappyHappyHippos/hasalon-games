@@ -42,10 +42,8 @@ const he = {
   // -------------------------------------------------------------------------
   // Lobby
   // -------------------------------------------------------------------------
-  copyInvite: 'העתקת קישור',
-  inviteWhatsApp: 'שליחה בוואטסאפ',
+  inviteWhatsApp: 'שליחת הזמנה בוואטסאפ',
   copied: 'הועתק!',
-  copyThisLink: 'העתיקו את הקישור:',
   inviteShareText: (code: string) => `בואו להינות איתי בסלון!. קוד: ${code}`,
   inviteAppTitle: 'כבר התקנתם את האפליקציה?',
   inviteAppBody: (code: string) =>
@@ -670,10 +668,8 @@ const en: Dict = {
   gamesHeading: 'In the room right now',
   reviewsHeading: 'What people are saying',
 
-  copyInvite: 'Copy link',
-  inviteWhatsApp: 'Send on WhatsApp',
+  inviteWhatsApp: 'Send invite on WhatsApp',
   copied: 'Copied!',
-  copyThisLink: 'Copy this link:',
   inviteShareText: (code: string) => `Come play with me in הסלון. Room code: ${code}`,
   inviteAppTitle: 'Already installed the app?',
   inviteAppBody: (code: string) =>
