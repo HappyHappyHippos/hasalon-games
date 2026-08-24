@@ -13,6 +13,7 @@ import { useVoice } from '../ui/useVoice';
 import { CLIENT_GAMES } from '../games/registry';
 import { resetIOSLobbyViewport } from '../ui/mobileViewport';
 import { msUntil } from '../net/clock';
+import { sfx } from '../audio';
 import { trackUi } from '../analytics';
 
 export function LobbyScreen(): JSX.Element {
@@ -84,56 +85,39 @@ export function LobbyScreen(): JSX.Element {
   // scoreboard, which is what it has been all along.
   const topScore = Math.max(0, ...room.players.map((p) => p.totalScore));
 
-  const inviteLink = (): string => `${location.origin}${location.pathname}#/room/${room.code}`;
+  const inviteLink = `${location.origin}${location.pathname}#/room/${room.code}`;
 
   /**
-   * Hand the invite to WhatsApp itself, rather than to the OS share sheet.
+   * The invite, as a link WhatsApp can be handed.
    *
-   * Everyone here invites over WhatsApp, and the share sheet was quietly making
-   * a mess of it: picking WhatsApp from the sheet hands the message to a
-   * *background* WhatsApp, which composes it, shows it as sent, and then does
-   * not actually deliver it until the app is next opened in the foreground. The
-   * host thinks the link is out; nobody has it; the room sits empty. That is
-   * Android's doing and no amount of `navigator.share` options changes it.
-   *
-   * `wa.me` opens WhatsApp in front of you instead, so you pick the person and
-   * press send inside a running app — which sends. The link is in the message
-   * text rather than beside it because a `text`+`url` pair is two fields and
-   * WhatsApp only ever carries one.
+   * The room link rides *inside* the message text rather than beside it: a
+   * `text` and a `url` are two fields and WhatsApp only ever carries one, so
+   * anything passed alongside is dropped on the floor.
    */
-  const shareToWhatsApp = (): void => {
-    trackUi('invite');
-    const message = `${t.inviteShareText(room.code)} ${inviteLink()}`;
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
-  };
+  const whatsappHref = `https://wa.me/?text=${encodeURIComponent(
+    `${t.inviteShareText(room.code)} ${inviteLink}`,
+  )}`;
 
-  const copyLink = async (): Promise<void> => {
-    const link = inviteLink();
-    // Counted on intent, not on success: cancelling the share sheet still says
-    // the host reached for the invite, and how rooms fill up is the question.
-    trackUi('invite');
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: document.title,
-          text: t.inviteShareText(room.code),
-          url: link,
-        });
-        return;
-      } catch (error) {
-        // Cancelling the native sheet is a complete action, not a clipboard failure.
-        if ((error as DOMException).name === 'AbortError') return;
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      // Clipboard blocked (insecure origin, permissions) — the code is on
-      // screen anyway, so this is only a convenience.
-      window.prompt(t.copyThisLink, link);
-    }
+  /**
+   * Copy the link too, quietly, on the way past.
+   *
+   * There is one invite control and it opens WhatsApp, because that is how
+   * every invite here is actually sent. Putting the link on the clipboard as
+   * well costs nothing and is the whole of what the second button used to do,
+   * so nobody on a laptop — or without WhatsApp — has lost anything.
+   *
+   * Best-effort by design: the clipboard needs a focused document and the tap
+   * is in the middle of handing the page to another app, so this losing the
+   * race is normal and is not a failure of the invite.
+   */
+  const alsoCopy = (): void => {
+    navigator.clipboard
+      ?.writeText(inviteLink)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1800);
+      })
+      .catch(() => undefined);
   };
 
   return (
@@ -285,15 +269,31 @@ export function LobbyScreen(): JSX.Element {
                 {room.code}
               </p>
             </div>
-            <div className="lobby__invite">
-              <Button className="lobby__whatsapp" onClick={shareToWhatsApp}>
-                <WhatsAppIcon />
-                <span>{t.inviteWhatsApp}</span>
-              </Button>
-              <Button variant="ghost" onClick={() => void copyLink()}>
-                {copied ? t.copied : t.copyInvite}
-              </Button>
-            </div>
+            {/*
+              An anchor, deliberately, and not a button that calls `window.open`.
+              Opening a window from script is a popup — mobile browsers block it
+              on a whim, and `wa.me` never got the chance to hand the message to
+              the app, which is what "the WhatsApp sending doesn't work" was.
+              A person clicking a real link is a navigation the blocker never
+              touches, and the OS intercepts `wa.me` and switches to WhatsApp
+              itself, leaving the lobby exactly where it was in the other tab.
+            */}
+            <a
+              className="btn btn--primary btn--md lobby__invite"
+              href={whatsappHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => {
+                sfx.click();
+                // Counted on intent, not on delivery: reaching for the invite is
+                // the thing worth knowing, and we cannot see the other end.
+                trackUi('invite');
+                alsoCopy();
+              }}
+            >
+              <WhatsAppIcon />
+              <span>{copied ? t.copied : t.inviteWhatsApp}</span>
+            </a>
           </header>
 
           <section className="lobby__choice">
