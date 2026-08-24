@@ -112,7 +112,6 @@ interface Peer {
   remote: MediaStream;
   remoteTrack: MediaStreamTrack | null;
   audio: HTMLAudioElement;
-  outputSource: MediaStreamAudioSourceNode | null;
   status: PeerStatus;
   polite: boolean;
   makingOffer: boolean;
@@ -553,7 +552,6 @@ export class Voice {
       remote,
       remoteTrack: null,
       audio,
-      outputSource: null,
       status: 'connecting',
       polite: !!this.selfId && this.selfId > id,
       makingOffer: false,
@@ -580,7 +578,6 @@ export class Voice {
       if (peer.remoteTrack && peer.remoteTrack !== remoteTrack) peer.remote.removeTrack(peer.remoteTrack);
       peer.remoteTrack = remoteTrack;
       if (!peer.remote.getTracks().includes(remoteTrack)) peer.remote.addTrack(remoteTrack);
-      this.connectRemoteOutput(peer);
       remoteTrack.onunmute = () => this.attemptPlay(peer);
       remoteTrack.onended = () => {
         if (peer.remoteTrack === remoteTrack) peer.remoteTrack = null;
@@ -814,8 +811,6 @@ export class Voice {
     peer.pc.onconnectionstatechange = null;
     peer.pc.oniceconnectionstatechange = null;
     peer.remoteTrack = null;
-    peer.outputSource?.disconnect();
-    peer.outputSource = null;
     peer.remote.getTracks().forEach((track) => peer.remote.removeTrack(track));
     peer.audio.srcObject = null;
     peer.audio.remove();
@@ -836,23 +831,26 @@ export class Voice {
   }
 
   /**
-   * Route remote speech through the same user-activated Web Audio context used
-   * by the mic analyser. Mobile WebKit otherwise sometimes switches the audio
-   * element to the quiet call receiver as soon as getUserMedia opens.
+   * Bring up the local Web Audio context. Only called from a user gesture
+   * (`wake` or microphone start).
+   *
+   * **The context is for the microphone analyser and nothing else.** Remote
+   * speech reaches the speaker through each peer's `<audio>` element, which is
+   * the only path that works on every browser we ship to.
+   *
+   * This used to route each remote stream through
+   * `createMediaStreamSource(peer.remote) -> ctx.destination` and mute the
+   * element, to stop mobile WebKit putting the room on the quiet call receiver
+   * once `getUserMedia` opened. That trade was far worse than the problem:
+   * **Safari's Web Audio cannot consume a remote peer connection stream at all**
+   * (WebKit bug 173863), so on iPhone the element was muted and the graph it
+   * was swapped for produced silence — the whole room inaudible, with no error
+   * anywhere. Worse, `attemptPlay` still resolved (the element *was* playing,
+   * just muted), so `playbackBlocked` stayed false and the UI reported voice as
+   * healthy. Output routing belongs to `setAudioSession`, which is the API
+   * WebKit added for exactly this and which cannot silence anything when it is
+   * unsupported.
    */
-  private connectRemoteOutput(peer: Peer): void {
-    if (!this.ctx || peer.outputSource || peer.remote.getAudioTracks().length === 0) return;
-    try {
-      const source = this.ctx.createMediaStreamSource(peer.remote);
-      source.connect(this.ctx.destination);
-      peer.outputSource = source;
-      peer.audio.muted = true;
-    } catch {
-      peer.audio.muted = false;
-    }
-  }
-
-  /** Only called from a user gesture (`wake` or microphone start). */
   private ensureOutputContext(): void {
     if (!this.ctx) {
       const Ctor = audioContextCtor();
@@ -862,11 +860,10 @@ export class Voice {
         this.ctx = null;
       }
     }
-    if (!this.ctx) return;
     setAudioSession(this.stream ? 'play-and-record' : 'playback');
+    if (!this.ctx) return;
     this.watchContext();
     if (this.ctx.state === 'suspended') void this.ctx.resume().catch(() => undefined);
-    for (const peer of this.peers.values()) this.connectRemoteOutput(peer);
   }
 
   private refreshPlaybackBlocked(): void {

@@ -6,7 +6,7 @@ import { socket } from '../net/socket';
 import { AppearancePicker } from '../ui/AppearancePicker';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
-import { BellIcon } from '../ui/Icons';
+import { BellIcon, WhatsAppIcon } from '../ui/Icons';
 import { GamePicker } from '../ui/GamePicker';
 import { SeriesSetup } from '../ui/SeriesSetup';
 import { useVoice } from '../ui/useVoice';
@@ -84,8 +84,31 @@ export function LobbyScreen(): JSX.Element {
   // scoreboard, which is what it has been all along.
   const topScore = Math.max(0, ...room.players.map((p) => p.totalScore));
 
+  const inviteLink = (): string => `${location.origin}${location.pathname}#/room/${room.code}`;
+
+  /**
+   * Hand the invite to WhatsApp itself, rather than to the OS share sheet.
+   *
+   * Everyone here invites over WhatsApp, and the share sheet was quietly making
+   * a mess of it: picking WhatsApp from the sheet hands the message to a
+   * *background* WhatsApp, which composes it, shows it as sent, and then does
+   * not actually deliver it until the app is next opened in the foreground. The
+   * host thinks the link is out; nobody has it; the room sits empty. That is
+   * Android's doing and no amount of `navigator.share` options changes it.
+   *
+   * `wa.me` opens WhatsApp in front of you instead, so you pick the person and
+   * press send inside a running app — which sends. The link is in the message
+   * text rather than beside it because a `text`+`url` pair is two fields and
+   * WhatsApp only ever carries one.
+   */
+  const shareToWhatsApp = (): void => {
+    trackUi('invite');
+    const message = `${t.inviteShareText(room.code)} ${inviteLink()}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener');
+  };
+
   const copyLink = async (): Promise<void> => {
-    const link = `${location.origin}${location.pathname}#/room/${room.code}`;
+    const link = inviteLink();
     // Counted on intent, not on success: cancelling the share sheet still says
     // the host reached for the invite, and how rooms fill up is the question.
     trackUi('invite');
@@ -262,7 +285,15 @@ export function LobbyScreen(): JSX.Element {
                 {room.code}
               </p>
             </div>
-            <Button onClick={() => void copyLink()}>{copied ? t.copied : t.copyInvite}</Button>
+            <div className="lobby__invite">
+              <Button className="lobby__whatsapp" onClick={shareToWhatsApp}>
+                <WhatsAppIcon />
+                <span>{t.inviteWhatsApp}</span>
+              </Button>
+              <Button variant="ghost" onClick={() => void copyLink()}>
+                {copied ? t.copied : t.copyInvite}
+              </Button>
+            </div>
           </header>
 
           <section className="lobby__choice">

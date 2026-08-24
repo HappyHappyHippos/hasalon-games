@@ -206,3 +206,20 @@ export function TrophyIcon(props: IconProps): JSX.Element {
     </svg>
   );
 }
+
+/**
+ * WhatsApp, drawn as a filled glyph rather than the stroked outlines above.
+ *
+ * Everything else in this file is a line icon in `currentColor`, and this one
+ * deliberately is not: it stands for a specific app, and a stroked
+ * approximation of a logo reads as a generic chat bubble. Kept monochrome and
+ * on `currentColor` so it still takes the button's ink rather than importing a
+ * second brand colour into the palette.
+ */
+export function WhatsAppIcon(props: IconProps): JSX.Element {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.86 9.86 0 0 0 4.79 1.22h.01c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2zm0 1.83c2.16 0 4.19.84 5.72 2.37a8.03 8.03 0 0 1 2.37 5.71c0 4.46-3.63 8.09-8.09 8.09a8.1 8.1 0 0 1-4.12-1.13l-.3-.17-3.06.8.82-3-.2-.31a8.03 8.03 0 0 1-1.23-4.29c0-4.46 3.63-8.08 8.09-8.08zM8.5 7.3c-.17 0-.43.06-.66.31-.23.25-.87.85-.87 2.07s.9 2.4 1.02 2.57c.13.16 1.75 2.67 4.25 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.47-.07 1.47-.6 1.67-1.18.21-.58.21-1.08.15-1.18-.06-.11-.23-.17-.48-.29-.25-.13-1.47-.73-1.7-.81-.23-.08-.4-.13-.56.12-.17.25-.64.81-.79.98-.14.16-.29.19-.54.06-.25-.12-1.05-.39-2-1.23-.74-.66-1.24-1.47-1.38-1.72-.15-.25-.02-.38.11-.51.11-.11.25-.29.37-.44.13-.14.17-.25.25-.41.09-.17.04-.31-.02-.44-.06-.12-.55-1.35-.77-1.85-.2-.48-.41-.42-.56-.42h-.13z" />
+    </svg>
+  );
+}

@@ -17,7 +17,7 @@ import {
   SPAWN_PLACEMENT_ATTEMPTS,
   SPEED_DOWN_MUL,
   SPEED_UP_MUL,
-  TARGET_SCORE_PER_PLAYER,
+  TARGET_SCORE_PER_OPPONENT,
   THICK_MUL,
   THIN_MUL,
 } from './constants';
@@ -95,9 +95,12 @@ export function defaultConfig(playerCount: number): AchtungConfig {
   };
 }
 
-/** The lobby's suggestion, and the default — see `TARGET_SCORE_PER_PLAYER`. */
+/** The lobby's suggestion, and the default — see `TARGET_SCORE_PER_OPPONENT`. */
 export function suggestedTargetScore(playerCount: number): number {
-  return Math.max(1, playerCount) * TARGET_SCORE_PER_PLAYER;
+  // `- 1` is the opponents, and a floor of one keeps a one-player room (a host
+  // alone in the lobby fiddling with settings) from suggesting a target of zero,
+  // which `normalizeConfig` would only have to clamp back up anyway.
+  return Math.max(1, playerCount - 1) * TARGET_SCORE_PER_OPPONENT;
 }
 
 // ---------------------------------------------------------------------------

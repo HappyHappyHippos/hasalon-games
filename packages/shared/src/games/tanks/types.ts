@@ -15,8 +15,62 @@ export const IN_BACK = 2;
 export const IN_TLEFT = 4;
 export const IN_TRIGHT = 8;
 export const IN_FIRE = 16;
+
+/**
+ * Turn magnitude, bits 6–9. Zero means "as far as it goes".
+ *
+ * **Turning used to be one bit per direction, and that is why the tank
+ * waddled.** The thumbstick is a travel control: it compares where you are
+ * pushing against where the hull faces, and holds a turn until the two agree.
+ * With only an on/off bit the hull can rotate at the full `TURN_RATE` or not at
+ * all — so "nearly aligned" and "pointing the wrong way" ask for exactly the
+ * same thing, and the control has to *guess* when to stop. Any error in that
+ * guess lands it past centre, where it turns back, and past centre again. The
+ * heading it is guessing from is a prediction over a 114 ms link, so there is
+ * always error. A stick held a little off the nose sat in that cycle forever,
+ * which is what "the tank waddles left right left right" is.
+ *
+ * A magnitude makes the answer proportional instead: far off the nose is full
+ * lock, nearly aligned is a trickle, aligned is nothing. It converges because
+ * the correction shrinks with the error, and no threshold has to be exactly
+ * right for it to settle.
+ *
+ * Packed into the same integer rather than widening the input message, exactly
+ * as `dirt/types.ts:steerOf` does — the 60 Hz sampler, the replay history and
+ * the snapshot's `ib` all treat `bits` as an opaque number, so an analogue axis
+ * costs nothing anywhere but here.
+ */
+export const IN_TURN_SHIFT = 5;
+export const IN_TURN_MASK = 0b111100000;
+export const IN_TURN_MAX = 15;
+
 /** Everything the wire is allowed to set. */
-export const IN_MASK = 0b11111;
+export const IN_MASK = 0b111111111;
+
+/**
+ * How hard this input is turning, from -1 (full left) to 1 (full right).
+ *
+ * A direction bit with no magnitude means full lock, which is what keeps the
+ * keyboard working without knowing this field exists: a held arrow key is a
+ * stick pushed all the way over. It is also what keeps every input recorded
+ * before this field existed meaning what it used to.
+ */
+export function turnOf(bits: number): number {
+  const dir = ((bits & IN_TRIGHT) !== 0 ? 1 : 0) - ((bits & IN_TLEFT) !== 0 ? 1 : 0);
+  if (dir === 0) return 0;
+  const magnitude = (bits & IN_TURN_MASK) >>> IN_TURN_SHIFT;
+  return dir * (magnitude === 0 ? 1 : magnitude / IN_TURN_MAX);
+}
+
+/** The bits for a turn request, for whoever is holding the stick. */
+export function turnBits(value: number): number {
+  const clamped = Math.max(-1, Math.min(1, value));
+  if (clamped === 0) return 0;
+  // At least one, so the smallest real nudge is never mistaken for the "no
+  // magnitude given" full-lock case above.
+  const magnitude = Math.max(1, Math.round(Math.abs(clamped) * IN_TURN_MAX));
+  return (clamped < 0 ? IN_TLEFT : IN_TRIGHT) | (magnitude << IN_TURN_SHIFT);
+}
 
 export interface TanksInput {
   seq: number;

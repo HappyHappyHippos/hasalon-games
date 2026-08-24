@@ -230,7 +230,7 @@ export class WormsRenderer {
 
     this.drawStage(ctx, drawn);
     this.drawProjectiles(ctx, drawn, next, alpha);
-    this.drawWorms(ctx, drawn, next, alpha, renderTime);
+    this.drawWorms(ctx, drawn, next, alpha, renderTime, snap);
     this.drawTargeting(ctx, drawn);
     this.drawBooms(ctx, dtMs);
 
@@ -398,22 +398,44 @@ export class WormsRenderer {
     }
   }
 
+  /**
+   * @param snap the render-delayed snapshot everything is *drawn* from.
+   * @param live the newest snapshot that has arrived. Prediction runs at the
+   *   present, so the question "am I driving right now" has to be answered from
+   *   the present, not from `snap` — see the note below.
+   */
   private drawWorms(
     ctx: CanvasRenderingContext2D,
     snap: WormsSnapshot,
     next: WormsSnapshot | null,
     alpha: number,
     renderTime: number,
+    live: WormsSnapshot,
   ): void {
     const sprite = getImage(WORM_SPRITE);
     const mySeat = this.context.mySeat;
     const controllable = snap.phase === 'turn' || snap.phase === 'retreat';
+    /**
+     * Whether the server still has this worm under our control, as of the last
+     * thing it told us — not as of the frame being drawn.
+     *
+     * These differ by the render delay, about a tenth of a second, and taking
+     * the wrong one is why a turn used to end in a different place on the
+     * driver's screen than on everybody else's. `snap` is deliberately in the
+     * past; the replay below runs to the present. Reading the phase off `snap`
+     * therefore kept replaying held buttons as *controllable* for ~100 ms after
+     * the server had stopped accepting them, so the driver watched their worm
+     * walk on past the end of its own turn and then snap back to where it had
+     * actually stopped — while every other client only ever saw the second
+     * position.
+     */
+    const driving = live.phase === 'turn' || live.phase === 'retreat';
 
     for (const worm of snap.worms) {
       if (worm.al === 0) continue;
 
-      const seat = snap.seats.find((s) => s.s === worm.s);
-      const mine = worm.i === snap.ac && worm.s === mySeat && controllable;
+      const seat = live.seats.find((s) => s.s === worm.s);
+      const mine = worm.i === live.ac && worm.s === mySeat && driving;
 
       let x = worm.x;
       let y = worm.y;
@@ -422,7 +444,11 @@ export class WormsRenderer {
       let vy = worm.vy;
 
       if (mine && seat) {
-        const predicted = predictWorm(worm, terrainBus.mask, seat.ack, seat.ib, true);
+        // From `live`, not from `snap`: replaying starts at the newest state the
+        // server has confirmed, so there are fewer ticks to re-run and less room
+        // to disagree with it.
+        const from = live.worms.find((w) => w.i === worm.i) ?? worm;
+        const predicted = predictWorm(from, terrainBus.mask, seat.ack, seat.ib, true);
         if (predicted) {
           x = predicted.x;
           y = predicted.y;
@@ -430,6 +456,13 @@ export class WormsRenderer {
           onGround = predicted.onGround;
           vy = predicted.vy;
         }
+        // While we are drawing this worm from prediction the shared smoother is
+        // not being fed, so its idea of "where this was drawn last" ages by the
+        // whole turn. Handing the worm back at the end of the turn would then
+        // absorb that ancient gap — up to `MAX_SMOOTHED_JUMP` of it — and slide
+        // the worm back toward where the turn *started*, on the driver's screen
+        // only. Forgetting it each frame means the hand-back starts clean.
+        this.bodies.forget(worm.i);
       } else {
         const to = next?.worms.find((w) => w.i === worm.i);
         if (to) {

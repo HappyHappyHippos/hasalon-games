@@ -37,18 +37,46 @@ export function enableVisibleViewportSizing(): () => void {
     if (Number.isFinite(top)) root.style.setProperty('--app-visible-top', `${top}px`);
   };
 
+  /**
+   * Re-read for a moment after a fullscreen change, not just once.
+   *
+   * `fullscreenchange` fires when the *state* flips, which on Android is before
+   * the browser has finished giving the page the pixels — the comment above is
+   * about exactly that lag. One reading taken at that instant is the
+   * pre-fullscreen size, and the app only recovers if a `visualViewport resize`
+   * happens to follow. When none does, the shell stays boxed at the size it had
+   * while the browser chrome was still there: the phone is fullscreen and the
+   * game is not, which is indistinguishable from the maximize button having
+   * done nothing. Polling the viewport across the transition costs a handful of
+   * reads and does not depend on an event that may never arrive.
+   */
+  const timers: number[] = [];
+  const settle = (): void => {
+    update();
+    for (const delay of [50, 150, 350, 700]) {
+      timers.push(window.setTimeout(update, delay));
+    }
+  };
+  const clearTimers = (): void => {
+    for (const timer of timers) window.clearTimeout(timer);
+    timers.length = 0;
+  };
+
   update();
   window.addEventListener('resize', update);
   viewport?.addEventListener('resize', update);
   viewport?.addEventListener('scroll', update);
-  document.addEventListener('fullscreenchange', update);
-  document.addEventListener('webkitfullscreenchange', update);
+  document.addEventListener('fullscreenchange', settle);
+  document.addEventListener('webkitfullscreenchange', settle);
+  window.addEventListener('orientationchange', settle);
   return () => {
+    clearTimers();
     window.removeEventListener('resize', update);
     viewport?.removeEventListener('resize', update);
     viewport?.removeEventListener('scroll', update);
-    document.removeEventListener('fullscreenchange', update);
-    document.removeEventListener('webkitfullscreenchange', update);
+    document.removeEventListener('fullscreenchange', settle);
+    document.removeEventListener('webkitfullscreenchange', settle);
+    window.removeEventListener('orientationchange', settle);
     root.style.removeProperty('--app-visible-width');
     root.style.removeProperty('--app-visible-height');
     root.style.removeProperty('--app-visible-left');

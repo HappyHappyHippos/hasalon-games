@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useT } from '../../strings';
 import { Button } from '../../ui/Button';
 import { MemeCard } from './MemeCard';
-import { downloadMeme, type DownloadableMeme } from './download';
+import { renderMemeBlob, saveMeme, type DownloadableMeme } from './download';
 
 /**
  * Save this meme as a real image.
@@ -11,11 +11,31 @@ import { downloadMeme, type DownloadableMeme } from './download';
  * Lifted out of `ResultCard` so the gallery's enlarged view uses the same
  * button rather than a second one that drifts: the failure copy, the disabled
  * state and the "which meme" plumbing are all one thing.
+ *
+ * **The rendered picture is kept**, which is what makes this work on an iPhone.
+ * Drawing the meme takes long enough to spend the tap's user activation, and
+ * iOS will not open a share sheet without one — so the first tap draws, and if
+ * the sheet is refused for that reason the blob stays in hand and the button
+ * asks for one more tap, which has nothing left to wait for and does open it.
+ * Everywhere else the first tap is the only tap.
  */
 export function MemeDownloadButton({ meme, size = 'sm' }: { meme: DownloadableMeme; size?: 'sm' | 'md' | 'lg' }): JSX.Element {
   const t = useT();
   const [downloading, setDownloading] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [retry, setRetry] = useState(false);
+  const rendered = useRef<Blob | null>(null);
+
+  // A different meme is a different picture; keeping the old one would save the
+  // wrong joke on the next tap.
+  useEffect(() => {
+    rendered.current = null;
+    setRetry(false);
+    setFailed(false);
+  }, [meme]);
+
+  const label = downloading ? t.memesDownloading : retry ? t.memesDownloadRetry : t.memesDownload;
+
   return (
     <div className="memes__download">
       <Button
@@ -24,12 +44,20 @@ export function MemeDownloadButton({ meme, size = 'sm' }: { meme: DownloadableMe
         onClick={() => {
           setDownloading(true);
           setFailed(false);
-          void downloadMeme(meme)
-            .catch(() => setFailed(true))
-            .finally(() => setDownloading(false));
+          void (async () => {
+            try {
+              const blob = rendered.current ?? (await renderMemeBlob(meme));
+              rendered.current = blob;
+              setRetry((await saveMeme(meme, blob)) === 'gesture');
+            } catch {
+              setFailed(true);
+            } finally {
+              setDownloading(false);
+            }
+          })();
         }}
       >
-        {downloading ? t.memesDownloading : t.memesDownload}
+        {label}
       </Button>
       {failed && <span role="status">{t.memesDownloadFailed}</span>}
     </div>

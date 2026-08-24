@@ -28,6 +28,41 @@ import {
 } from '@mg/shared/dirt';
 import { dirtInput } from './input';
 
+/**
+ * Where the local car is *actually* pointing right now.
+ *
+ * The joystick is a heading control, so it has to subtract the car's heading
+ * from the one you are asking for — and the newest snapshot's `a` is not the
+ * car's heading, it is the heading a snapshot interval plus half a round trip
+ * ago. At `TURN_RATE` that is up to half a radian of swing already committed
+ * and not yet visible, which on a stick means asking for lock the car has
+ * already used and then having to unwind it: the car hunts either side of the
+ * line instead of settling on it.
+ *
+ * This is {@link DirtPredictor.update} without the sub-tick carry and without
+ * keeping the body — the same replay through the same `stepCar`, answering only
+ * the question the control needs. Cheap enough for the 60 Hz resample in
+ * `Controls.tsx`, and `trackGeometry` is memoised so rebuilding it costs
+ * nothing after the first call.
+ */
+export function predictCarAngle(server: DirtSnapshotCar, geometry: TrackGeometry, controllable: boolean): number {
+  const body: CarBody = {
+    x: server.x,
+    y: server.y,
+    angle: server.a,
+    vx: server.vx,
+    vy: server.vy,
+    steer: server.st,
+  };
+  const mods = carModsFromSnapshot(server);
+  const pending = dirtInput.since(server.ack);
+  const start = Math.max(0, pending.length - MAX_REPLAY_TICKS);
+  for (let i = start; i < pending.length; i += 1) {
+    stepCar(body, { steer: steerOf(pending[i]!.bits), controllable }, geometry, DT, mods);
+  }
+  return body.angle;
+}
+
 /** Past this the server has stopped acknowledging and replaying more is noise. */
 const MAX_REPLAY_TICKS = 24;
 /** A frame-to-frame jump this big is a correction or a recovery, not driving. */
