@@ -9,7 +9,12 @@ import { Button } from './Button';
 import { Toggle } from './Toggle';
 import { useHasTouch } from './useTouchControls';
 import { useVoice } from './useVoice';
-import { exitFullscreen, useIsFullscreen } from './useFullscreen';
+import {
+  enterFullscreen,
+  exitFullscreen,
+  fullscreenSupported,
+  useIsFullscreen,
+} from './useFullscreen';
 import type { TouchControlsMode } from '../store';
 import { LANGS, type Dict, type Lang } from '../i18n';
 import { GearIcon } from './Icons';
@@ -303,15 +308,21 @@ export function OptionsMenu(): JSX.Element {
 
         <section className="options__section">
           <h3 className="eyebrow">{t.sectionControls}</h3>
-          {fullscreen && (
+          {/* Both directions, not just the way out.
+              The floating maximize button is a 38px circle in a corner that
+              shares a row with pause and the microphone, and it is the only way
+              into fullscreen on a phone — so anything that covers it, moves it,
+              or eats the tap leaves no route at all. This is that route, at a
+              size nothing can hide, and it is the same call either way. */}
+          {fullscreenSupported() && (
             <Button
               full
               onClick={() => {
-                void exitFullscreen();
+                void (fullscreen ? exitFullscreen() : enterFullscreen());
                 close();
               }}
             >
-              {t.exitFullscreen}
+              {fullscreen ? t.exitFullscreen : t.enterFullscreen}
             </Button>
           )}
           <div className="options__choice">

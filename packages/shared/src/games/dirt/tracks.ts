@@ -91,24 +91,12 @@ export const DIRT_TRACKS: Record<DirtTrackId, DirtTrackDef> = {
       { x: 198, y: 560, w: 108 },
     ],
     solids: [
-      // **Off the road, never on it.** Each box's near face is pushed just past
-      // the edge of the racing surface, so it lines the road rather than
-      // standing in it: a car on the racing line never meets one, and a car
-      // that runs wide onto the shoulder does. Boxes are kept small enough to
-      // sit inside the shoulder — anything bigger ends up buried in the scenery,
-      // which is already solid, and is then an obstacle nobody can ever see or
-      // hit. `tracks.test.ts` fails on any box that touches the surface.
-      { x: 867, y: 481, w: 68, h: 68 },
-      { x: 1146, y: 427, w: 68, h: 68 },
-      { x: 528, y: 364, w: 68, h: 68 },
-      { x: 311, y: 423, w: 68, h: 68 },
-      { x: 1411, y: 753, w: 68, h: 68 },
+      // Empty on purpose — see the note above `DIRT_TRACKS`. The rocks that
+      // used to line this road are drawn scenery now, not collision.
     ],
     pads: [
       { at: 0.14, side: -0.55 },
-      { at: 0.14, side: 0.55 },
       { at: 0.42, side: 0 },
-      { at: 0.63, side: -0.5 },
       { at: 0.63, side: 0.5 },
       { at: 0.86, side: 0 },
     ],
@@ -174,22 +162,14 @@ export const DIRT_TRACKS: Record<DirtTrackId, DirtTrackDef> = {
       },
     ],
     solids: [
-      // Pines lining the road, never in it. See the note on canyon's list.
-      { x: 878, y: 821, w: 68, h: 68 },
-      { x: 1211, y: 515, w: 68, h: 68 },
-      { x: 1029, y: 406, w: 68, h: 68 },
-      { x: 1450, y: 144, w: 68, h: 68 },
-      { x: 807, y: 26, w: 68, h: 68 },
+      // Empty on purpose; the pines are scenery. See canyon's note.
     ],
     pads: [
       { at: 0.06, side: -0.5 },
-      { at: 0.06, side: 0.5 },
       { at: 0.26, side: 0 },
-      { at: 0.46, side: -0.45 },
       { at: 0.46, side: 0.45 },
       { at: 0.68, side: 0 },
       { at: 0.86, side: -0.4 },
-      { at: 0.86, side: 0.4 },
     ],
   },
 
@@ -236,20 +216,12 @@ export const DIRT_TRACKS: Record<DirtTrackId, DirtTrackDef> = {
       { x: 190, y: 650, w: 100 },
     ],
     solids: [
-      // Machinery and spoil lining the road, never in it. See canyon's note.
-      { x: 1214, y: 549, w: 68, h: 68 },
-      { x: 767, y: 513, w: 68, h: 64 },
-      { x: 1100, y: 305, w: 68, h: 68 },
-      { x: 527, y: 305, w: 68, h: 68 },
-      { x: 284, y: 467, w: 68, h: 68 },
+      // Empty on purpose; the machinery is scenery. See canyon's note.
     ],
     pads: [
       { at: 0.1, side: -0.5 },
-      { at: 0.1, side: 0.5 },
       { at: 0.3, side: 0 },
-      { at: 0.46, side: -0.5 },
       { at: 0.46, side: 0.5 },
-      { at: 0.68, side: 0 },
       { at: 0.86, side: 0 },
     ],
   },
@@ -305,20 +277,12 @@ export const DIRT_TRACKS: Record<DirtTrackId, DirtTrackDef> = {
       },
     ],
     solids: [
-      // Salt pillars lining the road, never in it. See canyon's note.
-      { x: 1077, y: 485, w: 68, h: 68 },
-      { x: 1530, y: 463, w: 68, h: 68 },
-      { x: 671, y: 40, w: 68, h: 68 },
-      { x: 1121, y: 407, w: 68, h: 68 },
+      // Empty on purpose; the salt pillars are scenery. See canyon's note.
     ],
     pads: [
-      { at: 0.12, side: -0.6 },
       { at: 0.12, side: 0 },
-      { at: 0.12, side: 0.6 },
       { at: 0.34, side: -0.5 },
-      { at: 0.34, side: 0.5 },
       { at: 0.62, side: 0 },
-      { at: 0.84, side: -0.55 },
       { at: 0.84, side: 0.55 },
     ],
   },

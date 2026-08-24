@@ -9,21 +9,30 @@
  *
  * Deflection ANGLE sets the target heading; deflection MAGNITUDE gates whether
  * the tank drives at all. A short push rotates the tank in place with no drive
- * bit; pushing further out adds a drive bit on top of the turn. Both gates are
- * Schmitt triggers for the same reason as before: a thumb (or a heading) that
- * sits right on a single threshold chatters, which reads as the tank
- * stuttering rather than as input.
+ * bit; pushing further out adds a drive bit on top of the turn.
+ *
+ * **The turn is analogue and the drive is latched, and the difference is the
+ * point.** Driving is a genuine either/or, so it needs a Schmitt trigger to stop
+ * a thumb resting on the threshold flickering the tank in and out of motion.
+ * Turning is not either/or, and pretending it was is what made the tank waddle:
+ * a bare direction bit rotates the hull at the full `TURN_RATE` whether it is
+ * 90° off the stick or 2°, so the control could only stop by guessing when to,
+ * from a heading predicted over a 114 ms link. It guessed late, overshot, turned
+ * back, overshot again — forever, for a stick held slightly off the nose. The
+ * request is now proportional to the error ({@link turnFor}), so it converges
+ * on its own and no threshold has to be right. Hysteresis went with it: an
+ * analogue axis that fades to zero has nothing to chatter between.
  *
  * A stick pointed BEHIND the tank reverses rather than turning around. Aiming
  * the hull at the stick is only the shorter way round while the stick is in
  * front; past a right angle the shorter answer is to back up, and swinging a
  * 180° turn in a corridor a tank barely fits down is how you die in a corner
- * you were trying to leave. So the mode is a third latch: past `REVERSE_ON` off
+ * you were trying to leave. So the mode is its own latch: past `REVERSE_ON` off
  * the nose the tank aims its *tail* at the stick and drives `back`, and it
  * takes coming within `REVERSE_OFF` to go forward again. That band is wide —
  * a thumb sitting near a right angle would otherwise flip the tank between
- * driving forward and driving backward, which is far worse than any chatter a
- * turn bit can cause.
+ * driving forward and driving backward, which is the one kind of chatter the
+ * analogue turn axis does nothing to prevent.
  *
  * Centring resets the mode, so every fresh push is judged from scratch. That
  * costs nothing in the case it looks like it should: letting go mid-reverse
@@ -37,7 +46,7 @@
  * it can never manufacture a turn out of a stick that never left dead centre.
  */
 
-import { IN_BACK, IN_FWD, IN_TLEFT, IN_TRIGHT, wrapAngle } from '@mg/shared/tanks';
+import { IN_BACK, IN_FWD, turnBits, wrapAngle } from '@mg/shared/tanks';
 
 export interface StickVector {
   x: number;
@@ -48,9 +57,26 @@ export interface StickVector {
 const DRIVE_ON = 0.55;
 const DRIVE_OFF = 0.45;
 
-/** Angular difference (radians) between current and target heading, as a turn gate. */
-const TURN_ON = 0.12;
-const TURN_OFF = 0.06;
+/**
+ * Heading error, in radians, at which the tank asks for full lock.
+ *
+ * Below it the request shrinks in proportion, so the hull eases onto the
+ * heading instead of arriving at full speed and having to be caught. About 34°:
+ * wide enough that ordinary corrections are gentle, tight enough that pointing
+ * the stick somewhere genuinely different still snaps round at full rate.
+ */
+const FULL_TURN_ERROR = 0.6;
+
+/**
+ * Heading error below which the tank is simply pointing where you asked.
+ *
+ * This is not a latch and it is not hysteresis — it is a floor, and the whole
+ * reason it can be a plain threshold now. `turnBits` quantises the magnitude to
+ * fifteen steps, so the smallest non-zero request is 1/15 of `TURN_RATE`; this
+ * sits just under what that turns in one tick, which makes "aligned" a state the
+ * tank can actually be *in* rather than a line it crosses at speed.
+ */
+const TURN_EPS = 0.01;
 
 /**
  * How far off the nose the stick has to point before the tank backs up, and how
@@ -69,13 +95,12 @@ const CENTRE_EPS = 1e-6;
 
 export interface StickState {
   drive: 0 | 1;
-  turn: 0 | 1 | -1;
   /** 1 while the stick is behind the tank and the tank is backing toward it. */
   reverse: 0 | 1;
 }
 
 export function newStickState(): StickState {
-  return { drive: 0, turn: 0, reverse: 0 };
+  return { drive: 0, reverse: 0 };
 }
 
 export function stickToTankBits(vector: StickVector, currentAngle: number, state: StickState): number {
@@ -83,7 +108,6 @@ export function stickToTankBits(vector: StickVector, currentAngle: number, state
 
   if (magnitude < CENTRE_EPS) {
     state.drive = 0;
-    state.turn = 0;
     state.reverse = 0;
     return 0;
   }
@@ -92,23 +116,40 @@ export function stickToTankBits(vector: StickVector, currentAngle: number, state
 
   const targetAngle = Math.atan2(vector.y, vector.x);
   // Signed shortest angular difference, in (-pi, pi]. Positive means the
-  // target heading is clockwise of the tank's own — the same sense in which
-  // `IN_TRIGHT` increases `angle` in `physics.ts:stepTank` — so the sign here
-  // maps directly onto which bit to emit, no further translation needed.
+  // target heading is clockwise of the tank's own — the same sense in which a
+  // positive `turn` increases `angle` in `physics.ts:stepTank` — so the sign
+  // here maps straight onto the wire, no further translation needed.
   const diff = wrapAngle(targetAngle - currentAngle);
   state.reverse = latchReverse(diff, state.reverse);
 
   // Backing up aims the tail at the stick, so the angle to close is the one to
   // the *opposite* heading. It stays a signed shortest difference, and so still
-  // maps onto a turn bit the same way.
+  // maps onto the turn axis the same way.
   const steer = state.reverse === 1 ? wrapAngle(diff - Math.PI) : diff;
-  state.turn = latchTurn(steer, state.turn);
 
-  let bits = 0;
+  let bits = turnBits(turnFor(steer));
   if (state.drive === 1) bits |= state.reverse === 1 ? IN_BACK : IN_FWD;
-  if (state.turn === 1) bits |= IN_TRIGHT;
-  else if (state.turn === -1) bits |= IN_TLEFT;
   return bits;
+}
+
+/**
+ * Heading error to a turn request, −1 to 1.
+ *
+ * Proportional, and that is the whole fix for the waddle: the correction
+ * shrinks as the error does, so the hull decelerates onto the heading rather
+ * than arriving at full rate and needing something to catch it. A latched bit
+ * had nothing to catch it with except a threshold, and a threshold compared
+ * against a *predicted* heading over a 114 ms link is wrong often enough to
+ * overshoot every time — which is the oscillation players see.
+ *
+ * There is deliberately no hysteresis here any more. Hysteresis is what you
+ * reach for when a control can only be on or off; an analogue one that goes
+ * quiet near zero cannot chatter, because there is nothing to chatter between.
+ */
+function turnFor(error: number): number {
+  if (Math.abs(error) < TURN_EPS) return 0;
+  const want = error / FULL_TURN_ERROR;
+  return want < -1 ? -1 : want > 1 ? 1 : want;
 }
 
 function latchDrive(magnitude: number, current: 0 | 1): 0 | 1 {
@@ -122,10 +163,3 @@ function latchReverse(diff: number, current: 0 | 1): 0 | 1 {
   return off > REVERSE_ON ? 1 : 0;
 }
 
-function latchTurn(diff: number, current: 0 | 1 | -1): 0 | 1 | -1 {
-  if (current === 1) return diff > TURN_OFF ? 1 : 0;
-  if (current === -1) return diff < -TURN_OFF ? -1 : 0;
-  if (diff > TURN_ON) return 1;
-  if (diff < -TURN_ON) return -1;
-  return 0;
-}

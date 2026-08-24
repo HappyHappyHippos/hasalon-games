@@ -35,8 +35,14 @@ export interface TankBody {
 export interface TankMoveInput {
   fwd: boolean;
   back: boolean;
-  left: boolean;
-  right: boolean;
+  /**
+   * How hard to turn, −1 (full left) to 1 (full right).
+   *
+   * Analogue rather than two booleans, because a travel control cannot settle
+   * on a heading it can only approach at one fixed rate — see the note on
+   * `types.ts:IN_TURN_SHIFT`. `turnOf(bits)` is how every caller gets it.
+   */
+  turn: number;
   /** False during the countdown, after death, and for a body the server owns. */
   controllable: boolean;
 }
@@ -63,7 +69,10 @@ export function stepTank(
   mods: TankMods = NO_TANK_MODS,
 ): void {
   if (input.controllable) {
-    const turn = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    // Clamped here rather than trusted: `turn` arrives from a wire field a
+    // client controls, and an out-of-range value would spin a hull faster than
+    // any input can ask for.
+    const turn = input.turn < -1 ? -1 : input.turn > 1 ? 1 : input.turn;
     if (turn !== 0) body.angle = wrapAngle(body.angle + turn * TURN_RATE * mods.turnMul * dt);
 
     const target = input.fwd

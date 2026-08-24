@@ -17,10 +17,11 @@ import { DT, TICK_MS } from '@mg/shared';
 import {
   IN_BACK,
   IN_FWD,
-  IN_TLEFT,
-  IN_TRIGHT,
+  TURN_RATE,
   movementMods,
   stepTank,
+  turnOf,
+  wrapAngle,
   type Maze,
   type TankBody,
   type TankSnapshotPlayer,
@@ -77,8 +78,7 @@ export class TanksPredictor {
         {
           fwd: (bits & IN_FWD) !== 0,
           back: (bits & IN_BACK) !== 0,
-          left: (bits & IN_TLEFT) !== 0,
-          right: (bits & IN_TRIGHT) !== 0,
+          turn: turnOf(bits),
           controllable,
         },
         maze,
@@ -102,6 +102,35 @@ export class TanksPredictor {
     this.active = true;
     return body;
   }
+}
+
+/**
+ * Where the local tank is *actually* pointing right now.
+ *
+ * The thumbstick is a travel control: it compares where you are pushing against
+ * where the tank faces, and holds a turn bit until the two line up. That
+ * comparison has to be made against the heading at the present instant, and the
+ * newest snapshot's `a` is not that — it is the heading a snapshot interval plus
+ * half a round trip ago. On a 114 ms link the tank has already swung ~0.3 rad
+ * past it, so the stick kept asking for turn long after the tank had arrived,
+ * sailed past the heading, then reversed. That is the wobble: the control was
+ * steering by a photograph.
+ *
+ * This is the angle half of {@link TanksPredictor.update} — the same replay,
+ * against the same inputs, skipping the position integration the caller does not
+ * need. Cheap enough to call at 60 Hz, which is what `TanksTouchPad` does.
+ */
+export function predictAngle(server: TankSnapshotPlayer, controllable: boolean): number {
+  if (!controllable) return server.a;
+  const mods = movementMods(server.bf ?? {});
+  const pending = tanksInput.since(server.ack);
+  const start = Math.max(0, pending.length - MAX_REPLAY_TICKS);
+  let angle = server.a;
+  for (let i = start; i < pending.length; i += 1) {
+    const turn = turnOf(pending[i]!.bits);
+    if (turn !== 0) angle = wrapAngle(angle + turn * TURN_RATE * mods.turnMul * DT);
+  }
+  return angle;
 }
 
 /**
@@ -129,8 +158,7 @@ export function advanceTank(
   const input = {
     fwd: (server.ib & IN_FWD) !== 0,
     back: (server.ib & IN_BACK) !== 0,
-    left: (server.ib & IN_TLEFT) !== 0,
-    right: (server.ib & IN_TRIGHT) !== 0,
+    turn: turnOf(server.ib),
     controllable,
   };
 

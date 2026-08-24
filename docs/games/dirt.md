@@ -1,4 +1,8 @@
-# Dirt Racing
+# אישה נוהגת (Woman Driving)
+
+The game's id is `dirt` everywhere in the code, and `GameMeta.name` is still the
+English "Dirt Racing" — that one is for logs. The displayed name lives only in
+`client/i18n.ts`, per the rule in CLAUDE.md.
 
 Implementation notes for `packages/shared/src/games/dirt/` and
 `packages/client/src/games/dirt/`. Read this before changing anything in
@@ -125,6 +129,16 @@ wheel than the server's. This is most of the difference between twitchy and
 planted, and it matters most on a keyboard, where the input is instantly full
 lock.
 
+**Nothing on these courses is solid except the scenery.** The `solids` lists are
+empty: the rocks, pines, machinery and salt pillars that used to line the roads
+are drawn now and nothing else. They were never chicanes — they sat on the
+shoulder to punish running wide — but a car that clips one stops *dead*, and in a
+game with no brake and no reverse that is a much bigger penalty than the mistake
+deserved. The shoulder already punishes running wide by being slow, and the
+scenery past it is solid by construction, so the course still ends where it looks
+like it ends. `tracks.test.ts` keeps checking that no box sits on the racing line;
+with no boxes it passes trivially, and it is there for whoever adds one back.
+
 **There are two powerups, and neither of them slows anybody.** `speed` helps
 you, `mine` hurts whoever is behind. There used to be a third, `reverse`, which
 flipped everyone else's steering — it was removed, and the removal is worth
@@ -144,23 +158,50 @@ car do a lap on its own, and the driver of that car wants it least. In a two-car
 race that is the winner crossing the line, which is the rule working rather than
 an edge case. The stragglers are still placed, on the progress they managed.
 
-**The steering wheel is a relative control, not a thumbstick, and the two are
-not interchangeable.** A stick is a *direction* control — you point it where you
-want to go — which is meaningless for a car that can only turn relative to its
-own heading. Pointing a stick "up-left" means something different every second
-on a course that changes compass direction constantly. Drag left or right
-instead: it matches the axis the sim actually consumes.
+**The control is a joystick: point it where you want to go, and the car goes
+there.** That is a reversal, and the reasoning it reversed is worth keeping,
+because it was good reasoning that turned out to be wrong about people.
 
-**The whole lower band of the screen is the wheel; the drawn wheel is a
-readout.** The first version was a small graphic in a corner that you had to
-hit, with full lock only 78 px away — so the usable travel was a few dozen
-pixels, every input was near full lock, and the car darted. It also looked
-rotary while behaving linear, so the gesture it invited was not the one it
-wanted. Now: press anywhere in the band and that point becomes centre (the same
-floating origin `Thumbstick` uses, for the same reason), full lock is 190 px
-away so the middle of the range is somewhere you can sit, and the corner dial
-plus the bar along the bottom show how much lock is on without looking away
-from the road.
+The argument for a wheel was that a car can only turn *relative to its own
+heading*, which is exactly what the simulation consumes, whereas a heading
+control means something different every second on a course that keeps changing
+compass direction — "up-left" is not a place. Two versions were built on it: a
+small dial in a corner (full lock 78 px away, so every input was near full lock
+and the car darted), then the whole lower band as a rotary wheel you turned with
+your thumb.
+
+Both worked and neither was *played*. A wheel is a control you have to translate:
+it asks which way to turn, relative to a heading you are also tracking, while
+the corner arrives. A stick asks where you want to go, and everyone already knows
+the answer to that. The translating still has to happen — it just belongs in
+`stickSteer.ts`, sixty times a second, rather than in the player's head.
+
+**The steering request is proportional to the heading error, never a direction.**
+This is what the analogue axis (`steerBits`) was always for. Full lock while the
+car is pointing somewhere else, tapering to nothing as it comes round: the
+correction shrinks with the error, so the car settles on the line instead of
+oversteering past it and being caught. Asking for full lock right up to the
+instant of alignment is how a heading control turns into a car that fights you —
+the same failure Tank Trouble's hull had with a bang-bang turn bit, and
+`stickSteer.test.ts` pins the loop rather than either half of it, because neither
+half looks wrong alone.
+
+**The car's heading has to come from the predictor, not the snapshot**
+(`predictor.ts:predictCarAngle`). A heading control subtracts two angles and the
+snapshot's is a snapshot interval plus half a round trip old — up to half a
+radian of swing at `TURN_RATE` that is already committed and not yet visible. Use
+it and the stick asks for lock the car has spent, then unwinds it: the car hunts
+either side of the line rather than sitting on it.
+
+**And the stick has to be re-read every tick, not on pointer events.** Both sides
+of that subtraction move, and the car's side moves whether or not your thumb
+does. A request derived only from `onMove` is stale the moment it is made, and a
+thumb held perfectly still would drive the car in a circle. `Controls.tsx`
+resamples at 60 Hz, the same rate `bitInput` samples at.
+
+There is nothing to latch here, unlike the tank: no reverse gear and no throttle,
+so a stick pointed behind the car is just a large error and the proportional law
+already answers it with full lock the short way round.
 
 **Skid marks are local and deliberately not in the snapshot.** They are pure
 decoration derived from a flag the server already sends, so putting the marks
@@ -200,7 +241,7 @@ Dropping files at these paths needs no code change:
 | `client/public/stages/dirt/dirt_track_<id>.png` | The painted course | 1600×900. Drawn *under* the ribbons; the kerbs stay geometry-drawn, because they mark the real edge. `<id>` is `canyon`, `grove`, `quarry`, `saltflat`. |
 | `client/public/cars/car_<colorIndex>.png` | Car sprite | Drawn nose-right, about 3:2. One per seat colour (0–7). |
 | `client/public/powerups/powerup_dirt_<kind>.png` | Powerup icons | Square. `<kind>` is `speed`, `mine`, `reverse`. |
-| `client/public/boxart/dirt.png` | Lobby card | 200×130. `BoxArt.tsx` currently draws inline SVG — swap the whole body for the same `<img>` the other games use. |
+| `client/public/boxart/dirt.png` | Lobby card | **Done.** `BoxArt.tsx` is the same `<img>` every other game's card is. |
 | `client/public/music/dirt.mp3` | Music bed | **mp3 only** — see the Ogg note in `public/music/ATTRIBUTION.md`. Currently points at `tanks.mp3`, deliberately at a file that *exists*; change the one line in `music.ts` and add the attribution. |
 
 **If a backdrop is painted, the centreline has to be traced onto it rather than

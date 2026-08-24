@@ -1,5 +1,6 @@
 import { useEffect, useRef, type JSX } from 'react';
 import { colorFor, type RoomView } from '@mg/shared';
+import { IN_TLEFT, IN_TRIGHT, IN_TURN_MASK } from '@mg/shared/tanks';
 import { useStore } from '../../store';
 import { socket } from '../../net/socket';
 import { Screen } from '../../ui/Screen';
@@ -8,6 +9,9 @@ import { useVoice } from '../../ui/useVoice';
 import { TanksRenderer } from './Renderer';
 import { attachTanksInput } from './input';
 import { Controls } from './Controls';
+
+/** Turning is one analogue field, written whole — see `TouchPad.tsx:TURN_FIELD`. */
+const TURN_MASK = IN_TLEFT | IN_TRIGHT | IN_TURN_MASK;
 
 interface Props {
   room: RoomView;
@@ -66,7 +70,11 @@ export function TanksScreen({ room, mySeat }: Props): JSX.Element {
       hud={<TanksHud room={room} mySeat={mySeat} />}
       controls={
         mySeat >= 0 && showTouch ? (
-          <Controls mySeat={mySeat} onButton={(bit, down) => inputRef.current?.setButton(bit, down)} />
+          <Controls
+            mySeat={mySeat}
+            onButton={(bit, down) => inputRef.current?.setButton(bit, down)}
+            onTurn={(bits) => inputRef.current?.setField(TURN_MASK, bits)}
+          />
         ) : null
       }
     />

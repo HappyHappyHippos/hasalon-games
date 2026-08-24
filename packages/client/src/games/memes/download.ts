@@ -5,6 +5,7 @@ import {
   type MemesStageEntry,
 } from '@mg/shared/memes';
 import { memeUrl } from './preload';
+import { isIOSDevice } from '../../ui/mobileViewport';
 
 type Drawable = HTMLImageElement | HTMLVideoElement;
 
@@ -129,8 +130,14 @@ function drawCaption(
  */
 export type DownloadableMeme = Pick<MemesStageEntry, 'templateId' | 'texts' | 'positions'>;
 
-/** Render the meme to a real image and download it locally. */
-export async function downloadMeme(stage: DownloadableMeme): Promise<void> {
+/**
+ * Render the meme to a real JPEG.
+ *
+ * Kept separate from saving it because on iOS the save has to happen inside the
+ * tap that asked for it — see {@link saveMeme}. A caller that already has the
+ * picture can retry the save without paying for the drawing again.
+ */
+export async function renderMemeBlob(stage: DownloadableMeme): Promise<Blob> {
   const template = templateById(stage.templateId);
   if (!template) throw new Error('Unknown meme template');
   await document.fonts?.ready;
@@ -158,15 +165,86 @@ export async function downloadMeme(stage: DownloadableMeme): Promise<void> {
       canvas.height,
     );
   });
-  const blob = await new Promise<Blob>((resolve, reject) => {
+  return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((value) => value ? resolve(value) : reject(new Error('Could not encode meme')), 'image/jpeg', 0.9);
   });
+}
+
+/**
+ * What happened when we tried to hand the picture over.
+ *
+ * `gesture` is the one the UI has to react to rather than report: iOS only
+ * allows the share sheet to open inside the tap that asked for it, and the
+ * drawing above takes long enough to lose that. The caller keeps the blob and
+ * offers a second tap, which is then instant and does open the sheet.
+ */
+export type SaveOutcome = 'saved' | 'shared' | 'cancelled' | 'gesture';
+
+function fileNameFor(stage: DownloadableMeme): string {
+  return `hasalon-${stage.templateId}.jpg`;
+}
+
+/**
+ * Hand a rendered meme to the phone or the desktop, whichever this is.
+ *
+ * **`<a download>` does nothing at all on iOS**, and it fails the way that is
+ * hardest to report: the attribute exists on the element, so it feature-detects
+ * as supported, the click is accepted, and no file ever appears. That is the
+ * whole of "the download button doesn't work on iPhone" — the button was fine
+ * and the browser has never implemented the attribute.
+ *
+ * So iOS goes through the share sheet instead, which is where "Save Image"
+ * actually lives on that platform, and everything else keeps the anchor, which
+ * downloads silently rather than raising a share sheet over a desktop.
+ * The object URL outlives the call by a wide margin because a share sheet or a
+ * new tab reads it long after this function has returned — the old one-second
+ * revoke was already racy on a slow phone.
+ */
+export async function saveMeme(stage: DownloadableMeme, blob: Blob): Promise<SaveOutcome> {
+  const name = fileNameFor(stage);
+
+  if (isIOSDevice() && typeof navigator.canShare === 'function') {
+    const file = new File([blob], name, { type: 'image/jpeg' });
+    if (navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] });
+        return 'shared';
+      } catch (error) {
+        const kind = (error as DOMException | undefined)?.name;
+        // The person closed the sheet. Nothing failed and nothing needs saying.
+        if (kind === 'AbortError') return 'cancelled';
+        // No transient activation left. The caller holds the blob and can try
+        // again from a fresh tap; falling through to a blocked `window.open`
+        // here would only turn a retryable state into a hard failure.
+        if (kind === 'NotAllowedError') return 'gesture';
+        // Anything else (no handler for the type, share unavailable after all)
+        // still has the tab fallback below.
+      }
+    }
+  }
+
   const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = `hasalon-${stage.templateId}.jpg`;
-  document.body.append(anchor);
-  anchor.click();
-  anchor.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  try {
+    const anchor = document.createElement('a');
+    if (!isIOSDevice() && 'download' in anchor) {
+      anchor.href = url;
+      anchor.download = name;
+      document.body.append(anchor);
+      anchor.click();
+      anchor.remove();
+      return 'saved';
+    }
+    // Last resort, and the only one left on an iOS browser with no share sheet:
+    // put the picture on screen on its own so it can be long-pressed and saved.
+    const tab = window.open(url, '_blank');
+    if (!tab) return 'gesture';
+    return 'shared';
+  } finally {
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+}
+
+/** Render and save in one go, for callers with a live user gesture to spend. */
+export async function downloadMeme(stage: DownloadableMeme): Promise<SaveOutcome> {
+  return saveMeme(stage, await renderMemeBlob(stage));
 }

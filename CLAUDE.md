@@ -11,8 +11,9 @@ that ship today: **Gun Mayhem** (2–6 player platform fighter, the priority —
 this is the flagship game and should get the most care), **Bomb It** (2–8 player
 grid-based bomber with kickable bombs), **Worms** (up to
 8-player turn-based artillery on destructible terrain), **Tank Trouble** (up to
-8-player top-down maze duel with ricocheting shells), **Dirt Racing** (2–8
-player top-down arcade racer — auto-throttle, steer only), **Achtung die Kurve**
+8-player top-down maze duel with ricocheting shells), **אישה נוהגת** (2–8
+player top-down arcade racer — auto-throttle, point the stick where you want to
+go; the id is still `dirt`), **Achtung die Kurve**
 (up to 8-player curve/Snake game), **Skribbl** (up to 8-player draw and guess, Hebrew
 or English), **Broken Telephone** (2–8 player draw/guess chains) and **Meme Machine**.
 
@@ -372,7 +373,7 @@ things that cost real debugging time to learn.
 
 - **Achtung die Kurve** — [`docs/games/achtung.md`](docs/games/achtung.md)
 - **Bomb It** — [`docs/games/bombit.md`](docs/games/bombit.md)
-- **Dirt Racing** — [`docs/games/dirt.md`](docs/games/dirt.md)
+- **אישה נוהגת** (`dirt`) — [`docs/games/dirt.md`](docs/games/dirt.md)
 - **Gun Mayhem** — [`docs/games/gunmayhem.md`](docs/games/gunmayhem.md)
 - **Worms** — [`docs/games/worms.md`](docs/games/worms.md)
 - **Tank Trouble** — [`docs/games/tanks.md`](docs/games/tanks.md)
@@ -478,6 +479,24 @@ canvas input, dispatch `PointerEvent`s at the element and stub
   (`scripts/smoke-ws.mjs`), which drives two real `ws` clients through
   create/join/ready. Faster, deterministic, and it exercises the actual wire
   protocol. Extend that script rather than reaching for tabs again.
+- **Safari's Web Audio cannot consume a remote WebRTC stream** (WebKit bug
+  173863), and `net/voice.ts` used to route every peer through
+  `createMediaStreamSource(peer.remote) → destination` and mute the `<audio>`
+  element it replaced. On iPhone that is the whole room, silent, with nothing in
+  the console — and `attemptPlay` still resolved, because the element genuinely
+  *was* playing, so `playbackBlocked` stayed false and the UI reported voice as
+  healthy. **The `<audio>` element is the only playback path that works
+  everywhere; never mute it in favour of a graph.** Output routing (speaker vs
+  the quiet call receiver) is `navigator.audioSession.type`'s job — the API
+  WebKit added for exactly this, which cannot silence anything when it is
+  unsupported. The context that remains is for the microphone analyser only.
+- **`<a download>` does nothing on iOS**, and it feature-detects as supported:
+  the property is on the element, the click is accepted, no file appears. So a
+  save has to go through `navigator.share({ files })` there, which is where "Save
+  Image" lives on that platform. That in turn needs transient user activation,
+  which rendering the image spends — hence `memes/download.ts` splitting
+  `renderMemeBlob` from `saveMeme`, and the button keeping the blob so a second
+  tap has nothing left to wait for.
 - **Safari has never supported Ogg Vorbis** — not "old Safari", any of it,
   desktop and iOS. Two music tracks shipped as `.ogg` and the site was silent on
   every iPhone from first paint, which read as a code bug through two rounds of

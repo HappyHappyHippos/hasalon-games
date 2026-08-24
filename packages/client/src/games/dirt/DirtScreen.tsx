@@ -2,8 +2,8 @@ import { useEffect, useRef, type JSX } from 'react';
 import { colorFor, type RoomView } from '@mg/shared';
 import { IN_LEFT, IN_RIGHT, IN_STEER_MASK, type DirtPowerup } from '@mg/shared/dirt';
 
-/** Direction bits plus the magnitude field — everything the wheel writes. */
-const WHEEL_MASK = IN_LEFT | IN_RIGHT | IN_STEER_MASK;
+/** Direction bits plus the magnitude field — everything the stick writes. */
+const STEER_FIELD = IN_LEFT | IN_RIGHT | IN_STEER_MASK;
 import { useStore } from '../../store';
 import { socket } from '../../net/socket';
 import { Screen } from '../../ui/Screen';
@@ -78,9 +78,10 @@ export function DirtScreen({ room, mySeat }: Props): JSX.Element {
       controls={
         mySeat >= 0 && showTouch ? (
           <DirtControls
+            mySeat={mySeat}
             item={item}
             onButton={(bit, down) => inputRef.current?.setButton(bit, down)}
-            onSteer={(bits) => inputRef.current?.setField(WHEEL_MASK, bits)}
+            onSteer={(bits) => inputRef.current?.setField(STEER_FIELD, bits)}
           />
         ) : null
       }

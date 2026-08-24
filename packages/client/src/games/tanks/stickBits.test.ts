@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { IN_BACK, IN_FWD, IN_TLEFT, IN_TRIGHT } from '@mg/shared/tanks';
+import { DT } from '@mg/shared';
+import { IN_BACK, IN_FWD, IN_TLEFT, IN_TRIGHT, TURN_RATE, turnOf } from '@mg/shared/tanks';
 import { newStickState, stickToTankBits } from './stickBits';
 
 const CENTRE = { x: 0, y: 0 };
@@ -115,18 +116,56 @@ describe('stickToTankBits', () => {
     expect(bits2 & IN_TRIGHT).toBe(0);
   });
 
-  it('does not chatter around the turn threshold', () => {
+  it('asks for less turn the closer the hull is to the heading', () => {
+    const at = (error: number): number =>
+      turnOf(stickToTankBits({ x: Math.cos(error), y: Math.sin(error) }, 0, newStickState()));
+
+    // Strictly decreasing as the error shrinks. This is the property that makes
+    // the tank settle: at no point does a smaller error ask for more rotation.
+    expect(at(0.8)).toBe(1);
+    expect(at(0.4)).toBeGreaterThan(at(0.2));
+    expect(at(0.2)).toBeGreaterThan(at(0.05));
+    expect(at(0.05)).toBeGreaterThan(0);
+    expect(at(0)).toBe(0);
+  });
+
+  /**
+   * The waddle, as a test.
+   *
+   * A stick held forward and slightly off the nose used to put the tank in a
+   * permanent left-right-left oscillation, because a bang-bang turn bit can only
+   * stop by guessing and every guess overshot. Driving the real `TURN_RATE`
+   * integration from the real stick output is the only way to catch that: the
+   * bug is in the *loop*, and neither half looks wrong on its own.
+   */
+  it('settles on the heading it was pointed at instead of oscillating', () => {
     const state = newStickState();
-    // Facing +x; ~0.3 rad off is comfortably past TURN_ON.
-    expect(stickToTankBits({ x: Math.cos(0.3), y: Math.sin(0.3) }, 0, state).valueOf() & IN_TRIGHT).toBe(IN_TRIGHT);
+    const target = 0.35;
+    const stick = { x: Math.cos(target), y: Math.sin(target) };
+    let angle = 0;
+    const errors: number[] = [];
 
-    // Drift to just above TURN_OFF: still held.
-    let bits = stickToTankBits({ x: Math.cos(0.08), y: Math.sin(0.08) }, 0, state);
-    expect(bits & IN_TRIGHT).toBe(IN_TRIGHT);
+    for (let tick = 0; tick < 240; tick += 1) {
+      const turn = turnOf(stickToTankBits(stick, angle, state));
+      angle += turn * TURN_RATE * DT;
+      errors.push(target - angle);
+    }
 
-    // Past the off threshold: released, and it now takes the full on threshold to re-engage.
-    bits = stickToTankBits({ x: Math.cos(0.04), y: Math.sin(0.04) }, 0, state);
-    expect(bits & (IN_TLEFT | IN_TRIGHT)).toBe(0);
+    // Arrived, and stayed. The residual is `TURN_EPS`, the alignment floor —
+    // about half a degree, which is a tenth of the hull's own width at the
+    // length of a corridor and is the point of having a floor at all.
+    expect(Math.abs(errors[errors.length - 1]!)).toBeLessThan(0.011);
+    // And never crossed to the far side on the way — an overshoot of any size is
+    // the first half of the oscillation.
+    expect(Math.min(...errors)).toBeGreaterThan(-1e-9);
+  });
+
+  it('turns at full lock when the stick points somewhere genuinely different', () => {
+    const state = newStickState();
+    // A right angle off the nose is not a correction, it is a new direction, and
+    // easing into it would make the tank feel slow to answer.
+    const bits = stickToTankBits({ x: 0, y: 1 }, 0, state);
+    expect(turnOf(bits)).toBe(1);
   });
 
   it('releases everything when the stick returns to centre', () => {

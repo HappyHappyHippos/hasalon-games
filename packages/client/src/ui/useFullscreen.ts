@@ -58,10 +58,25 @@ function doc(): FullscreenDoc | null {
   return typeof document === 'undefined' ? null : (document as unknown as FullscreenDoc);
 }
 
+/**
+ * Is there a fullscreen API here at all?
+ *
+ * The `*Enabled` flags are the reliable half of this and are checked first, but
+ * they are not the whole answer: they report whether the *document* is
+ * permitted to go fullscreen, and a browser that leaves them unset (or that
+ * only ships the prefixed pair under a name we did not guess) still has a
+ * working `requestFullscreen` on the element. So the presence of the method
+ * counts too. Getting this wrong is not a silent no-op — `fullscreenNeedsInstall`
+ * turns the maximize button into the iPhone explainer, so a false negative
+ * replaces the control with a tip about home-screen shortcuts on a phone that
+ * could have gone fullscreen all along.
+ */
 export function fullscreenSupported(): boolean {
   const d = doc();
   if (!d) return false;
-  return d.fullscreenEnabled === true || d.webkitFullscreenEnabled === true;
+  if (d.fullscreenEnabled === true || d.webkitFullscreenEnabled === true) return true;
+  const el = document.documentElement as Element & FullscreenEl;
+  return typeof el.requestFullscreen === 'function' || typeof el.webkitRequestFullscreen === 'function';
 }
 
 function isFullscreen(): boolean {
@@ -76,11 +91,27 @@ function isFullscreen(): boolean {
  * `navigator.standalone` is the old iOS-only flag and is still the only one
  * older iOS reports; `display-mode: standalone` is the standard and covers
  * Android's installed-PWA case. Either means there is no URL bar to reclaim.
+ *
+ * **Measured once, at load, and never again.** Installing to the home screen
+ * cannot happen inside a session — you get a new one — so the answer is a
+ * constant, and treating it as one is what makes it safe to read during render.
+ * Sampling it live is not: `display-mode` is a *chain*, and browsers are
+ * entitled to match `standalone` while the Fullscreen API is active. On such a
+ * browser the first tap on maximize worked, the app re-rendered inside
+ * fullscreen, `isStandalone()` flipped to true — and `FullscreenButton` returns
+ * null for a standalone app, so the button deleted itself the moment it was
+ * used, taking `.app--nomaximize` and the whole button row's layout with it.
+ * The CSS in `styles.css` already assumes this cannot move mid-session; now it
+ * genuinely cannot.
  */
-export function isStandalone(): boolean {
+const STANDALONE = ((): boolean => {
   if (typeof window === 'undefined') return false;
   const legacy = (navigator as Navigator & { standalone?: boolean }).standalone === true;
   return legacy || window.matchMedia('(display-mode: standalone)').matches;
+})();
+
+export function isStandalone(): boolean {
+  return STANDALONE;
 }
 
 /**
