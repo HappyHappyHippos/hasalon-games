@@ -74,45 +74,57 @@ export const DIRT_TRACKS: Record<DirtTrackId, DirtTrackDef> = {
     },
     backdropUrl: '/stages/dirt/dirt_track_canyon.png',
     path: [
-      { x: 300, y: 686, w: 124 },
-      { x: 620, y: 686, w: 124 },
-      { x: 980, y: 686, w: 124 },
-      { x: 1280, y: 698, w: 112 },
-      // The hairpin. Narrow on entry, so committing to the inside is a choice.
-      { x: 1420, y: 540, w: 84 },
-      { x: 1360, y: 372, w: 80 },
-      { x: 1160, y: 316, w: 96 },
-      { x: 980, y: 352, w: 104 },
-      // A wide sweeper across the top — the overtaking place.
-      { x: 800, y: 300, w: 124 },
-      { x: 560, y: 214, w: 124 },
-      { x: 340, y: 236, w: 120 },
-      { x: 208, y: 380, w: 100 },
-      { x: 198, y: 560, w: 108 },
+      // The main straight: the longest and widest thing on any of the four, so
+      // a boost spent here is visible from the other end of it.
+      { x: 560, y: 730, w: 132 },
+      { x: 900, y: 730, w: 126 },
+      { x: 1190, y: 704, w: 112 },
+      // Fast right onto the back straight — takeable flat, and the first place
+      // anyone finds out that flat is not the same as fastest.
+      { x: 1384, y: 592, w: 90 },
+      { x: 1438, y: 404, w: 84 },
+      { x: 1330, y: 258, w: 84 },
+      { x: 1126, y: 214, w: 100 },
+      // The notch. The lap turns its back on the perimeter and dives into the
+      // middle of the arena, which is what stops this being another ring road:
+      // the apex is four hundred units from both straights, so the shape you
+      // are driving is legible from anywhere on it.
+      { x: 966, y: 330, w: 92 },
+      { x: 818, y: 398, w: 86 },
+      { x: 654, y: 322, w: 92 },
+      { x: 516, y: 206, w: 104 },
+      { x: 320, y: 184, w: 110 },
+      // Long left onto the start straight. Opens on exit, so there is a run to
+      // the line for whoever got it right.
+      { x: 176, y: 322, w: 88 },
+      { x: 158, y: 486, w: 96 },
+      { x: 214, y: 634, w: 108 },
+      { x: 356, y: 722, w: 126 },
     ],
     solids: [
       // Empty on purpose — see the note above `DIRT_TRACKS`. The rocks that
       // used to line this road are drawn scenery now, not collision.
     ],
     pads: [
-      { at: 0.14, side: -0.55 },
-      { at: 0.42, side: 0 },
-      { at: 0.63, side: 0.5 },
-      { at: 0.86, side: 0 },
+      { at: 0.16, side: -0.55 },
+      { at: 0.4, side: 0 },
+      { at: 0.58, side: 0.5 },
+      { at: 0.84, side: 0 },
     ],
   },
 
   // ---------------------------------------------------------------------
-  // Pine Grove — a fast perimeter loop with an S-bend spliced into the top
-  // straight, so the quickest way round is a rhythm rather than a line. The
-  // one shortcut cuts the inside of the long left-hand sweep.
+  // Pine Grove — the dumbbell. Two big lobes at either end of the arena, and a
+  // neck between them the lap crosses twice in opposite directions with a
+  // stand of pines down the middle.
   //
-  // Everything stays on the perimeter on purpose. This track began as a figure
-  // of eight joined by a neck, which is not a shape a 1600×900 arena can hold:
-  // the two sides of the neck ended up three units apart, so the surfaces were
-  // one blob and the "route" was unreadable. A loop that doubles back through
-  // the middle needs the two lanes far enough apart to leave scenery between
-  // them, and there is not room for both that and the loop.
+  // This is the shape the track was originally meant to have and could not: it
+  // began as a figure of eight, which needs a crossing, and then as a neck so
+  // narrow that its two sides were three units apart and the surfaces merged
+  // into one unreadable blob. What makes it work now is simply giving the neck
+  // room — the two runs are ~290 units apart, which after `clampShoulders` has
+  // taken its cut still leaves a visible strip of forest between them. Anything
+  // under about 270 and there is nothing left to draw.
   // ---------------------------------------------------------------------
   grove: {
     id: 'grove',
@@ -131,33 +143,49 @@ export const DIRT_TRACKS: Record<DirtTrackId, DirtTrackDef> = {
     },
     backdropUrl: '/stages/dirt/dirt_track_grove.png',
     path: [
-      { x: 350, y: 690, w: 124 },
-      { x: 660, y: 686, w: 124 },
-      { x: 1000, y: 686, w: 124 },
-      { x: 1290, y: 702, w: 108 },
-      // Tight right-hander at the end of the main straight.
-      { x: 1426, y: 566, w: 84 },
-      { x: 1422, y: 388, w: 88 },
-      // The S: down, then up. Narrow through both halves.
-      { x: 1330, y: 258, w: 100 },
-      { x: 1130, y: 292, w: 104 },
-      { x: 910, y: 228, w: 104 },
-      { x: 690, y: 214, w: 124 },
-      { x: 470, y: 214, w: 124 },
-      { x: 272, y: 214, w: 118 },
-      { x: 196, y: 412, w: 108 },
-      { x: 214, y: 574, w: 118 },
+      // Start along the bottom of the left lobe, running right into the lower
+      // neck. Wide here and narrowing all the way in, so the field sorts itself
+      // out before the trees rather than in them.
+      { x: 336, y: 744, w: 122 },
+      { x: 520, y: 716, w: 110 },
+      { x: 672, y: 630, w: 94 },
+      { x: 880, y: 612, w: 92 },
+      { x: 1072, y: 654, w: 98 },
+      // Round the right lobe.
+      { x: 1244, y: 748, w: 110 },
+      { x: 1404, y: 652, w: 94 },
+      { x: 1446, y: 470, w: 92 },
+      { x: 1392, y: 288, w: 94 },
+      { x: 1230, y: 186, w: 110 },
+      // Back through the upper neck, the other way. The pines between the two
+      // runs are the only thing on this course you can see the rest of the race
+      // through, which is most of why it is the one people remember.
+      { x: 1048, y: 246, w: 98 },
+      { x: 856, y: 314, w: 92 },
+      { x: 664, y: 328, w: 94 },
+      { x: 506, y: 234, w: 110 },
+      // Round the left lobe and back to the line.
+      { x: 320, y: 178, w: 122 },
+      { x: 168, y: 300, w: 100 },
+      { x: 150, y: 490, w: 100 },
+      { x: 196, y: 664, w: 112 },
     ],
     shortcuts: [
-      // Straight down the inside of the left sweep. Narrow, entered off the
-      // racing line, and threaded by a pine halfway along — quick if you get
-      // it, a stopped car if you arrive sideways.
+      // A chord across the bottom corner of the right lobe. It cuts a *bend*,
+      // never the neck — a cut across the neck would put the nearest point on
+      // the far run, which `MAX_PROGRESS_JUMP` throws away as a teleport, so
+      // the driver would lose the corner rather than gain it. See the note on
+      // `TrackShortcut`.
+      //
+      // Worth about half a second of a ten-second lap — the most any route on
+      // these four courses is allowed to be (`tracks.test.ts`) — and paid for
+      // by being barely wider than a car, entered off the racing line, and
+      // rejoining on the outside of the next corner.
       {
         path: [
-          { x: 300, y: 268, w: 44 },
-          { x: 292, y: 400, w: 42 },
-          { x: 300, y: 530, w: 44 },
-          { x: 330, y: 648, w: 46 },
+          { x: 1160, y: 664, w: 48 },
+          { x: 1300, y: 596, w: 44 },
+          { x: 1420, y: 500, w: 48 },
         ],
       },
     ],
@@ -165,17 +193,27 @@ export const DIRT_TRACKS: Record<DirtTrackId, DirtTrackDef> = {
       // Empty on purpose; the pines are scenery. See canyon's note.
     ],
     pads: [
-      { at: 0.06, side: -0.5 },
-      { at: 0.26, side: 0 },
-      { at: 0.46, side: 0.45 },
-      { at: 0.68, side: 0 },
-      { at: 0.86, side: -0.4 },
+      { at: 0.1, side: -0.5 },
+      { at: 0.3, side: 0 },
+      { at: 0.52, side: 0.45 },
+      { at: 0.72, side: 0 },
+      { at: 0.9, side: -0.4 },
     ],
   },
 
   // ---------------------------------------------------------------------
-  // Quarry — the technical one. A deep hairpin, a chicane on the top straight,
-  // and machinery to hit. Narrow throughout, so contact is constant.
+  // The Quarry — the technical one, and the only course that spends part of
+  // its lap inside its own infield. A short run off the line turns up into a
+  // tongue that climbs into the middle of the arena, doubles back, and drops
+  // onto the main straight facing the hairpin.
+  //
+  // The tongue is what makes this track, and its two legs are ~260 units apart
+  // for a reason: that is the least that survives `clampShoulders` with a strip
+  // of spoil left between them. Narrow it and the two runs merge into one wide
+  // patch of nothing, which is the failure Pine Grove was rebuilt out of.
+  //
+  // Everything here is narrower than the other three. There is nowhere on this
+  // lap where two cars are comfortable side by side, which is the point.
   // ---------------------------------------------------------------------
   quarry: {
     id: 'quarry',
@@ -194,42 +232,52 @@ export const DIRT_TRACKS: Record<DirtTrackId, DirtTrackDef> = {
     },
     backdropUrl: '/stages/dirt/dirt_track_quarry.png',
     path: [
-      { x: 340, y: 702, w: 108 },
-      { x: 700, y: 698, w: 112 },
-      { x: 1040, y: 706, w: 104 },
-      { x: 1310, y: 718, w: 92 },
-      // The hairpin, and the only place on any of these courses where the lap
-      // doubles back on itself. It is a *turn*, not an out-and-back excursion,
-      // and that distinction is what keeps it honest: going round costs about
-      // as much distance as cutting across would, so there is nothing to gain
-      // by trying. An excursion would need a barrier down its neck.
-      { x: 1432, y: 590, w: 78 },
-      { x: 1434, y: 400, w: 76 },
-      { x: 1330, y: 268, w: 86 },
-      { x: 1120, y: 190, w: 96 },
-      // A chicane on the top straight: down, then up, both at speed.
-      { x: 900, y: 258, w: 86 },
-      { x: 700, y: 178, w: 88 },
-      { x: 460, y: 198, w: 108 },
-      { x: 250, y: 210, w: 100 },
-      { x: 182, y: 430, w: 92 },
-      { x: 190, y: 650, w: 100 },
+      { x: 268, y: 752, w: 104 },
+      { x: 520, y: 758, w: 100 },
+      // Up into the infield. Arriving here too fast is the single most common
+      // way to lose this race, because the entry tightens and there is no room
+      // to run wide — the spoil heap is right there.
+      { x: 676, y: 694, w: 86 },
+      { x: 716, y: 566, w: 78 },
+      { x: 792, y: 482, w: 76 },
+      { x: 936, y: 474, w: 76 },
+      { x: 1036, y: 556, w: 78 },
+      { x: 1076, y: 684, w: 88 },
+      // Back out onto the main straight, pointed at the hairpin.
+      { x: 1156, y: 752, w: 98 },
+      { x: 1330, y: 744, w: 96 },
+      { x: 1448, y: 606, w: 82 },
+      { x: 1444, y: 404, w: 80 },
+      { x: 1340, y: 252, w: 86 },
+      // The top straight is the only place on the lap anybody rests.
+      { x: 1140, y: 172, w: 92 },
+      { x: 880, y: 164, w: 90 },
+      { x: 620, y: 172, w: 90 },
+      { x: 378, y: 190, w: 94 },
+      { x: 196, y: 330, w: 88 },
+      { x: 172, y: 530, w: 92 },
+      { x: 200, y: 676, w: 100 },
     ],
     solids: [
       // Empty on purpose; the machinery is scenery. See canyon's note.
     ],
     pads: [
-      { at: 0.1, side: -0.5 },
+      { at: 0.12, side: -0.5 },
       { at: 0.3, side: 0 },
-      { at: 0.46, side: 0.5 },
-      { at: 0.86, side: 0 },
+      { at: 0.5, side: 0.5 },
+      { at: 0.78, side: 0 },
     ],
   },
 
   // ---------------------------------------------------------------------
-  // Salt Flat — the fast one. Wide everywhere, two enormous sweepers, almost
-  // nothing solid. This is the track where powerups decide the race, because
-  // there is nowhere anyone is forced to slow down.
+  // Salt Flat — the fast one, and the only course that is not a ring. It is a
+  // rounded triangle: three enormous sweepers taken flat out, meeting at three
+  // corners of very different character — a long-radius kink, a wide open
+  // double-apex, and one genuinely slow hairpin where the whole lap is decided.
+  //
+  // Wide everywhere, because there is nothing here to make anybody lift and the
+  // race has to be decided by racing rather than by the road. This is the track
+  // where powerups matter most, for exactly that reason.
   // ---------------------------------------------------------------------
   saltflat: {
     id: 'saltflat',
@@ -248,31 +296,43 @@ export const DIRT_TRACKS: Record<DirtTrackId, DirtTrackDef> = {
     },
     backdropUrl: '/stages/dirt/dirt_track_saltflat.png',
     path: [
-      { x: 300, y: 686, w: 124 },
-      { x: 640, y: 686, w: 124 },
-      { x: 1000, y: 686, w: 124 },
-      { x: 1300, y: 686, w: 124 },
-      { x: 1394, y: 520, w: 116 },
-      // One genuinely tight corner, at the far end of the fastest straight.
-      { x: 1400, y: 340, w: 86 },
-      { x: 1200, y: 270, w: 104 },
-      { x: 1000, y: 300, w: 124 },
-      { x: 760, y: 268, w: 124 },
-      { x: 500, y: 214, w: 124 },
-      { x: 260, y: 226, w: 124 },
-      { x: 212, y: 400, w: 122 },
-      { x: 214, y: 570, w: 124 },
+      // The bottom edge of the triangle, and the fastest ground in the game.
+      { x: 470, y: 728, w: 128 },
+      { x: 780, y: 738, w: 128 },
+      { x: 1090, y: 726, w: 126 },
+      // Corner one: a long-radius kink onto the right-hand edge. Flat out, and
+      // it does not feel like a corner until the exit runs out of room.
+      { x: 1318, y: 672, w: 116 },
+      { x: 1428, y: 508, w: 108 },
+      { x: 1382, y: 356, w: 104 },
+      // Corner two: the wide double-apex down off the top vertex. Two lines
+      // through it, and they cross — which is the only place on the four
+      // courses where the overtake and the defence are the same piece of road.
+      { x: 1214, y: 236, w: 120 },
+      { x: 1024, y: 186, w: 126 },
+      { x: 846, y: 172, w: 126 },
+      { x: 654, y: 206, w: 120 },
+      // The long diagonal back down to the hairpin.
+      { x: 470, y: 292, w: 124 },
+      { x: 318, y: 404, w: 114 },
+      // Corner three: the hairpin. The one slow corner on the course, at the
+      // end of its longest run — so it is where a boost is worth spending and
+      // where a mine is worth leaving.
+      { x: 196, y: 540, w: 88 },
+      { x: 228, y: 674, w: 96 },
+      { x: 338, y: 734, w: 116 },
     ],
     shortcuts: [
-      // Straight across the inside of the long left-hander. Wide open salt,
-      // no rocks — but it is offroad either side, so getting the entry wrong
-      // costs more than the cut saves.
+      // Across the inside of the first corner, off the end of the main
+      // straight. Wide open salt with nothing on it, which is the joke: the cut
+      // is free to look at and expensive to get wrong, because it is entered at
+      // the fastest point on the fastest course and there is no run-off on the
+      // far side of it. Worth about a third of a second.
       {
         path: [
-          { x: 250, y: 300, w: 52 },
-          { x: 196, y: 420, w: 50 },
-          { x: 214, y: 560, w: 52 },
-          { x: 292, y: 664, w: 54 },
+          { x: 1104, y: 718, w: 54 },
+          { x: 1276, y: 592, w: 50 },
+          { x: 1384, y: 398, w: 54 },
         ],
       },
     ],
@@ -280,10 +340,10 @@ export const DIRT_TRACKS: Record<DirtTrackId, DirtTrackDef> = {
       // Empty on purpose; the salt pillars are scenery. See canyon's note.
     ],
     pads: [
-      { at: 0.12, side: 0 },
-      { at: 0.34, side: -0.5 },
-      { at: 0.62, side: 0 },
-      { at: 0.84, side: 0.55 },
+      { at: 0.14, side: 0 },
+      { at: 0.36, side: -0.5 },
+      { at: 0.6, side: 0 },
+      { at: 0.82, side: 0.55 },
     ],
   },
 };

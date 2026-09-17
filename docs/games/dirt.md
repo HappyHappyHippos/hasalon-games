@@ -8,6 +8,18 @@ Implementation notes for `packages/shared/src/games/dirt/` and
 `packages/client/src/games/dirt/`. Read this before changing anything in
 either directory.
 
+**The four courses are four different shapes, and that is the point of them.**
+They were all a perimeter ring at one stage, varying only in width and palette,
+which is a lot of work for one track. Now: Canyon Run is a ring with a deep
+notch that dives into the middle of the arena, Pine Grove is a dumbbell whose
+neck the lap crosses twice in opposite directions with pines between the runs,
+The Quarry spends part of its lap inside its own infield on a tongue that climbs
+into the centre and doubles back, and Salt Flat is a rounded triangle of three
+flat-out sweepers. **Any course whose two runs pass close together needs ~270
+units between the centrelines** — less than that and `clampShoulders` has
+nothing left to cut, the two surfaces merge into one patch, and the route stops
+being readable. That is what killed the first attempt at Pine Grove.
+
 **The course is one polyline, and everything is derived from it.** A track
 (`tracks.ts`) is a closed centreline of control points, a half-width at each of
 them, and a handful of solid boxes. `track.ts` derives *everything* else from
@@ -75,12 +87,30 @@ side. Before it existed a lap of Canyon Run took 102 seconds and a lap of Salt
 Flat took 6.4, and the only difference between them was how tight the corners
 were.
 
-The top speed was later dropped from 430 to 300 for the same reason from the
-other end: at 430 the turning circle was 134 units, wider than most of the
-corners on these courses, so the car spent the lap unable to go where it was
-pointed. At 300 it is ~94, comfortably inside every corner `tracks.test.ts`
-allows. Speed in a top-down racer is read from how fast the scenery goes past,
-not from the number.
+**Top speed and turn rate move together or not at all.** This is the one number
+pair that has been wrong in both directions. At 430 the turning circle was 134
+units — wider than most corners here, so the car spent the lap unable to go
+where it was pointed. Walking it back to 300 and then 255 fixed that and took
+the urgency out of the race, which is what brought it back up. It now sits at
+400 with `TURN_RATE` at 4.1, so the circle is ~98 and still fits every corner on
+the four courses.
+
+`tracks.test.ts` pins the other half of the pair: no corner on any course may be
+tighter than half the full-speed circle, so raising the speed without redrawing
+the courses fails the suite rather than shipping a corner nobody can take. The
+binding corner today is The Quarry's exit onto the main straight at r=60, which
+is what caps the top speed at roughly 490 before the courses have to change.
+
+**Drift is a feel knob, not a pace knob, and that is why it is safe to turn.**
+`TRACK_GRIP` is now 4.0, down from 5.5: a ~173 ms half-life on the sideways
+component instead of ~126 ms. Measured with a bot lapping each course, cars
+spent 8–18% of a race sideways at the old value and spend 36–68% at this one —
+the difference between a racer that occasionally slides and a rally car. Across
+a sweep from 3.5 to 5.0 the lap times moved under three tenths of a second,
+because `CORNER_DRAG` scrubs back out of the corner whatever the slide costs.
+So the knob buys character almost for free; what it must not be turned past is
+the point where the car stops being placeable, which is a thing to feel on a
+phone rather than to read off a number.
 
 **`MIN_TURN_AUTHORITY` is not a feel knob, it is a deadlock guard.** Steering
 authority scales with speed, so a car nosed into a rock cannot steer; with no
@@ -198,6 +228,21 @@ of that subtraction move, and the car's side moves whether or not your thumb
 does. A request derived only from `onMove` is stale the moment it is made, and a
 thumb held perfectly still would drive the car in a circle. `Controls.tsx`
 resamples at 60 Hz, the same rate `bitInput` samples at.
+
+**It also has to be *sent* every tick, not only when it changes** — and this one
+cost a working game. `Controls.tsx` used to keep the last field it handed to the
+sampler and skip the repeat, which is a cache of state `bitInput.releaseAll`
+clears on blur, pagehide and `visibilitychange` without telling anybody. On a
+phone that fires for reasons the player never sees, and steering is the one
+control that never recovers from it: the request is proportional to the heading
+error, so the moment the car settles on the line the value stops changing, and a
+control that only speaks on a change has nothing left to say. Full lock, thumb
+on the glass, car driving straight on for the rest of the race — and no error
+anywhere, because every part in isolation was working.
+
+Every touch pad in the repo had the same cache; `bitInput.ts` now carries the
+rule, `setButton` is idempotent while held so re-asserting is free, and
+`bitInput.test.ts` pins the recovery.
 
 There is nothing to latch here, unlike the tank: no reverse gear and no throttle,
 so a stick pointed behind the car is just a large error and the proportional law

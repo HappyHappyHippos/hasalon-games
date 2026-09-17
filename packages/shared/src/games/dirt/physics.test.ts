@@ -111,10 +111,16 @@ describe('surfaces', () => {
   it('runs much slower offroad than on the track', () => {
     // Placed on the shoulder rather than driven there, so this measures the
     // surface and not the trip.
+    //
+    // Half of *this point's* shoulder, not half of `SHOULDER`. That constant is
+    // the maximum, and `clampShoulders` narrows it wherever two parts of a lap
+    // pass close — so an offset measured from the constant lands in the scenery
+    // on any course whose shoulder was cut here, which is a property of the
+    // track rather than anything this test is about.
     const at = pointAt(geometry, 300);
     const nx = Math.sin(at.angle);
     const ny = -Math.cos(at.angle);
-    const off = at.half + SHOULDER * 0.5;
+    const off = at.half + at.shoulder * 0.5;
     const body: CarBody = {
       x: at.x + nx * off,
       y: at.y + ny * off,
@@ -145,8 +151,8 @@ describe('surfaces', () => {
     const at = pointAt(geometry, 300);
     const nx = Math.sin(at.angle);
     const ny = -Math.cos(at.angle);
-    body.x = at.x + nx * (at.half + SHOULDER * 0.5);
-    body.y = at.y + ny * (at.half + SHOULDER * 0.5);
+    body.x = at.x + nx * (at.half + at.shoulder * 0.5);
+    body.y = at.y + ny * (at.half + at.shoulder * 0.5);
 
     drive(body, STRAIGHT, 30);
     // Half a second of grass has to cost a real chunk of the speed carried

@@ -56,14 +56,12 @@ export function Controls({
   const applyVector = useCallback(
     (vector: StickVector) => {
       const next = stickToBits(vector, stick.current, performance.now());
-      const previous = stickBits.current;
-      if (next === previous) return;
       stickBits.current = next;
-      for (const bit of STICK_BITS) {
-        const was = (previous & bit) !== 0;
-        const is = (next & bit) !== 0;
-        if (was !== is) onButton(bit, is);
-      }
+      // Every bit, every sample — `setButton` is idempotent while held, and a
+      // control that only spoke on a change had no way back after
+      // `bitInput.releaseAll` cleared the mask behind it. See the note there.
+      // `stickBits` is still tracked, but only so unmount can let go.
+      for (const bit of STICK_BITS) onButton(bit, (next & bit) !== 0);
     },
     [onButton],
   );
