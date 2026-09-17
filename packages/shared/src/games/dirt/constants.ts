@@ -121,13 +121,15 @@ export const INDEX_REACH = 220;
  * were placeable but the race had no urgency, which is the complaint that
  * brought it back up.
  *
- * 340 is the speed the current courses are drawn for, and the pairing matters
- * more than the number. `TURN_RATE` went up with it, so the turning circle is
- * ~87 units — no wider than it was at 255, which is the property that decides
+ * 400 is where it sits, and the pairing matters more than the number.
+ * `TURN_RATE` went up with it, so the turning circle is ~98 units — still
+ * inside every corner on the four courses, which is the property that decides
  * whether a car feels steered or aimed. Raising one without the other is how
- * this has gone wrong every previous time.
+ * this has gone wrong every previous time, and `tracks.test.ts` now fails
+ * rather than letting it: no corner may be tighter than half the circle, so a
+ * speed the courses cannot hold is a red suite rather than a bad race.
  */
-export const TRACK_TOP_SPEED = 340;
+export const TRACK_TOP_SPEED = 400;
 
 /**
  * Top speed on grass, sand and dirt.
@@ -144,12 +146,12 @@ export const TRACK_TOP_SPEED = 340;
  * whether a lap can be skipped. That guarantee is structural and this number
  * cannot weaken it.
  */
-export const OFFROAD_TOP_SPEED = 224;
+export const OFFROAD_TOP_SPEED = 264;
 
 /** ~0.65 s from a standing start to full speed. Cars accelerate on their own. */
-export const CAR_ACCEL = 520;
+export const CAR_ACCEL = 600;
 /** Coasting deceleration, used during the countdown and after finishing. */
-export const CAR_DECEL = 620;
+export const CAR_DECEL = 700;
 /**
  * How fast speed carried onto grass bleeds away.
  *
@@ -157,7 +159,7 @@ export const CAR_DECEL = 620;
  * — but no longer brutal. Separate from deceleration so that "I lifted off" and
  * "I left the road" are not the same event.
  */
-export const OFFROAD_BLEED = 700;
+export const OFFROAD_BLEED = 800;
 
 /**
  * Radians per second at full lock and full authority.
@@ -166,7 +168,7 @@ export const OFFROAD_BLEED = 700;
  * turning circle, and the turning circle is what has to fit inside the corners.
  * See the note there.
  */
-export const TURN_RATE = 3.9;
+export const TURN_RATE = 4.1;
 
 /**
  * How fast the steering itself moves toward what the player is asking for, in
@@ -190,7 +192,7 @@ export const STEER_RATE = 7;
  * feel heavy. Well under `TRACK_TOP_SPEED`, so ordinary racing is always at
  * full authority — this only shapes the bottom of the range.
  */
-export const TURN_FULL_SPEED = 150;
+export const TURN_FULL_SPEED = 165;
 
 /**
  * The least steering a car has, however slowly it is going.
@@ -214,17 +216,24 @@ export const MIN_TURN_AUTHORITY = 0.32;
 /**
  * Lateral grip: how quickly sideways velocity bleeds off, per second.
  *
- * **This is the drift knob.** The car's velocity is decomposed against its old
- * heading, the heading is rotated, and the velocity is recomposed against the
- * new one — so the car keeps travelling the way it was pointed a moment ago and
- * this number decides how long for. Higher is grippier and duller; lower slides
- * for longer and eventually becomes uncontrollable. At 5.5 the sideways
- * component has a ~180 ms half-life, which is a car that rotates into a corner
- * and washes out of it.
+ * **This is the drift knob**, and the single number that most decides what this
+ * game is. The heading rotates first and the velocity is measured against the
+ * *new* heading, so the car keeps travelling the way it was pointed a moment
+ * ago and this decides how long for. Higher is grippier and duller; lower
+ * slides for longer and eventually becomes uncontrollable.
+ *
+ * At 4.0 the sideways component has a ~173 ms half-life. Down from 5.5, which
+ * was a car that tidied itself up before the apex — measured over a bot lap of
+ * each course, cars spent 8–18% of a race sideways there and spend 36–68% here,
+ * which is the difference between a racer that occasionally slides and a rally
+ * car. It is also nearly free in lap time: across a sweep from 3.5 to 5.0 the
+ * spread was under three tenths of a second a lap, because `CORNER_DRAG` scrubs
+ * what the slide costs back out of the corner either way. Drift is a feel knob
+ * here, not a pace knob, which is exactly what makes it safe to turn.
  */
-export const TRACK_GRIP = 5.5;
+export const TRACK_GRIP = 4.0;
 /** Grass is slidier as well as slower — a corner cut punishes twice. */
-export const OFFROAD_GRIP = 3.1;
+export const OFFROAD_GRIP = 2.1;
 
 /**
  * How much forward speed a sideways slide scrubs off, per unit of lateral
@@ -233,7 +242,7 @@ export const OFFROAD_GRIP = 3.1;
  * **This is the brake pedal.** There is no brake pedal, which sounds like a
  * simplification and is actually a hard constraint: a car doing
  * `TRACK_TOP_SPEED` and turning at `TURN_RATE` sweeps a circle of radius
- * `340 / 3.9 ≈ 87` units, so without this every corner tighter than that is
+ * `400 / 4.1 ≈ 98` units, so without this every corner tighter than that is
  * one no car can physically take — it simply drives into the outside wall,
  * every lap, forever. Measured before this existed, a lap of Canyon Run took
  * 102 seconds and a lap of Salt Flat took 6.4, and the only difference between
@@ -249,16 +258,21 @@ export const OFFROAD_GRIP = 3.1;
  * rather than a decoration — a tidy drift loses less than a full slide, because
  * a tidy drift has less lateral speed to pay for.
  */
-export const CORNER_DRAG = 1.18;
+export const CORNER_DRAG = 1.05;
 
 /**
  * Sideways speed at which the car is considered to be drifting.
  *
  * Cosmetic only — skid marks, dust and the drift flag in the snapshot. Nothing
- * in the physics branches on it, so raising it cannot change how the car
+ * in the physics branches on it, so changing it cannot change how the car
  * handles, only how much it looks like it is working.
+ *
+ * At 80 against a 400 top speed this is about eleven degrees of slip, which is
+ * the point where a slide is worth drawing. It is deliberately *under* what the
+ * car does through an ordinary corner: marks that only appear when something
+ * has gone wrong read as an error state rather than as driving.
  */
-export const DRIFT_THRESHOLD = 92;
+export const DRIFT_THRESHOLD = 80;
 
 // ---------------------------------------------------------------------------
 // Contact
@@ -311,7 +325,7 @@ export const CONTACT_PASSES = 4;
  * of which are recoverable and none of which the player can fix, because there
  * is no reverse gear to fix them with.
  */
-export const STUCK_SPEED = 56;
+export const STUCK_SPEED = 62;
 /** How long that has to last before the car is put back on the track. */
 export const STUCK_TICKS = seconds(1.4);
 /**

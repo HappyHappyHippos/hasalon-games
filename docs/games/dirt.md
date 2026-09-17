@@ -92,15 +92,25 @@ pair that has been wrong in both directions. At 430 the turning circle was 134
 units — wider than most corners here, so the car spent the lap unable to go
 where it was pointed. Walking it back to 300 and then 255 fixed that and took
 the urgency out of the race, which is what brought it back up. It now sits at
-340 with `TURN_RATE` at 3.9, so the circle is ~87: no wider than it was at 255,
-which is the property that actually decides whether the car feels steered or
-aimed. `CORNER_DRAG` went up with them, because it is the only thing that takes
-speed *off* and a faster car that scrubbed the same amount would arrive at every
-corner carrying more than the corner allows.
+400 with `TURN_RATE` at 4.1, so the circle is ~98 and still fits every corner on
+the four courses.
 
 `tracks.test.ts` pins the other half of the pair: no corner on any course may be
 tighter than half the full-speed circle, so raising the speed without redrawing
-the courses fails the suite rather than shipping a corner nobody can take.
+the courses fails the suite rather than shipping a corner nobody can take. The
+binding corner today is The Quarry's exit onto the main straight at r=60, which
+is what caps the top speed at roughly 490 before the courses have to change.
+
+**Drift is a feel knob, not a pace knob, and that is why it is safe to turn.**
+`TRACK_GRIP` is now 4.0, down from 5.5: a ~173 ms half-life on the sideways
+component instead of ~126 ms. Measured with a bot lapping each course, cars
+spent 8–18% of a race sideways at the old value and spend 36–68% at this one —
+the difference between a racer that occasionally slides and a rally car. Across
+a sweep from 3.5 to 5.0 the lap times moved under three tenths of a second,
+because `CORNER_DRAG` scrubs back out of the corner whatever the slide costs.
+So the knob buys character almost for free; what it must not be turned past is
+the point where the car stops being placeable, which is a thing to feel on a
+phone rather than to read off a number.
 
 **`MIN_TURN_AUTHORITY` is not a feel knob, it is a deadlock guard.** Steering
 authority scales with speed, so a car nosed into a rock cannot steer; with no
