@@ -94,20 +94,24 @@ export function TanksTouchPad({ mySeat, onButton, onTurn }: Props): JSX.Element 
     };
   }, [onButton, onTurn]);
 
+  /**
+   * Written every sample, unconditionally — see the note on `releaseAll` in
+   * `bitInput.ts`.
+   *
+   * This used to skip the write when the bits matched the last ones it sent,
+   * which is a cache of state `bitInput` clears on blur and never mentions. The
+   * hull is a heading control, so its request goes constant the moment the tank
+   * is pointing where you asked — and a control with nothing new to say after a
+   * notification arrived stayed silent for the rest of the round.
+   */
   const applyVector = useCallback(
     (vector: StickVector) => {
       const next = stickToTankBits(vector, currentAngle(mySeat), stick.current);
-      const previous = stickBits.current;
-      if (next === previous) return;
       stickBits.current = next;
-      // Diff rather than replace: `setButton` re-arms a tap latch, so pushing a
-      // bit that is already down would double-fire it.
-      for (const bit of STICK_BITS) {
-        const was = (previous & bit) !== 0;
-        const is = (next & bit) !== 0;
-        if (was !== is) onButton(bit, is);
-      }
-      if ((next & TURN_FIELD) !== (previous & TURN_FIELD)) onTurn(next & TURN_FIELD);
+      // Still per-bit rather than one mask: these are buttons, and `setButton`
+      // is what feeds the tap latch. Re-asserting a held one is a no-op.
+      for (const bit of STICK_BITS) onButton(bit, (next & bit) !== 0);
+      onTurn(next & TURN_FIELD);
     },
     [mySeat, onButton, onTurn],
   );

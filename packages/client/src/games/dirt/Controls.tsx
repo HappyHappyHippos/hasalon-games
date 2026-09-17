@@ -67,18 +67,24 @@ export function DirtControls({ mySeat, item, onButton, onSteer }: Props): JSX.El
 
   // Where the thumb is, as opposed to where it last *moved*.
   const vector = useRef<StickVector>({ x: 0, y: 0 });
-  const sent = useRef(0);
 
   const onSteerRef = useRef(onSteer);
   onSteerRef.current = onSteer;
 
+  /**
+   * Written every sample, unconditionally — never "only when it changed".
+   *
+   * This used to keep the last field it sent and skip the repeat, which cost a
+   * race every time a notification arrived. `bitInput.releaseAll` clears the
+   * touch mask on blur, pagehide and `visibilitychange` and tells nobody, so
+   * the cache went stale while the sampler held zero. Steering is the one
+   * control where that never recovers: the request is proportional to the
+   * heading error, so the instant the car settles on the line the value stops
+   * changing, and a control that only speaks on a change has nothing left to
+   * say. Full lock, thumb on the glass, car driving straight on.
+   */
   const apply = useCallback((next: StickVector) => {
-    const bits = steerBits(stickToSteer(next, currentAngle(mySeat)));
-    // The magnitude is quantised to fifteen steps, so most resamples produce the
-    // identical field and never reach the sampler at all.
-    if (bits === sent.current) return;
-    sent.current = bits;
-    onSteerRef.current(bits);
+    onSteerRef.current(steerBits(stickToSteer(next, currentAngle(mySeat))));
   }, [mySeat]);
 
   const onMove = useCallback(

@@ -202,7 +202,13 @@ And the ones no compiler catches, which is why they are worth writing down:
 - Reuse rather than copy. All three of these are parameterised and already used
   by every game that needs them:
   - `client/games/bitInput.ts` — the whole 60 Hz sampler/tap-latch/
-    sequence-in-`sessionStorage` machinery, parameterised by key map.
+    sequence-in-`sessionStorage` machinery, parameterised by key map. **A touch
+    control must write its whole state every sample, never only when it
+    changes**: `releaseAll` clears the touch mask on blur/pagehide/
+    `visibilitychange` and tells nobody, so a pad that caches what it last sent
+    goes dead after any notification. Every pad used to; Dirt never recovered,
+    because a proportional steering request goes constant once the car is on
+    line. `setButton` is idempotent while held so repeating is free.
   - `client/games/prediction.ts:ticksBehind` — snapshot age in fractional ticks.
   - `client/game/canvasDraw.ts` — `roundRect` and `shade`. Note Tank Trouble's
     local `darken(hex, factor)` is a *different* function with the opposite sign

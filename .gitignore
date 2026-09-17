@@ -17,3 +17,5 @@ coverage/
 *.tmp.mjs
 *.tmp.ts
 *.tmp.js
+*.tmp.svg
+*.tmp.png

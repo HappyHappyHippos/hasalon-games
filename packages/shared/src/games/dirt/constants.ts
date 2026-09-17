@@ -113,20 +113,21 @@ export const INDEX_REACH = 220;
 /**
  * Top speed on the racing surface, in units per second.
  *
- * Down from 430, which was simply too fast to drive: at that speed a car turning
- * at `TURN_RATE` sweeps a circle of radius 134 units, which is wider than most
- * of the corners on these courses, so the car spent the whole lap unable to go
- * where it was pointed. Speed in a top-down racer is read from how quickly the
- * scenery goes past rather than from the number, and 300 across a 1600-unit
- * arena still crosses the map in five seconds.
+ * The history is worth keeping, because this number has been wrong in both
+ * directions and the failure looks different each way. At 430 a car turning at
+ * `TURN_RATE` swept a circle of radius 134 units — wider than most corners on
+ * these courses, so it spent the lap unable to go where it was pointed. Backing
+ * off to 300 and then 255 fixed that and went too far the other way: the cars
+ * were placeable but the race had no urgency, which is the complaint that
+ * brought it back up.
  *
- * Eased again from 300 after a playtest: the courses are compact and a lap is
- * over quickly, so the top end was still arriving faster than a corner could be
- * read. The turning circle is now ~80 units, well inside every corner
- * `tracks.test.ts` allows — which is what makes the car feel like it is being
- * steered rather than aimed.
+ * 340 is the speed the current courses are drawn for, and the pairing matters
+ * more than the number. `TURN_RATE` went up with it, so the turning circle is
+ * ~87 units — no wider than it was at 255, which is the property that decides
+ * whether a car feels steered or aimed. Raising one without the other is how
+ * this has gone wrong every previous time.
  */
-export const TRACK_TOP_SPEED = 255;
+export const TRACK_TOP_SPEED = 340;
 
 /**
  * Top speed on grass, sand and dirt.
@@ -143,12 +144,12 @@ export const TRACK_TOP_SPEED = 255;
  * whether a lap can be skipped. That guarantee is structural and this number
  * cannot weaken it.
  */
-export const OFFROAD_TOP_SPEED = 168;
+export const OFFROAD_TOP_SPEED = 224;
 
-/** ~0.6 s from a standing start to full speed. Cars accelerate on their own. */
-export const CAR_ACCEL = 420;
+/** ~0.65 s from a standing start to full speed. Cars accelerate on their own. */
+export const CAR_ACCEL = 520;
 /** Coasting deceleration, used during the countdown and after finishing. */
-export const CAR_DECEL = 500;
+export const CAR_DECEL = 620;
 /**
  * How fast speed carried onto grass bleeds away.
  *
@@ -156,10 +157,16 @@ export const CAR_DECEL = 500;
  * — but no longer brutal. Separate from deceleration so that "I lifted off" and
  * "I left the road" are not the same event.
  */
-export const OFFROAD_BLEED = 560;
+export const OFFROAD_BLEED = 700;
 
-/** Radians per second at full lock and full authority. */
-export const TURN_RATE = 3.2;
+/**
+ * Radians per second at full lock and full authority.
+ *
+ * Moves with `TRACK_TOP_SPEED`, and has to: the two of them together are the
+ * turning circle, and the turning circle is what has to fit inside the corners.
+ * See the note there.
+ */
+export const TURN_RATE = 3.9;
 
 /**
  * How fast the steering itself moves toward what the player is asking for, in
@@ -183,7 +190,7 @@ export const STEER_RATE = 7;
  * feel heavy. Well under `TRACK_TOP_SPEED`, so ordinary racing is always at
  * full authority — this only shapes the bottom of the range.
  */
-export const TURN_FULL_SPEED = 120;
+export const TURN_FULL_SPEED = 150;
 
 /**
  * The least steering a car has, however slowly it is going.
@@ -226,11 +233,15 @@ export const OFFROAD_GRIP = 3.1;
  * **This is the brake pedal.** There is no brake pedal, which sounds like a
  * simplification and is actually a hard constraint: a car doing
  * `TRACK_TOP_SPEED` and turning at `TURN_RATE` sweeps a circle of radius
- * `430 / 3.2 ≈ 134` units, so without this every corner tighter than that is
+ * `340 / 3.9 ≈ 87` units, so without this every corner tighter than that is
  * one no car can physically take — it simply drives into the outside wall,
  * every lap, forever. Measured before this existed, a lap of Canyon Run took
  * 102 seconds and a lap of Salt Flat took 6.4, and the only difference between
  * them was how tight the corners were.
+ *
+ * It rises whenever the top speed does, and for the obvious reason: it is the
+ * only thing that takes speed *off*, so a faster car that scrubbed the same
+ * amount would arrive at every corner carrying more than the corner allows.
  *
  * Scrubbing speed in proportion to how sideways the car is fixes it the way an
  * arcade racer always has: turn in, the tyres wash, the car slows itself into
@@ -238,7 +249,7 @@ export const OFFROAD_GRIP = 3.1;
  * rather than a decoration — a tidy drift loses less than a full slide, because
  * a tidy drift has less lateral speed to pay for.
  */
-export const CORNER_DRAG = 1.05;
+export const CORNER_DRAG = 1.18;
 
 /**
  * Sideways speed at which the car is considered to be drifting.
@@ -247,7 +258,7 @@ export const CORNER_DRAG = 1.05;
  * in the physics branches on it, so raising it cannot change how the car
  * handles, only how much it looks like it is working.
  */
-export const DRIFT_THRESHOLD = 70;
+export const DRIFT_THRESHOLD = 92;
 
 // ---------------------------------------------------------------------------
 // Contact
@@ -266,11 +277,25 @@ export const WALL_SCRUB = 0.55;
  *
  * 1 is a clean elastic swap of the closing velocity; above it, contact adds
  * energy, which is what makes a deliberate ram feel like a move rather than an
- * accident. Kept modest — pushing should win you a corner, not delete a rival.
+ * accident.
+ *
+ * Up from 1.15, which was a nudge you had to be looking for. The thing being
+ * bought is not damage — there is none — it is that door-to-door racing has an
+ * outcome: leaning on someone through a corner puts them wide, and that is the
+ * whole vocabulary of contact this game has. Still well short of a weapon,
+ * because the car doing the shoving is knocked off its own line by the same
+ * impulse, and at speed that costs the aggressor a corner too.
  */
-export const BUMP_RESTITUTION = 1.15;
-/** Minimum closing speed that counts as a bump worth a sound and a spark. */
-export const BUMP_EVENT_SPEED = 120;
+export const BUMP_RESTITUTION = 1.5;
+/**
+ * Minimum closing speed that counts as a bump worth a sound and a spark.
+ *
+ * Under the old value most real contact happened *below* the threshold, so the
+ * cars visibly shoved each other in silence and the bump read as a physics
+ * glitch rather than a move. It wants to sit under ordinary side-by-side
+ * jostling, not over it.
+ */
+export const BUMP_EVENT_SPEED = 90;
 /** Passes of shove-apart / resolve-solids per tick. See `WALL_SEPARATE_PASSES` in tanks. */
 export const CONTACT_PASSES = 4;
 
@@ -286,7 +311,7 @@ export const CONTACT_PASSES = 4;
  * of which are recoverable and none of which the player can fix, because there
  * is no reverse gear to fix them with.
  */
-export const STUCK_SPEED = 42;
+export const STUCK_SPEED = 56;
 /** How long that has to last before the car is put back on the track. */
 export const STUCK_TICKS = seconds(1.4);
 /**
@@ -365,7 +390,7 @@ export const PAD_RESPAWN_TICKS = seconds(6);
 
 /** Speed: a short, unmistakable shove. */
 export const BOOST_TICKS = seconds(2.4);
-export const BOOST_SPEED_MUL = 1.55;
+export const BOOST_SPEED_MUL = 1.45;
 export const BOOST_ACCEL_MUL = 2.4;
 /** Boost holds the car together as well as pushing it, or it is unusable in a corner. */
 export const BOOST_GRIP_MUL = 1.35;
