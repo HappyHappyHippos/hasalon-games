@@ -129,12 +129,14 @@ const he = {
   round: (n: number) => `סיבוב ${n}`,
   roundOver: 'הסיבוב נגמר',
   watching: 'צופים',
-  watchingHost: 'אין לכם מקום במשחק הזה — «התחלת משחק מחדש» בתפריט תכניס אתכם.',
+  watchingHost: 'אין לכם מקום במשחק הזה — «להכניס» בתפריט, ליד השם שלכם, יכניס אתכם.',
   watchingGuest:
-    'אין לכם מקום במשחק הזה. המארח יכול להכניס אתכם עם «התחלת משחק מחדש», או שתיכנסו בבא.',
+    'אין לכם מקום במשחק הזה. המארח יכול להכניס אתכם מהתפריט, או שתיכנסו בבא.',
   paused: 'תגידו מו - מושהה',
   pausedBy: (name: string) => `${name} עצר את המשחק`,
   pausedByNobody: 'עצרנו לרגע תמשחק',
+  /** Shown to whoever pressed pause. They are the one holding it; say so. */
+  pausedByYou: 'אתם עצרתם את המשחק',
   resume: 'להמשיך!',
   waitingForPlayer: 'מחכים שמישהו ימשיך…',
   matchOver: 'איזה באסה נגמר המשחק',
@@ -234,6 +236,12 @@ const he = {
   restartMatch: 'התחלת משחק מחדש',
   endMatch: 'סיימו את המשחק',
   onlyHostRestart: 'רק המארח יכול להתחיל מחדש או לסיים.',
+  /** The host's list of people sitting the match out. */
+  watchingNow: (n: number) => (n === 1 ? 'אחד צופה' : `${n} צופים`),
+  admit: 'להכניס',
+  admitConfirm: (name: string) =>
+    `להכניס את ${name} למשחק? המשחק יתחיל מחדש והניקוד של הסיבוב הנוכחי יתאפס.`,
+  admitFull: 'כל המקומות במשחק הזה תפוסים.',
   controlsFor: (game: string) => `${game} — שליטה`,
   howToPlay: 'איך משחקים',
   backToGame: 'חזרה למשחק',
@@ -647,6 +655,7 @@ const he = {
     KICKED: 'המארח הוציא אתכם מהחדר.',
     SERIES_UNAVAILABLE: 'אין משחקים בכובע שמתאימים לכמות הזאת. סמנו עוד.',
     SERIES_POOL_UNFIT: 'יש בכובע משחק שלא מתאים למי שמוכן. הוציאו אותו או קראו לעוד אנשים.',
+    NO_SEAT_FREE: 'אין מקום פנוי במשחק הזה כרגע.',
   } satisfies Record<ErrorCode, string>,
 };
 
@@ -747,12 +756,13 @@ const en: Dict = {
   round: (n: number) => `Round ${n}`,
   roundOver: 'Round over',
   watching: 'Watching',
-  watchingHost: 'You have no seat in this match — “Restart match” in the menu deals you in.',
+  watchingHost: 'You have no seat in this match — “Deal in” beside your name in the menu puts you in.',
   watchingGuest:
-    'You have no seat in this match. The host can deal you in with “Restart match”, or you’re in the next one.',
+    'You have no seat in this match. The host can deal you in from the menu, or you’re in the next one.',
   paused: 'Paused',
   pausedBy: (name: string) => `${name} stopped the game`,
   pausedByNobody: 'The game is stopped',
+  pausedByYou: 'You stopped the game',
   resume: 'Resume',
   waitingForPlayer: 'Waiting for a player to resume…',
   matchOver: 'Match over',
@@ -848,6 +858,11 @@ const en: Dict = {
   restartMatch: 'Restart match',
   endMatch: 'End match',
   onlyHostRestart: 'Only the host can restart or end the match.',
+  watchingNow: (n: number) => (n === 1 ? '1 watching' : `${n} watching`),
+  admit: 'Deal in',
+  admitConfirm: (name: string) =>
+    `Deal ${name} into the match? This restarts it and clears the current scores.`,
+  admitFull: 'Every seat in this game is taken.',
   controlsFor: (game: string) => `${game} — controls`,
   howToPlay: 'How to play',
   backToGame: 'Back to the game',
@@ -1244,6 +1259,7 @@ const en: Dict = {
     SERIES_UNAVAILABLE: 'Nothing in the hat fits this many players. Tick a few more.',
     SERIES_POOL_UNFIT:
       "Something in the hat doesn't suit everyone who's ready. Take it out, or get more people in.",
+    NO_SEAT_FREE: 'There is no free seat in this game right now.',
   },
 };
 

@@ -58,6 +58,18 @@ export type ClientMessage =
   /** Host only — same seats and settings, fresh match from round one. */
   | { t: 'restart' }
   /**
+   * Host only — deal a named spectator into the match in progress.
+   *
+   * `restart` already seats everybody who is watching, and that is all a
+   * `GameModule` can offer: an instance is created with a fixed seat list and
+   * has no way to grow one, so admitting anybody means beginning the match
+   * again with them in it. This exists anyway because "restart the match" is
+   * not a thing a host thinks of when what they want is to let Noa in, and
+   * because it is the only way to give a *specific* person the last free seat.
+   * See `Room.admit`.
+   */
+  | { t: 'admit'; playerId: string }
+  /**
    * Host only, outside a match — the roulette settings. A partial patch, like
    * `settings`; the server normalizes and keeps whatever is not mentioned.
    */
@@ -129,7 +141,14 @@ export type ErrorCode =
    * here there is a perfectly good lineup available and the host is being told
    * to fix the hat instead of having a pick silently dropped from it.
    */
-  | 'SERIES_POOL_UNFIT';
+  | 'SERIES_POOL_UNFIT'
+  /**
+   * `admit` had nowhere to put them: the game's seats are all taken by people
+   * who are still connected, or the named player is not someone who can be
+   * dealt in. Distinct from `NOT_ENOUGH_PLAYERS`, which is the opposite
+   * complaint and would read as nonsense on a full arena.
+   */
+  | 'NO_SEAT_FREE';
 
 export type ServerMessage =
   /** Sent once on a successful create/join/resume. */

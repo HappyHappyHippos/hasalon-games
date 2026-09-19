@@ -2689,6 +2689,39 @@ strong,
   gap: 8px;
 }
 
+/* The host's list of people sitting the match out, each with a way in.
+   Boxed rather than loose in the section: these are rows about *people*, in
+   among buttons about the match, and the frame is what says so at a glance. */
+.options__watchers {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  background: var(--paper);
+  border: 2.5px solid var(--ink);
+  border-radius: 14px;
+}
+
+.options__watchers-head {
+  margin: 0;
+}
+
+.options__watcher {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.options__watcher-name {
+  font-weight: 700;
+  /* A long name shortens rather than shoving the button off the row. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .options__slider {
   display: flex;
   align-items: center;

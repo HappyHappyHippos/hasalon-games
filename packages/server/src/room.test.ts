@@ -712,6 +712,137 @@ describe('Room restart', () => {
   });
 });
 
+describe('Room admit', () => {
+  /** Two seated players and a running match, which is what `admit` needs to exist. */
+  function running(game: 'gunmayhem' | 'achtung' = 'gunmayhem'): {
+    room: Room;
+    a: RoomPlayer;
+    b: RoomPlayer;
+  } {
+    const room = new Room('TEST');
+    room.setGame(game);
+    const a = room.addPlayer(fakeClient(), identity('A', 0))!;
+    const b = room.addPlayer(fakeClient(), identity('B', 1))!;
+    room.setReady(a, true);
+    room.setReady(b, true);
+    expect(room.start()).toBe(true);
+    return { room, a, b };
+  }
+
+  it('gives a late joiner a seat without disturbing the ones already held', () => {
+    const { room, a, b } = running();
+    const late = room.addPlayer(fakeClient(), identity('Late', 2))!;
+    expect(late.seat).toBe(-1);
+
+    expect(room.admit(late.id)).toBe(true);
+
+    expect(late.seat).toBe(2);
+    expect(a.seat).toBe(0);
+    expect(b.seat).toBe(1);
+    expect(room.phase).toBe('playing');
+
+    room.dispose();
+  });
+
+  it('gives the named watcher the spare seat ahead of everyone who joined earlier', () => {
+    // The whole reason this is not just `restart`: that seats watchers in join
+    // order, so in a room with more people than the game has seats the person
+    // the host meant to let in is not the one who gets the spare.
+    const room = new Room('TEST');
+    room.setGame('gunmayhem'); // six seats
+    const players = Array.from(
+      { length: 5 },
+      (_, i) => room.addPlayer(fakeClient(), identity(`P${i}`, i))!,
+    );
+    for (const p of players) room.setReady(p, true);
+    expect(room.start()).toBe(true);
+
+    const first = room.addPlayer(fakeClient(), identity('First', 5))!;
+    const wanted = room.addPlayer(fakeClient(), identity('Wanted', 6))!;
+
+    expect(room.admit(wanted.id)).toBe(true);
+
+    expect(wanted.seat).toBe(5);
+    expect(first.seat).toBe(-1);
+
+    room.dispose();
+  });
+
+  it('refuses rather than restarting the match for nothing when every seat is taken', () => {
+    const room = new Room('TEST');
+    room.setGame('gunmayhem');
+    const players = Array.from(
+      { length: 6 },
+      (_, i) => room.addPlayer(fakeClient(), identity(`P${i}`, i))!,
+    );
+    for (const p of players) room.setReady(p, true);
+    expect(room.start()).toBe(true);
+
+    const late = room.addPlayer(fakeClient(), identity('Late', 6))!;
+    expect(room.admit(late.id)).toBe(false);
+    expect(late.seat).toBe(-1);
+    // And the round everyone else is in the middle of is still theirs.
+    expect(players.map((p) => p.seat)).toEqual([0, 1, 2, 3, 4, 5]);
+
+    room.dispose();
+  });
+
+  it('frees a seat held by somebody who has gone, and fills it', () => {
+    const room = new Room('TEST');
+    room.setGame('gunmayhem');
+    const players = Array.from(
+      { length: 6 },
+      (_, i) => room.addPlayer(fakeClient(), identity(`P${i}`, i))!,
+    );
+    const goneClient = players[5]!.client!;
+    for (const p of players) room.setReady(p, true);
+    expect(room.start()).toBe(true);
+
+    const late = room.addPlayer(fakeClient(), identity('Late', 6))!;
+    room.detach(goneClient);
+
+    expect(room.admit(late.id)).toBe(true);
+    expect(late.seat).toBeGreaterThanOrEqual(0);
+    expect(players[5]!.seat).toBe(-1);
+
+    room.dispose();
+  });
+
+  it('refuses someone who already has a seat, a stranger, and anyone offline', () => {
+    const { room, a } = running();
+    const offlineClient = fakeClient();
+    const offline = room.addPlayer(offlineClient, identity('Offline', 3))!;
+    room.detach(offlineClient);
+
+    expect(room.admit(a.id)).toBe(false);
+    expect(room.admit('nobody')).toBe(false);
+    expect(room.admit(offline.id)).toBe(false);
+
+    room.dispose();
+  });
+
+  it('refuses in the lobby, where readying up is the way in', () => {
+    const room = new Room('TEST');
+    const a = room.addPlayer(fakeClient(), identity('A', 0))!;
+    room.addPlayer(fakeClient(), identity('B', 1));
+
+    expect(room.admit(a.id)).toBe(false);
+    expect(room.phase).toBe('lobby');
+  });
+
+  it('clears a pause on the way in, like any other match start', () => {
+    const { room, a } = running();
+    room.setPaused(a, true);
+    expect(room.paused).toBe(true);
+
+    const late = room.addPlayer(fakeClient(), identity('Late', 2))!;
+    expect(room.admit(late.id)).toBe(true);
+    expect(room.paused).toBe(false);
+
+    room.dispose();
+  });
+});
+
 describe('Room total score', () => {
   /** Calls the private `endMatch` directly — same access pattern as `instance` above. */
   function endMatch(room: Room, winnerSeat: number | null): void {

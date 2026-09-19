@@ -423,6 +423,18 @@ export function createApp(options: AppOptions): App {
         return;
       }
 
+      case 'admit': {
+        if (!requireHost(client, room, player)) return;
+        if (!room.admit(String(message.playerId ?? ''))) {
+          // One code for every refusal, because from the host's side they are
+          // one situation: that person cannot be given a seat right now. The
+          // distinctions (already seated, disconnected, game full, mid-break)
+          // are all visible in the roster in front of them.
+          client.sendError('NO_SEAT_FREE', 'Nobody to deal in, or the game is full.');
+        }
+        return;
+      }
+
       case 'input': {
         // The payload is game-specific and the module validates its *shape* —
         // but nothing upstream bounds its size. `ws` defaults to a 100 MB frame

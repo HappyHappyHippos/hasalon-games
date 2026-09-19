@@ -621,6 +621,45 @@ export class Room {
   }
 
   /**
+   * Deal one named spectator into the match, at the host's request.
+   *
+   * Somebody who follows the link after the host pressed start — or who lost
+   * their session, or who the seat rotation benched — sits there with controls
+   * that do nothing. The room already had a way out of that (`restart`), and it
+   * was useless in practice for two reasons: nobody looking for "let Dana play"
+   * thinks to press "Restart match", and restarting seats watchers in join
+   * order, so in a room with more people than the game has seats the person you
+   * meant to let in is not necessarily the one who gets the spare.
+   *
+   * This **restarts the match**, and it cannot not. A `GameInstance` is created
+   * with a fixed seat list and the seam gives it no way to grow one mid-flight
+   * — see `gameModule.ts` — so an eighth tank has to come from an eighth seat,
+   * which means a new instance. The host is told as much before they press it;
+   * the alternative is a button that quietly throws away the round in progress.
+   *
+   * Refused rather than fudged when the game is already full, because
+   * `seatAndBegin` would then drop `first` on the floor and restart the match
+   * for nothing — a button that visibly did something and did not do the thing
+   * it is named after.
+   */
+  admit(playerId: string): boolean {
+    if (this.phase === 'lobby') return false;
+    // Same reason as `restart`: a finished leg is already on the board and
+    // replaying it would score it twice.
+    if (this.series.active && this.series.phase !== 'leg') return false;
+
+    const player = this.players.find((p) => p.id === playerId);
+    if (!player || player.seat >= 0 || player.client === null) return false;
+
+    // Exactly the set `seatAndBegin` will carry over, so this predicts its
+    // answer rather than guessing at it.
+    const keeping = this.players.filter((p) => p.seat >= 0 && p.client !== null).length;
+    if (keeping >= this.module.meta.maxPlayers) return false;
+
+    return this.seatAndBegin(player);
+  }
+
+  /**
    * Seat whoever is here and start a match.
    *
    * Existing players keep their seats, in order, and anyone who has been
@@ -633,15 +672,24 @@ export class Room {
    * caller sets `gameId` to the next leg first, and the *next* game's player
    * range is what governs the seating. Returns false when there is nobody
    * enough to play.
+   *
+   * `first` is `admit`'s one addition: a watcher who goes to the front of the
+   * queue for whatever seats are spare. Without it "let Noa in" is only ever
+   * "let everyone in and hope Noa is early enough in join order", which in a
+   * room with more people than the game seats is exactly the case that needed
+   * a button.
    */
-  private seatAndBegin(): boolean {
+  private seatAndBegin(first: RoomPlayer | null = null): boolean {
     const max = this.module.meta.maxPlayers;
     const seated = this.players
       .filter((p) => p.seat >= 0 && p.client !== null)
       .sort((a, b) => a.seat - b.seat);
+    if (first && first.seat < 0 && first.client !== null && seated.length < max) {
+      seated.push(first);
+    }
     for (const p of this.players) {
       if (seated.length >= max) break;
-      if (p.seat < 0 && p.client !== null) seated.push(p);
+      if (p.seat < 0 && p.client !== null && p !== first) seated.push(p);
     }
     if (seated.length < this.module.meta.minPlayers) return false;
 

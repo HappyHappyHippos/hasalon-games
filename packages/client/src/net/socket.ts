@@ -85,6 +85,15 @@ const PING_INTERVAL_MS = 1000;
 const RECONNECT_BASE_MS = 500;
 const RECONNECT_MAX_MS = 8000;
 
+/**
+ * How long the pause overlay stays hidden after this client asks to resume.
+ *
+ * Comfortably over a round trip on a bad link, and comfortably under how long
+ * somebody stares at dead controls before deciding the game is broken. See
+ * `GameSocket.awaitingResume`.
+ */
+export const RESUME_GRACE_MS = 1200;
+
 function socketUrl(): string {
   const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
   return `${protocol}//${location.host}${WS_PATH}`;
@@ -300,11 +309,43 @@ class GameSocket {
   }
 
   setPaused(paused: boolean): void {
+    // See `awaitingResume`. Pausing clears the grace rather than leaving a stale
+    // one running, so a pause taken during it still shows its card.
+    this.resumeAskedAt = paused ? Number.NEGATIVE_INFINITY : performance.now();
     this.send({ t: 'pause', paused });
+  }
+
+  /** `performance.now()` when we last asked the room to resume. */
+  private resumeAskedAt = Number.NEGATIVE_INFINITY;
+
+  /**
+   * Whether a resume we asked for is still too young to have been answered.
+   *
+   * The pause overlay hides while this is true, so the ordinary pause → menu →
+   * close flow does not flash a full-screen modal for the round trip between
+   * asking and being told — 114 ms of it, on this room's usual link.
+   *
+   * It is a **grace, not a belief**, and that distinction is the whole point.
+   * The client writing its own pause state is exactly what used to leave a room
+   * silently frozen with every button dead and nothing on screen; this expires
+   * on a clock instead, so a resume that never lands ends with the card up and
+   * a Resume button under the player's thumb rather than with a lie that only a
+   * reload could clear.
+   */
+  awaitingResume(): boolean {
+    return performance.now() - this.resumeAskedAt < RESUME_GRACE_MS;
   }
 
   restart(): void {
     this.send({ t: 'restart' });
+  }
+
+  /**
+   * Host only — give a spectator a seat. Restarts the match, because that is
+   * the only way a new seat can exist; see `Room.admit`.
+   */
+  admit(playerId: string): void {
+    this.send({ t: 'admit', playerId });
   }
 
   setSeriesSetup(setup: unknown): void {
