@@ -29,6 +29,22 @@
  *   notification pulled down leaves the last mask held, and the character keeps
  *   running off the stage while nobody is watching.
  *
+ *   The corollary is the rule for everything that writes touch input: **a touch
+ *   control must re-assert its whole state every sample, never only when it
+ *   changes.** `releaseAll` clears `touchBits` from under whoever wrote it, so a
+ *   control that remembers what it last sent and skips the repeat has a cache
+ *   this module can silently invalidate — and nothing ever tells it. Every pad
+ *   used to do exactly that, and the result was a stick that went dead for the
+ *   rest of the round after any notification: the sampler held zero while the
+ *   thumb held full lock, and the control kept deciding it had already sent
+ *   that. Dirt was the worst of them, because its request is a *correction* and
+ *   goes constant the moment the car is pointing where you asked — so the value
+ *   never changed again, and the stick never recovered.
+ *
+ *   `setButton` and `setField` are both cheap and both idempotent, so writing
+ *   every sample costs nothing and repairs itself the tick after a spurious
+ *   release. That is the same reason the keyboard path samples unconditionally.
+ *
  * - **The sequence survives a reload** in `sessionStorage`, so it never restarts
  *   below the sequence the server has already acknowledged.
  */
@@ -90,7 +106,14 @@ export function createInputBuffer(): InputBuffer {
 
 export interface InputController {
   destroy(): void;
-  /** Used by the touch controls; `down` toggles one button. */
+  /**
+   * Used by the touch controls; `down` toggles one button.
+   *
+   * Idempotent while held — re-asserting a button that is already down neither
+   * changes the mask nor re-arms the tap latch — so a pad may call it every
+   * sample rather than tracking edges itself. See the note on `releaseAll`
+   * above for why it must.
+   */
   setButton(bit: number, down: boolean): void;
   /**
    * Set several bits at once to an already-shifted value — an analogue axis
@@ -179,8 +202,15 @@ export function attachBitInput({ buffer, keyBits, seqKey, onChange }: AttachOpti
 
   return {
     setButton(bit, down) {
+      const was = (touchBits & bit) !== 0;
       touchBits = down ? touchBits | bit : touchBits & ~bit;
-      if (down) tapped |= bit;
+      // Latched on the *rising edge* only, so re-asserting a button that is
+      // already held is a no-op. That is what makes it safe for a touch control
+      // to write its whole state every sample (see the note above), and it is
+      // the property the pads used to buy with a private cache of the last
+      // value they sent — a cache of state this module can clear underneath
+      // them, which is exactly how the sticks went dead.
+      if (down && !was) tapped |= bit;
     },
     setField(mask, value) {
       touchBits = (touchBits & ~mask) | (value & mask);

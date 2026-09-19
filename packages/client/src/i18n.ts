@@ -42,9 +42,8 @@ const he = {
   // -------------------------------------------------------------------------
   // Lobby
   // -------------------------------------------------------------------------
-  copyInvite: 'העתקת הזמנה',
+  inviteWhatsApp: 'שלח קישור',
   copied: 'הועתק!',
-  copyThisLink: 'העתיקו את הקישור:',
   inviteShareText: (code: string) => `בואו להינות איתי בסלון!. קוד: ${code}`,
   inviteAppTitle: 'כבר התקנתם את האפליקציה?',
   inviteAppBody: (code: string) =>
@@ -130,12 +129,14 @@ const he = {
   round: (n: number) => `סיבוב ${n}`,
   roundOver: 'הסיבוב נגמר',
   watching: 'צופים',
-  watchingHost: 'אין לכם מקום במשחק הזה — «התחלת משחק מחדש» בתפריט תכניס אתכם.',
+  watchingHost: 'אין לכם מקום במשחק הזה — «להכניס» בתפריט, ליד השם שלכם, יכניס אתכם.',
   watchingGuest:
-    'אין לכם מקום במשחק הזה. המארח יכול להכניס אתכם עם «התחלת משחק מחדש», או שתיכנסו בבא.',
+    'אין לכם מקום במשחק הזה. המארח יכול להכניס אתכם מהתפריט, או שתיכנסו בבא.',
   paused: 'תגידו מו - מושהה',
   pausedBy: (name: string) => `${name} עצר את המשחק`,
   pausedByNobody: 'עצרנו לרגע תמשחק',
+  /** Shown to whoever pressed pause. They are the one holding it; say so. */
+  pausedByYou: 'אתם עצרתם את המשחק',
   resume: 'להמשיך!',
   waitingForPlayer: 'מחכים שמישהו ימשיך…',
   matchOver: 'איזה באסה נגמר המשחק',
@@ -235,6 +236,12 @@ const he = {
   restartMatch: 'התחלת משחק מחדש',
   endMatch: 'סיימו את המשחק',
   onlyHostRestart: 'רק המארח יכול להתחיל מחדש או לסיים.',
+  /** The host's list of people sitting the match out. */
+  watchingNow: (n: number) => (n === 1 ? 'אחד צופה' : `${n} צופים`),
+  admit: 'להכניס',
+  admitConfirm: (name: string) =>
+    `להכניס את ${name} למשחק? המשחק יתחיל מחדש והניקוד של הסיבוב הנוכחי יתאפס.`,
+  admitFull: 'כל המקומות במשחק הזה תפוסים.',
   controlsFor: (game: string) => `${game} — שליטה`,
   howToPlay: 'איך משחקים',
   backToGame: 'חזרה למשחק',
@@ -268,7 +275,7 @@ const he = {
       ],
     },
     gunmayhem: {
-      name: 'אנדרלמוסקטרים',
+      name: 'שליפות',
       tagline: 'מלא יריות ומלא צחוקים',
       controls: 'חצים או WASD לתזוזה · למעלה לקפיצה · למטה לצניחה · J ירי · K פצצה',
       rules: [
@@ -318,23 +325,23 @@ const he = {
       ],
     },
     dirt: {
-      name: 'מרוץ עפר',
-      tagline: 'רק לאחוז בהגה. הגז מחזיק את עצמו',
-      controls: 'שמאלה וימינה להיגוי · רווח להפעלת פריט',
+      name: 'אישה נוהגת',
+      tagline: 'לנהוג כמו בדואי מהנוחות של הספא',
+      controls: 'ג׳ויסטיק לכיוון הנסיעה · רווח להפעלת פריט',
       rules: [
-        'המכונית נוסעת לבד. כל מה שאתם עושים זה להגות.',
+        'המכונית נוסעת לבד. כל מה שאתם עושים זה לכוון לאן.',
+        'מכוונים את הג׳ויסטיק לכיוון שאליו רוצים לנסוע, והמכונית פונה לשם.',
         'עפר ודשא איטיים בהרבה מהמסלול, אז קיצור דרך בפינה כמעט תמיד עולה יותר ממה שהוא חוסך.',
-        'סלעים, עצים ומחסומים עוצרים אתכם במקום. כל מה שמעבר לשולי המסלול הוא אחד מהם.',
         'סיבוב חד במהירות מוציא את הזנב. סחרור מהיר יותר מבלימה — אם תופסים אותו בזמן.',
         'אפשר לדחוף. גם אתכם ידחפו, ובגלל זה הפינות הרחבות הן המעניינות.',
-        'עוברים על משטח כדי לאסוף פריט אחד: בוסט, מוקש להשאיר מאחור, או היפוך היגוי לכל השאר.',
+        'עוברים על משטח כדי לאסוף פריט אחד: בוסט, או מוקש להשאיר מאחור.',
         'אם נתקעתם, מחזירים אתכם למסלול בכיוון הנכון. זה עולה לכם בזמן, לא במרוץ.',
         'נקודות לפי מקום הסיום בכל מרוץ. הכי הרבה נקודות בסוף המרוץ האחרון מנצח.',
       ],
     },
     tanks: {
-      name: 'אוי טנק!',
-      tagline: 'לירות מעבר לפינה, בדרך כלל על עצמכם',
+      name: 'טנקים טנקים',
+      tagline: 'הידעת? אלפרד טנק המציא את הטנק הראשון ב1947 בבאזל, קנדה',
       controls: 'חצים או WASD לנהיגה · M או רווח לירי',
       rules: [
         'נוסעים במבוך ויורים על הטנקים האחרים. האחרון ששורד מנצח בסיבוב.',
@@ -348,7 +355,7 @@ const he = {
     },
     bombit: {
       name: 'פצצה בסלון',
-      tagline: 'לפוצץ ארגזים, ואת כל מי שעמד לידם',
+      tagline: 'איש אחד הלך הלך בום בום נסראללה',
       controls: 'חצים או WASD לתזוזה · רווח או J להנחת פצצה',
       rules: [
         'מניחים פצצות, מפוצצים ארגזים, ונשארים אחרונים על הלוח.',
@@ -425,10 +432,9 @@ const he = {
   blockDensityLabels: ['מעט', 'רגיל', 'מלא'],
   bombitKit: (bombs: number, range: number) => `${bombs} פצצות, טווח ${range}`,
   bombitEffects: { slow: 'אטיות', reverse: 'כיוונים הפוכים' },
-  dirtWheel: 'הגה',
+  dirtWheel: 'הגאי כיוון',
   dirtNoItem: 'אין פריט',
-  dirtItems: { speed: 'בוסט', mine: 'מוקש', reverse: 'היפוך' },
-  dirtReversed: 'ההיגוי הפוך!',
+  dirtItems: { speed: 'בוסט', mine: 'מוקש' },
   dirtLap: (lap: number) => `הקפה ${lap}`,
   dirtTrack: 'מסלול',
   dirtTrackNames: ['ערוץ הקניון', 'חורשת האורנים', 'המחצבה', 'מישור המלח'],
@@ -567,6 +573,8 @@ const he = {
   memesTenSeconds: 'נשארו עשר שניות',
   memesDownload: 'הורדת המם',
   memesDownloading: 'מכינים תמונה…',
+  /** iPhone only: the picture is ready and one more tap opens the share sheet. */
+  memesDownloadRetry: 'הקישו שוב כדי לשמור',
   memesDownloadFailed: 'לא הצלחנו להוריד את המם',
   memesViewerOpen: 'להגדיל את המם',
   memesViewerTitle: 'המם בגדול',
@@ -647,6 +655,7 @@ const he = {
     KICKED: 'המארח הוציא אתכם מהחדר.',
     SERIES_UNAVAILABLE: 'אין משחקים בכובע שמתאימים לכמות הזאת. סמנו עוד.',
     SERIES_POOL_UNFIT: 'יש בכובע משחק שלא מתאים למי שמוכן. הוציאו אותו או קראו לעוד אנשים.',
+    NO_SEAT_FREE: 'אין מקום פנוי במשחק הזה כרגע.',
   } satisfies Record<ErrorCode, string>,
 };
 
@@ -668,9 +677,8 @@ const en: Dict = {
   gamesHeading: 'In the room right now',
   reviewsHeading: 'What people are saying',
 
-  copyInvite: 'Copy invite',
+  inviteWhatsApp: 'Send invite on WhatsApp',
   copied: 'Copied!',
-  copyThisLink: 'Copy this link:',
   inviteShareText: (code: string) => `Come play with me in הסלון. Room code: ${code}`,
   inviteAppTitle: 'Already installed the app?',
   inviteAppBody: (code: string) =>
@@ -748,12 +756,13 @@ const en: Dict = {
   round: (n: number) => `Round ${n}`,
   roundOver: 'Round over',
   watching: 'Watching',
-  watchingHost: 'You have no seat in this match — “Restart match” in the menu deals you in.',
+  watchingHost: 'You have no seat in this match — “Deal in” beside your name in the menu puts you in.',
   watchingGuest:
-    'You have no seat in this match. The host can deal you in with “Restart match”, or you’re in the next one.',
+    'You have no seat in this match. The host can deal you in from the menu, or you’re in the next one.',
   paused: 'Paused',
   pausedBy: (name: string) => `${name} stopped the game`,
   pausedByNobody: 'The game is stopped',
+  pausedByYou: 'You stopped the game',
   resume: 'Resume',
   waitingForPlayer: 'Waiting for a player to resume…',
   matchOver: 'Match over',
@@ -849,6 +858,11 @@ const en: Dict = {
   restartMatch: 'Restart match',
   endMatch: 'End match',
   onlyHostRestart: 'Only the host can restart or end the match.',
+  watchingNow: (n: number) => (n === 1 ? '1 watching' : `${n} watching`),
+  admit: 'Deal in',
+  admitConfirm: (name: string) =>
+    `Deal ${name} into the match? This restarts it and clears the current scores.`,
+  admitFull: 'Every seat in this game is taken.',
   controlsFor: (game: string) => `${game} — controls`,
   howToPlay: 'How to play',
   backToGame: 'Back to the game',
@@ -926,16 +940,16 @@ const en: Dict = {
       ],
     },
     dirt: {
-      name: 'Dirt Racing',
-      tagline: 'Hold the wheel. The throttle holds itself.',
-      controls: 'Left and right to steer · Space to use an item',
+      name: 'Woman Driving',
+      tagline: 'Point where you want to go. The throttle holds itself.',
+      controls: 'Joystick points where you drive · Space to use an item',
       rules: [
-        'Your car drives itself. All you do is steer.',
+        'Your car drives itself. All you do is point it.',
+        'Push the stick the way you want to go and the car turns to face it.',
         'Dirt and grass are much slower than the track, so cutting a corner usually costs more than it saves.',
-        'Rocks, trees and barriers stop you dead. Everything past the edge of the course is one of them.',
         'Turn hard at speed and the back steps out. A drift is faster than a scrub if you catch it.',
         'Bumping works. So does being bumped, which is why the wide corners are the interesting ones.',
-        'Drive over a pad to pick up one item: a boost, a mine to drop behind you, or a reverse to inflict on everyone else.',
+        'Drive over a pad to pick up one item: a boost, or a mine to drop behind you.',
         'Get stuck and you are put back on the track facing the right way. It costs you time, not the race.',
         'Points by finishing position each race. Most points at the end of the last one wins.',
       ],
@@ -1030,10 +1044,9 @@ const en: Dict = {
   blockDensityLabels: ['Sparse', 'Normal', 'Packed'],
   bombitKit: (bombs: number, range: number) => `${bombs} bombs, range ${range}`,
   bombitEffects: { slow: 'Slowed', reverse: 'Reversed controls' },
-  dirtWheel: 'Steering wheel',
+  dirtWheel: 'Steering stick',
   dirtNoItem: 'No item',
-  dirtItems: { speed: 'Boost', mine: 'Mine', reverse: 'Reverse' },
-  dirtReversed: 'STEERING REVERSED',
+  dirtItems: { speed: 'Boost', mine: 'Mine' },
   dirtLap: (lap: number) => `Lap ${lap}`,
   dirtTrack: 'Track',
   dirtTrackNames: ['Canyon Run', 'Pine Grove', 'The Quarry', 'Salt Flat'],
@@ -1169,6 +1182,7 @@ const en: Dict = {
   memesTenSeconds: 'Ten seconds left',
   memesDownload: 'Download meme',
   memesDownloading: 'Preparing image…',
+  memesDownloadRetry: 'Tap again to save',
   memesDownloadFailed: 'Could not download this meme',
   memesViewerOpen: 'Open this meme bigger',
   memesViewerTitle: 'Meme, full size',
@@ -1245,6 +1259,7 @@ const en: Dict = {
     SERIES_UNAVAILABLE: 'Nothing in the hat fits this many players. Tick a few more.',
     SERIES_POOL_UNFIT:
       "Something in the hat doesn't suit everyone who's ready. Take it out, or get more people in.",
+    NO_SEAT_FREE: 'There is no free seat in this game right now.',
   },
 };
 

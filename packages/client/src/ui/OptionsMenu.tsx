@@ -9,7 +9,12 @@ import { Button } from './Button';
 import { Toggle } from './Toggle';
 import { useHasTouch } from './useTouchControls';
 import { useVoice } from './useVoice';
-import { exitFullscreen, useIsFullscreen } from './useFullscreen';
+import {
+  enterFullscreen,
+  exitFullscreen,
+  fullscreenSupported,
+  useIsFullscreen,
+} from './useFullscreen';
 import type { TouchControlsMode } from '../store';
 import { LANGS, type Dict, type Lang } from '../i18n';
 import { GearIcon } from './Icons';
@@ -28,6 +33,42 @@ const TOUCH_MODES: Array<{ mode: TouchControlsMode; label: (t: Dict) => string }
  * "אנגלית" is no help to a reader who cannot read the alphabet it is in.
  */
 const LANG_LABELS: Record<Lang, string> = { he: 'עברית', en: 'English' };
+
+/**
+ * Closing the menu lifts the pause — and does so **unconditionally**, from
+ * the live store rather than this render's `room`.
+ *
+ * Both halves of that are a bug that cost a whole match. This used to read
+ * `room.paused` off the closure and only resume when it was already true,
+ * which opens a window on every single pause: the pause button sends `pause`
+ * and opens this menu in the same tick, and the room broadcast that sets
+ * `paused` is a round trip away — 114 ms to Frankfurt. Dismiss the menu
+ * inside that window and the condition was false, no resume went out, and the
+ * room stayed frozen with `Room.input` dropping every button press from
+ * everybody. Sending it every time costs one 22-byte frame and cannot race:
+ * `MatchClock.setPaused` returns false when nothing changed, so an unpause
+ * with nothing to unpause is not even broadcast.
+ *
+ * The other half was an *optimistic local write* of `paused: false` that used
+ * to live here. The server's pause is the only thing that gates input, so a
+ * client that writes its own is a client that can believe it is playing while
+ * the server ignores it — with no overlay, because the overlay reads the
+ * value we just lied about, and no correction, because mid-match room
+ * broadcasts are rare. Only a reload cleared it, which is exactly how it was
+ * reported. Pause state is the server's; we ask, we do not assume.
+ *
+ * Every way out of the menu comes through here — the ✕, the scrim, and
+ * Escape. Escape used to toggle `optionsOpen` directly and skip the resume
+ * altogether, which on a keyboard was the same frozen room by a second route.
+ *
+ * The resume goes out *before* the menu closes, so `socket.awaitingResume` is
+ * already true on the render that takes the menu away, and the pause card
+ * cannot flash up for the round trip in between.
+ */
+function closeOptions(): void {
+  if (useStore.getState().room?.phase === 'playing') socket.setPaused(false);
+  useStore.getState().setOptionsOpen(false);
+}
 
 /**
  * The one menu. Sound, match control, and how to play — all behind a single
@@ -65,7 +106,8 @@ export function OptionsMenu(): JSX.Element {
     const onKey = (event: KeyboardEvent): void => {
       if (event.key !== 'Escape') return;
       event.preventDefault();
-      setOpen(!useStore.getState().optionsOpen);
+      if (useStore.getState().optionsOpen) closeOptions();
+      else setOpen(true);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -108,15 +150,18 @@ export function OptionsMenu(): JSX.Element {
   const seated = mySeat >= 0;
   const meta = room ? GAMES[room.gameId].meta : null;
 
-  const close = (): void => {
-    setOpen(false);
-    if (room?.phase === 'playing' && room?.paused) {
-      socket.setPaused(false);
-      useStore.setState((state) =>
-        state.room ? { room: { ...state.room, paused: false, pausedBy: null } } : {},
-      );
-    }
-  };
+  // Everyone with no seat in the match in progress, and how many seats there
+  // are left to give them. Both count *connected* players only, which is the
+  // same set `Room.seatAndBegin` carries over — a held seat belonging to
+  // somebody in a tunnel is not a free one, and they are not a spectator.
+  const watching =
+    room && inMatch ? room.players.filter((p) => p.seat < 0 && p.connected) : [];
+  const seatsFree =
+    room && meta
+      ? meta.maxPlayers - room.players.filter((p) => p.seat >= 0 && p.connected).length
+      : 0;
+
+  const close = closeOptions;
 
   return (
     <div className="overlay overlay--solid options__overlay" onClick={close} role="presentation">
@@ -155,8 +200,11 @@ export function OptionsMenu(): JSX.Element {
                   variant="primary"
                   full
                   onClick={() => {
-                    socket.setPaused(!room.paused);
-                    if (room.paused) close();
+                    // Live state, not this render's: the label may be a round
+                    // trip behind, and acting on a stale `false` is what used to
+                    // leave a room frozen. Resuming is `close`'s job either way.
+                    if (useStore.getState().room?.paused) close();
+                    else socket.setPaused(true);
                   }}
                 >
                   {room.paused ? t.resume : t.pauseForEveryone}
@@ -168,6 +216,41 @@ export function OptionsMenu(): JSX.Element {
             {inMatch &&
               (isHost ? (
                 <>
+                  {/* Whoever has no seat in the match in progress: someone who
+                      followed the link after it started, someone the seat
+                      rotation benched, someone whose session died. Their
+                      controls do nothing and only the host can change that, so
+                      the host is who this list is for. Gated on `canRestart`
+                      because dealing them in restarts the match — see
+                      `Room.admit` — which a finished series leg may not do. */}
+                  {canRestart && watching.length > 0 && (
+                    <div className="options__watchers">
+                      <p className="eyebrow options__watchers-head">
+                        {t.watchingNow(watching.length)}
+                      </p>
+                      {watching.map((watcher) => (
+                        <div key={watcher.id} className="options__watcher">
+                          <span className="options__watcher-name">{watcher.name}</span>
+                          <Button
+                            size="sm"
+                            disabled={seatsFree < 1}
+                            onClick={() => {
+                              // Confirmed like the kick button, and for a
+                              // stronger reason: this one throws away the round
+                              // everybody else is in the middle of.
+                              if (!window.confirm(t.admitConfirm(watcher.name))) return;
+                              socket.admit(watcher.id);
+                              close();
+                            }}
+                          >
+                            {t.admit}
+                          </Button>
+                        </div>
+                      ))}
+                      {seatsFree < 1 && <p className="muted small">{t.admitFull}</p>}
+                    </div>
+                  )}
+
                   {/* Not offered between legs of a series: that leg is already
                       on the board, and replaying it would score it twice. The
                       server refuses it too. */}
@@ -303,15 +386,21 @@ export function OptionsMenu(): JSX.Element {
 
         <section className="options__section">
           <h3 className="eyebrow">{t.sectionControls}</h3>
-          {fullscreen && (
+          {/* Both directions, not just the way out.
+              The floating maximize button is a 38px circle in a corner that
+              shares a row with pause and the microphone, and it is the only way
+              into fullscreen on a phone — so anything that covers it, moves it,
+              or eats the tap leaves no route at all. This is that route, at a
+              size nothing can hide, and it is the same call either way. */}
+          {fullscreenSupported() && (
             <Button
               full
               onClick={() => {
-                void exitFullscreen();
+                void (fullscreen ? exitFullscreen() : enterFullscreen());
                 close();
               }}
             >
-              {t.exitFullscreen}
+              {fullscreen ? t.exitFullscreen : t.enterFullscreen}
             </Button>
           )}
           <div className="options__choice">

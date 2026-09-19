@@ -29,8 +29,18 @@ export function PauseButton(): JSX.Element | null {
       title={room.paused ? t.resume : t.pauseForEveryone}
       onClick={() => {
         sfx.click();
-        socket.setPaused(!room.paused);
-        setOptionsOpen(true);
+        // Live state, not this render's. The icon is allowed to be a round trip
+        // behind; what it *does* is not, or a second tap during that round trip
+        // re-sends the state the room is already in and the button looks dead.
+        const pause = !useStore.getState().room?.paused;
+        socket.setPaused(pause);
+        // Only on the way *in*. Pausing opens the menu because a pause is
+        // almost always somebody leaving the game to do something, and the menu
+        // is where that something lives. Resuming is the opposite intent, and
+        // opening the menu on top of the arena they just asked to play was one
+        // more thing to dismiss — with the added trap that dismissing it sends
+        // a second resume for a room already running.
+        if (pause) setOptionsOpen(true);
       }}
     >
       {room.paused ? <PlayIcon /> : <PauseIcon />}

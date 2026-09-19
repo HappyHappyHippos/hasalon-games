@@ -1,8 +1,8 @@
-import { useMemo, type CSSProperties, type JSX, type ReactNode } from 'react';
+import { useEffect, useMemo, useReducer, type CSSProperties, type JSX, type ReactNode } from 'react';
 import { colorFor, type RoomView } from '@mg/shared';
 import { useStore } from '../store';
 import { useT } from '../strings';
-import { socket } from '../net/socket';
+import { RESUME_GRACE_MS, socket } from '../net/socket';
 import { Button } from './Button';
 import { Avatar } from './Avatar';
 import { TrophyIcon } from './Icons';
@@ -30,18 +30,42 @@ export function Paused({ room, spectating }: { room: RoomView; spectating: boole
   // three on others — opening the options menu while paused changed the count.
   const t = useT();
 
-  if (optionsOpen || room.pausedBy === playerId) {
+  // A resume we have asked for but not yet been told about. Read during render
+  // rather than subscribed to, because it is a clock and not state — which is
+  // why the timer below exists: nothing else would re-render this component to
+  // put the card back up if the resume never lands. See `socket.awaitingResume`.
+  const awaitingResume = socket.awaitingResume();
+  const [, recheck] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => {
+    if (!awaitingResume) return undefined;
+    const timer = window.setTimeout(recheck, RESUME_GRACE_MS);
+    return () => window.clearTimeout(timer);
+  }, [awaitingResume]);
+
+  // Suppressed by the menu, which is literally on top of it, and for a moment
+  // after we ask to resume, so the ordinary pause → menu → close flow does not
+  // flash a modal for one round trip.
+  //
+  // Not suppressed for the person who pressed pause, which it used to be, on
+  // the theory that they are looking at the options menu and will resume by
+  // closing it. When that resume failed to go out — see `OptionsMenu.close` —
+  // the one player whose controls the server was ignoring was the only one not
+  // told why: a frozen arena, dead buttons, nothing on screen, which reads as
+  // the game being broken rather than paused. They are the person who most
+  // needs the Resume button, so they get the card too.
+  if (optionsOpen || awaitingResume) {
     return null;
   }
 
   const pauser = room.players.find((p) => p.id === room.pausedBy);
+  const byMe = room.pausedBy !== null && room.pausedBy === playerId;
 
   return (
     <div className="overlay overlay--solid">
       <div className="sticker overlay__card paused__card">
         <p className="eyebrow">{t.paused}</p>
         <h2 className="overlay__title">
-          {pauser ? t.pausedBy(pauser.name) : t.pausedByNobody}
+          {byMe ? t.pausedByYou : pauser ? t.pausedBy(pauser.name) : t.pausedByNobody}
         </h2>
         {spectating ? (
           <p className="muted center">{t.waitingForPlayer}</p>

@@ -104,13 +104,13 @@ export interface SolidBox {
 // ---------------------------------------------------------------------------
 
 /**
- * Three, deliberately.
+ * Two, deliberately.
  *
- * One that helps you, one that hurts whoever is behind you, and one that hurts
- * whoever is ahead. Every extra kind past that is another thing to read while
- * driving flat out.
+ * One that helps you and one that hurts whoever is behind you. Every extra kind
+ * is another thing to read while driving flat out, and the set is small enough
+ * that nobody has to be told what the icons mean.
  */
-export type DirtPowerup = 'speed' | 'mine' | 'reverse';
+export type DirtPowerup = 'speed' | 'mine';
 
 // ---------------------------------------------------------------------------
 // State
@@ -166,7 +166,6 @@ export interface DirtCarState {
   /** Remaining ticks. */
   boostTicks: number;
   spinTicks: number;
-  reverseTicks: number;
   ghostTicks: number;
   /**
    * Which way a spin-out throws the car, ±1.
@@ -233,8 +232,6 @@ export interface DirtState {
   pads: DirtPad[];
   nextMineId: number;
 
-  /** Ticks until the race is called, once somebody has finished. Zero before that. */
-  finishGrace: number;
   finishedCount: number;
   /**
    * Ticks this race has been running, against a hard ceiling.
@@ -257,7 +254,6 @@ export type DirtEvent =
   | { t: 'pickup'; seat: number; kind: DirtPowerup }
   | { t: 'use'; seat: number; kind: DirtPowerup }
   | { t: 'spin'; seat: number; by: number | null }
-  | { t: 'reversed'; seat: number }
   | { t: 'bump'; x: number; y: number; force: number }
   | { t: 'thud'; x: number; y: number }
   | { t: 'lap'; seat: number; lap: number }
@@ -295,8 +291,6 @@ export interface DirtSnapshot {
   tk: DirtTrackId;
   /** Laps in this race. */
   lp: number;
-  /** Ticks left on the finish grace, or 0 when nobody has finished yet. */
-  fg: number;
   cars: DirtSnapshotCar[];
   mines: DirtSnapshotMine[];
   pads: DirtSnapshotPad[];
@@ -330,7 +324,6 @@ export interface DirtSnapshotCar {
   /** Effect ticks remaining, each omitted when zero. */
   bo?: number;
   sp?: number;
-  rv?: number;
   gh?: number;
   /** Spin direction, sent only while spinning. */
   sd?: number;

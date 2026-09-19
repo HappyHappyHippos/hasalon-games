@@ -4,7 +4,6 @@ import {
   exitFullscreen,
   fullscreenNeedsInstall,
   fullscreenSupported,
-  isStandalone,
   subscribeFullscreenChange,
 } from './useFullscreen';
 
@@ -104,8 +103,19 @@ describe('fullscreenNeedsInstall', () => {
   });
 });
 
+/**
+ * `isStandalone` is sampled once when the module loads, so these reload it
+ * rather than calling it — see the note on `STANDALONE` for why the live read
+ * was wrong. `vi.resetModules()` plus a dynamic import is the only way to
+ * observe a load-time constant under different conditions.
+ */
+async function reloadIsStandalone(): Promise<() => boolean> {
+  vi.resetModules();
+  return (await import('./useFullscreen')).isStandalone;
+}
+
 describe('isStandalone', () => {
-  it('reads the standard display-mode media query', () => {
+  it('reads the standard display-mode media query', async () => {
     Object.defineProperty(globalThis, 'window', {
       configurable: true,
       value: { matchMedia: (q: string) => ({ matches: q === '(display-mode: standalone)' }) },
@@ -114,10 +124,10 @@ describe('isStandalone', () => {
       configurable: true,
       value: {},
     });
-    expect(isStandalone()).toBe(true);
+    expect((await reloadIsStandalone())()).toBe(true);
   });
 
-  it('falls back to the legacy iOS flag', () => {
+  it('falls back to the legacy iOS flag', async () => {
     Object.defineProperty(globalThis, 'window', {
       configurable: true,
       value: { matchMedia: () => ({ matches: false }) },
@@ -126,7 +136,27 @@ describe('isStandalone', () => {
       configurable: true,
       value: { standalone: true },
     });
-    expect(isStandalone()).toBe(true);
+    expect((await reloadIsStandalone())()).toBe(true);
+  });
+
+  it('does not change when the page enters fullscreen', async () => {
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { matchMedia: () => ({ matches: false }) },
+    });
+    Object.defineProperty(globalThis, 'navigator', {
+      configurable: true,
+      value: {},
+    });
+    const standalone = await reloadIsStandalone();
+    expect(standalone()).toBe(false);
+    // A browser that starts matching `(display-mode: standalone)` inside
+    // fullscreen must not be able to delete the button that got us there.
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: { matchMedia: () => ({ matches: true }) },
+    });
+    expect(standalone()).toBe(false);
   });
 });
 
@@ -149,8 +179,16 @@ describe('enterFullscreen', () => {
     expect(webkitRequestFullscreen).toHaveBeenCalled();
   });
 
-  it('is a no-op when unsupported', async () => {
-    const requestFullscreen = vi.fn();
+  /**
+   * The `*Enabled` flags say whether the document is *permitted* to go
+   * fullscreen, not whether the API exists. A browser that leaves them unset
+   * while shipping a working `requestFullscreen` used to be treated as having
+   * no fullscreen at all — which is not a quiet no-op, because
+   * `fullscreenNeedsInstall` then swaps the maximize button for the iPhone
+   * home-screen tip on a phone that could have gone fullscreen all along.
+   */
+  it('tries the method even when the enabled flag is unset', async () => {
+    const requestFullscreen = vi.fn().mockResolvedValue(undefined);
     install(
       makeDoc({
         fullscreenEnabled: undefined,
@@ -159,7 +197,19 @@ describe('enterFullscreen', () => {
       }),
     );
     await enterFullscreen();
-    expect(requestFullscreen).not.toHaveBeenCalled();
+    expect(requestFullscreen).toHaveBeenCalled();
+  });
+
+  it('is a no-op when there is no fullscreen API at all', async () => {
+    install(
+      makeDoc({
+        fullscreenEnabled: undefined,
+        webkitFullscreenEnabled: undefined,
+        documentElement: {},
+      }),
+    );
+    await expect(enterFullscreen()).resolves.toBeUndefined();
+    expect(fullscreenSupported()).toBe(false);
   });
 
   it('is a no-op when already fullscreen', async () => {

@@ -69,7 +69,7 @@ export const achtungModule: GameModule = {
   // lobby default. A win-by-two tail is unbounded — two players trading rounds
   // at the target can run indefinitely — and a series has five more legs
   // waiting behind this one. The target itself is also well under the lobby's
-  // `TARGET_SCORE_PER_PLAYER`, which is the whole reason this method exists
+  // `TARGET_SCORE_PER_OPPONENT`, which is the whole reason this method exists
   // rather than reusing `defaultConfig`.
   seriesConfig(playerCount, pace) {
     const base = defaultConfig(playerCount);

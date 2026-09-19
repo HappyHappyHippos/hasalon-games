@@ -446,6 +446,59 @@ describe('match', () => {
     expect(playing.snap.tick).toBeGreaterThan(0);
   });
 
+  it('lets the host, and only the host, deal a spectator into a running match', async () => {
+    const clients = await makeLobby(2);
+    const [host, guest] = clients;
+
+    host!.send({ t: 'game', gameId: 'achtung' });
+    host!.send({ t: 'start' });
+    await host!.next('matchStarted');
+
+    // Arrives after the whistle: in the room, no seat, controls that do nothing.
+    const late = await connect();
+    late.send({
+      t: 'join',
+      v: PROTOCOL_VERSION,
+      code: host!.code,
+      identity: { name: 'Late', colorIndex: 4, hat: 0, face: 0 },
+    });
+    const welcome = await late.next('welcome');
+    expect(welcome.seat).toBe(-1);
+
+    // Not something a guest can do on anyone's behalf, their own included.
+    guest!.send({ t: 'admit', playerId: late.playerId });
+    expect((await guest!.next('error')).code).toBe('NOT_HOST');
+
+    host!.send({ t: 'admit', playerId: late.playerId });
+    const restarted = await late.next('matchStarted');
+    expect(restarted.room.players.find((p) => p.id === late.playerId)?.seat).toBeGreaterThanOrEqual(
+      0,
+    );
+    // And the people already playing kept theirs.
+    for (const client of clients) {
+      expect(
+        restarted.room.players.find((p) => p.id === client.playerId)?.seat,
+      ).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('tells the host when there is no seat to give, rather than restarting for nothing', async () => {
+    // A room holds eight and Gun Mayhem seats six, which is the one place those
+    // differ — so two of these seven are watching and neither can be let in.
+    const clients = await makeLobby(7);
+    const [host] = clients;
+
+    host!.send({ t: 'game', gameId: 'gunmayhem' });
+    host!.send({ t: 'start' });
+    const started = await host!.next('matchStarted');
+
+    const benched = started.room.players.find((p) => p.seat < 0)!;
+    expect(benched).toBeDefined();
+
+    host!.send({ t: 'admit', playerId: benched.id });
+    expect((await host!.next('error')).code).toBe('NO_SEAT_FREE');
+  });
+
   it('plays a whole match through to a winner and awards scores', async () => {
     const clients = await makeLobby(3);
     const [host] = clients;

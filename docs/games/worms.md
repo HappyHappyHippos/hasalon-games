@@ -227,6 +227,24 @@ that as the weapon being unreliable rather than as physics.
 - Only the active worm is predicted, and only when it is yours. Everything else
   goes through the shared `RemoteBodies` slide/snap rule. Knockback is never
   predicted — a blast only lands during `resolve`, when nothing is controllable.
+- **Whether you are still driving is a question about the present, and the frame
+  being drawn is not the present.** `Renderer.drawWorms` takes two snapshots: the
+  render-delayed one everything is *drawn* from, and the newest one that has
+  arrived. Prediction replays to now, so the phase that decides whether to
+  predict at all — and the state it replays from — come from the newest, never
+  from the drawn one. Reading the phase off the drawn snapshot kept replaying
+  held buttons as *controllable* for the whole render delay after the server had
+  stopped accepting them, so the driver watched their worm walk on past the end
+  of its own turn (~100 ms at `WALK_SPEED`) and then snap back, while everyone
+  else only ever saw the second position. "The worm ends the turn somewhere
+  different on every screen" is the shape that bug takes.
+- **A worm being predicted is dropped from `RemoteBodies` every frame.**
+  While the local worm is drawn from prediction the shared smoother is not being
+  fed, so its record of "where this was drawn last" ages by the length of the
+  whole turn. Handing the worm back at the end of the turn then looked like a
+  jump from *there* to the current position, and the smoother dutifully absorbed
+  it — sliding the worm back toward where the turn began, up to
+  `MAX_SMOOTHED_JUMP` of it, on the driver's screen only.
 
 ## Testing
 

@@ -28,6 +28,41 @@ import {
 } from '@mg/shared/dirt';
 import { dirtInput } from './input';
 
+/**
+ * Where the local car is *actually* pointing right now.
+ *
+ * The joystick is a heading control, so it has to subtract the car's heading
+ * from the one you are asking for — and the newest snapshot's `a` is not the
+ * car's heading, it is the heading a snapshot interval plus half a round trip
+ * ago. At `TURN_RATE` that is up to half a radian of swing already committed
+ * and not yet visible, which on a stick means asking for lock the car has
+ * already used and then having to unwind it: the car hunts either side of the
+ * line instead of settling on it.
+ *
+ * This is {@link DirtPredictor.update} without the sub-tick carry and without
+ * keeping the body — the same replay through the same `stepCar`, answering only
+ * the question the control needs. Cheap enough for the 60 Hz resample in
+ * `Controls.tsx`, and `trackGeometry` is memoised so rebuilding it costs
+ * nothing after the first call.
+ */
+export function predictCarAngle(server: DirtSnapshotCar, geometry: TrackGeometry, controllable: boolean): number {
+  const body: CarBody = {
+    x: server.x,
+    y: server.y,
+    angle: server.a,
+    vx: server.vx,
+    vy: server.vy,
+    steer: server.st,
+  };
+  const mods = carModsFromSnapshot(server);
+  const pending = dirtInput.since(server.ack);
+  const start = Math.max(0, pending.length - MAX_REPLAY_TICKS);
+  for (let i = start; i < pending.length; i += 1) {
+    stepCar(body, { steer: steerOf(pending[i]!.bits), controllable }, geometry, DT, mods);
+  }
+  return body.angle;
+}
+
 /** Past this the server has stopped acknowledging and replaying more is noise. */
 const MAX_REPLAY_TICKS = 24;
 /** A frame-to-frame jump this big is a correction or a recovery, not driving. */
@@ -103,7 +138,31 @@ export class DirtPredictor {
  * only the fractional remainder is carried linearly, because rounding to whole
  * ticks makes remote cars judder on a 120 Hz display.
  */
-export const MAX_ADVANCE_TICKS = 6;
+/**
+ * How far forward a remote car may be carried, in ticks.
+ *
+ * **This is a property of the link, not a taste.** It has to cover the worst
+ * honest distance between "when the server authored the snapshot we are
+ * holding" and "now": one-way delay, plus the wait for the next snapshot, plus
+ * jitter. To Israel that is 57 + 33 + 25 ≈ 115 ms before a single packet is
+ * lost, and one lost snapshot takes it to ~149 ms.
+ *
+ * It was 6 — a hundred milliseconds, under the floor of that budget — so the
+ * steady state hit the cap every interval. The car stopped dead partway through
+ * each gap and the whole missing stretch landed in one frame when the next
+ * snapshot arrived, which players reported in exactly those words: freeze, then
+ * teleport. Invisible on localhost, where the delay is a millisecond and the
+ * cap is never reached, which is why it reached them first.
+ *
+ * 12 covers a two-snapshot gap, and costs nothing measurable: swept from 6 to
+ * 18 over the simulated link, tracking error against the truth is flat
+ * (median 2.3 units, p95 4.4) — because above the link's staleness the cap
+ * simply stops being what decides anything. The headroom only engages during a
+ * stall, where drawing a car that is still moving beats one that has stopped.
+ * `remoteLag.test.ts` pins both ends: no frozen frame in the steady state, and
+ * the cap still exists so a long stall cannot fling a car round the course.
+ */
+export const MAX_ADVANCE_TICKS = 12;
 
 export function advanceCar(
   server: DirtSnapshotCar,

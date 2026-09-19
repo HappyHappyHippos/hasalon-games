@@ -6,13 +6,14 @@ import { socket } from '../net/socket';
 import { AppearancePicker } from '../ui/AppearancePicker';
 import { Avatar } from '../ui/Avatar';
 import { Button } from '../ui/Button';
-import { BellIcon } from '../ui/Icons';
+import { BellIcon, WhatsAppIcon } from '../ui/Icons';
 import { GamePicker } from '../ui/GamePicker';
 import { SeriesSetup } from '../ui/SeriesSetup';
 import { useVoice } from '../ui/useVoice';
 import { CLIENT_GAMES } from '../games/registry';
 import { resetIOSLobbyViewport } from '../ui/mobileViewport';
 import { msUntil } from '../net/clock';
+import { sfx } from '../audio';
 import { trackUi } from '../analytics';
 
 export function LobbyScreen(): JSX.Element {
@@ -84,33 +85,39 @@ export function LobbyScreen(): JSX.Element {
   // scoreboard, which is what it has been all along.
   const topScore = Math.max(0, ...room.players.map((p) => p.totalScore));
 
-  const copyLink = async (): Promise<void> => {
-    const link = `${location.origin}${location.pathname}#/room/${room.code}`;
-    // Counted on intent, not on success: cancelling the share sheet still says
-    // the host reached for the invite, and how rooms fill up is the question.
-    trackUi('invite');
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: document.title,
-          text: t.inviteShareText(room.code),
-          url: link,
-        });
-        return;
-      } catch (error) {
-        // Cancelling the native sheet is a complete action, not a clipboard failure.
-        if ((error as DOMException).name === 'AbortError') return;
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      // Clipboard blocked (insecure origin, permissions) — the code is on
-      // screen anyway, so this is only a convenience.
-      window.prompt(t.copyThisLink, link);
-    }
+  const inviteLink = `${location.origin}${location.pathname}#/room/${room.code}`;
+
+  /**
+   * The invite, as a link WhatsApp can be handed.
+   *
+   * The room link rides *inside* the message text rather than beside it: a
+   * `text` and a `url` are two fields and WhatsApp only ever carries one, so
+   * anything passed alongside is dropped on the floor.
+   */
+  const whatsappHref = `https://wa.me/?text=${encodeURIComponent(
+    `${t.inviteShareText(room.code)} ${inviteLink}`,
+  )}`;
+
+  /**
+   * Copy the link too, quietly, on the way past.
+   *
+   * There is one invite control and it opens WhatsApp, because that is how
+   * every invite here is actually sent. Putting the link on the clipboard as
+   * well costs nothing and is the whole of what the second button used to do,
+   * so nobody on a laptop — or without WhatsApp — has lost anything.
+   *
+   * Best-effort by design: the clipboard needs a focused document and the tap
+   * is in the middle of handing the page to another app, so this losing the
+   * race is normal and is not a failure of the invite.
+   */
+  const alsoCopy = (): void => {
+    navigator.clipboard
+      ?.writeText(inviteLink)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1800);
+      })
+      .catch(() => undefined);
   };
 
   return (
@@ -262,7 +269,31 @@ export function LobbyScreen(): JSX.Element {
                 {room.code}
               </p>
             </div>
-            <Button onClick={() => void copyLink()}>{copied ? t.copied : t.copyInvite}</Button>
+            {/*
+              An anchor, deliberately, and not a button that calls `window.open`.
+              Opening a window from script is a popup — mobile browsers block it
+              on a whim, and `wa.me` never got the chance to hand the message to
+              the app, which is what "the WhatsApp sending doesn't work" was.
+              A person clicking a real link is a navigation the blocker never
+              touches, and the OS intercepts `wa.me` and switches to WhatsApp
+              itself, leaving the lobby exactly where it was in the other tab.
+            */}
+            <a
+              className="btn btn--primary btn--md lobby__invite"
+              href={whatsappHref}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() => {
+                sfx.click();
+                // Counted on intent, not on delivery: reaching for the invite is
+                // the thing worth knowing, and we cannot see the other end.
+                trackUi('invite');
+                alsoCopy();
+              }}
+            >
+              <WhatsAppIcon />
+              <span>{copied ? t.copied : t.inviteWhatsApp}</span>
+            </a>
           </header>
 
           <section className="lobby__choice">

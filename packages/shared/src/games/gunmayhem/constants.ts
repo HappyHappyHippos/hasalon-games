@@ -25,9 +25,21 @@ export const BLAST_BOTTOM = ARENA_HEIGHT + 360;
 // Body
 // ---------------------------------------------------------------------------
 
-/** x/y are the centre of this box. */
-export const PLAYER_WIDTH = 30;
-export const PLAYER_HEIGHT = 44;
+/**
+ * x/y are the centre of this box.
+ *
+ * 20% larger than the 30x44 this shipped with. The renderer draws the character
+ * from these two numbers rather than from its own, so the hitbox and the
+ * drawing cannot disagree — which is the property worth keeping here, and the
+ * reason a size change is one edit rather than two that drift.
+ *
+ * Note it is a real gameplay change as well as a visual one: a bigger character
+ * is easier to hit and has less room through a gap. `trap.test.ts` walks every
+ * walkable position on every stage and is the thing that says whether a stage
+ * still works at this size.
+ */
+export const PLAYER_WIDTH = 36;
+export const PLAYER_HEIGHT = 53;
 export const PLAYER_HALF_W = PLAYER_WIDTH / 2;
 export const PLAYER_HALF_H = PLAYER_HEIGHT / 2;
 

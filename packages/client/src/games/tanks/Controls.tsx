@@ -5,6 +5,8 @@ import { attachTanksInput, tanksInput } from './input';
 interface Props {
   mySeat: number;
   onButton: (bit: number, down: boolean) => void;
+  /** Sets the whole turn field at once — direction and magnitude together. */
+  onTurn: (bits: number) => void;
 }
 
 /**
@@ -12,7 +14,7 @@ interface Props {
  * Ensures the shoot button is clamped within visible viewport safe-area bounds
  * so it is never pushed off-screen when maximized on Android.
  */
-export function Controls({ mySeat, onButton }: Props): JSX.Element {
+export function Controls({ mySeat, onButton, onTurn }: Props): JSX.Element {
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -55,7 +57,7 @@ export function Controls({ mySeat, onButton }: Props): JSX.Element {
 
   return (
     <div ref={wrapperRef} className="tanks-controls-wrapper">
-      <TanksTouchPad mySeat={mySeat} onButton={onButton} />
+      <TanksTouchPad mySeat={mySeat} onButton={onButton} onTurn={onTurn} />
     </div>
   );
 }

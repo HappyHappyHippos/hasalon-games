@@ -83,8 +83,14 @@ export const BRAID_FRACTION = 0.3;
  */
 export const WALL_SEPARATE_PASSES = 4;
 
-export const MAX_SPEED = 135;
-export const REVERSE_SPEED = 85;
+/**
+ * Both up 15% from 135/85. Reverse keeps its ratio to forward deliberately —
+ * backing out of a dead end is half the game in a maze this tight, and a tank
+ * that reverses proportionally slower than it drives turns every wrong turn
+ * into a longer wait than the mistake deserves.
+ */
+export const MAX_SPEED = 155;
+export const REVERSE_SPEED = 98;
 /** ~120 ms to full speed: weighty, but not laggy. */
 export const ACCEL = 1200;
 export const DECEL = 1600;

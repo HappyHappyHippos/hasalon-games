@@ -112,14 +112,19 @@ export const MIN_PLAYERS = 2;
 export const MAX_PLAYERS = 8;
 
 /**
- * Default target score is playerCount * this.
+ * Default target score is `(playerCount - 1)` times this.
  *
  * A round pays the survivor one point per player who died before them, so a
- * clean sweep of a full room is `playerCount - 1` points. Multiplying by the
- * head count rather than the opponent count keeps the match roughly this many
- * rounds long whatever the room size, which is the number people actually feel.
+ * clean sweep of the room is exactly `playerCount - 1` points — one perfect
+ * round. The target is therefore *ten perfect rounds*, at every room size,
+ * which is a rule you can say out loud and a match length that does not change
+ * shape when a ninth friend does or does not turn up.
+ *
+ * It used to multiply by the head count instead, which quietly made bigger
+ * rooms longer: eight players needed 64 points off a maximum of 7 a round,
+ * where two needed 16 off a maximum of 1. Same formula, twice the match.
  */
-export const TARGET_SCORE_PER_PLAYER = 8;
+export const TARGET_SCORE_PER_OPPONENT = 10;
 
 // ---------------------------------------------------------------------------
 // Powerups

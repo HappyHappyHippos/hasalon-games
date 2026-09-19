@@ -1,31 +1,19 @@
 /**
- * The three powerups.
+ * The two powerups.
  *
- * One table, so a fourth kind is one entry plus whatever it does at the point
- * it applies. Anything that touches movement has to go through `carMods`,
- * because that is the only channel the client predictor can see — a speed boost
- * applied anywhere else would be a boost the local car does not feel until the
- * next snapshot lands.
+ * One table, so a third kind is one entry plus whatever it does at the point it
+ * applies. Anything that touches movement has to go through `carMods`, because
+ * that is the only channel the client predictor can see — a speed boost applied
+ * anywhere else would be a boost the local car does not feel until the next
+ * snapshot lands.
  *
  * The set is deliberately small and deliberately shaped: one that helps you
- * (`speed`), one that hurts whoever is behind (`mine`), and one that hurts
- * whoever is ahead (`reverse`). That covers "I am winning and want to stay
- * there" and "I am losing and need something to happen" without adding a
- * fourth thing to read at 430 units a second.
- *
- * None of them touch driving skill directly. A boost is still a car you have to
- * keep on the road, a mine is still avoidable, and reversed steering is still
- * steering — see the note on `REVERSE_TICKS`.
+ * (`speed`) and one that hurts whoever is behind (`mine`). Neither touches
+ * driving skill directly — a boost is still a car you have to keep on the road,
+ * and a mine is still avoidable.
  */
 
-import {
-  BOOST_ACCEL_MUL,
-  BOOST_GRIP_MUL,
-  BOOST_SPEED_MUL,
-  BOOST_TICKS,
-  REVERSE_TICKS,
-  SPIN_TICKS,
-} from './constants';
+import { BOOST_ACCEL_MUL, BOOST_GRIP_MUL, BOOST_SPEED_MUL, BOOST_TICKS, SPIN_TICKS } from './constants';
 import type { CarMods } from './physics';
 import type { DirtCarState, DirtPowerup } from './types';
 
@@ -36,19 +24,18 @@ export interface PowerupSpec {
   /** Pickup colour — the renderer draws the glyph itself, no emoji. */
   color: string;
   /**
-   * Who it lands on. `self` is a buff, `others` is everyone still racing except
-   * the user, and `trail` leaves something behind on the track.
+   * Who it lands on. `self` is a buff and `trail` leaves something behind on
+   * the track.
    */
-  target: 'self' | 'others' | 'trail';
+  target: 'self' | 'trail';
 }
 
 export const DIRT_POWERUPS: Record<DirtPowerup, PowerupSpec> = {
   speed: { kind: 'speed', label: 'Boost', color: '#7cff6b', target: 'self' },
   mine: { kind: 'mine', label: 'Mine', color: '#ffd447', target: 'trail' },
-  reverse: { kind: 'reverse', label: 'Reverse', color: '#c77dff', target: 'others' },
 };
 
-export const DIRT_POWERUP_KINDS: DirtPowerup[] = ['speed', 'mine', 'reverse'];
+export const DIRT_POWERUP_KINDS: DirtPowerup[] = ['speed', 'mine'];
 
 /**
  * The movement half, shared with the client predictor.
@@ -62,7 +49,6 @@ export function carMods(car: {
   boostTicks: number;
   spinTicks: number;
   spinDir: number;
-  reverseTicks: number;
 }): CarMods {
   const boosting = car.boostTicks > 0;
   return {
@@ -72,22 +58,15 @@ export function carMods(car: {
     // straight, which is the one place it is least interesting.
     gripMul: boosting ? BOOST_GRIP_MUL : 1,
     spin: car.spinTicks > 0 ? car.spinDir : 0,
-    reversed: car.reverseTicks > 0,
   };
 }
 
 /** The same, from the snapshot's short keys, for the predictor. */
-export function carModsFromSnapshot(car: {
-  bo?: number;
-  sp?: number;
-  sd?: number;
-  rv?: number;
-}): CarMods {
+export function carModsFromSnapshot(car: { bo?: number; sp?: number; sd?: number }): CarMods {
   return carMods({
     boostTicks: car.bo ?? 0,
     spinTicks: car.sp ?? 0,
     spinDir: car.sd ?? 1,
-    reverseTicks: car.rv ?? 0,
   });
 }
 
@@ -95,7 +74,6 @@ export function carModsFromSnapshot(car: {
 export function tickEffects(car: DirtCarState): void {
   if (car.boostTicks > 0) car.boostTicks -= 1;
   if (car.spinTicks > 0) car.spinTicks -= 1;
-  if (car.reverseTicks > 0) car.reverseTicks -= 1;
   if (car.ghostTicks > 0) car.ghostTicks -= 1;
 }
 
@@ -118,13 +96,3 @@ export function grantBoost(car: DirtCarState): void {
   car.boostTicks = BOOST_TICKS;
 }
 
-/**
- * Refresh rather than stack.
- *
- * Two `reverse` powerups landing a second apart should leave one full duration
- * on the clock, not two — otherwise a pair of players holding the same item can
- * lock the leader's steering for a quarter of a race between them.
- */
-export function applyReverse(car: DirtCarState): void {
-  car.reverseTicks = Math.max(car.reverseTicks, REVERSE_TICKS);
-}

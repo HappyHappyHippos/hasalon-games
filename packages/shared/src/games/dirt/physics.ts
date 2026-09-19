@@ -46,7 +46,6 @@ import {
   OFFROAD_GRIP,
   OFFROAD_TOP_SPEED,
   SPIN_RATE,
-  SPIN_SPEED_MUL,
   TRACK_GRIP,
   TRACK_TOP_SPEED,
   TURN_FULL_SPEED,
@@ -94,8 +93,6 @@ export interface CarMods {
    * spins the same way the server does.
    */
   spin: number;
-  /** The reverse powerup: left and right swap. */
-  reversed: boolean;
 }
 
 /** A body at rest, for tests and for anything that needs a blank car. */
@@ -104,7 +101,6 @@ export const NO_CAR_MODS: CarMods = {
   accelMul: 1,
   gripMul: 1,
   spin: 0,
-  reversed: false,
 };
 
 export interface CarStep {
@@ -162,8 +158,7 @@ export function stepCar(
     // there, which is most of the difference between twitchy and planted. It
     // keeps easing when the car is not controllable too, so a car crossing the
     // line does not coast to a halt with the wheel locked over.
-    let want = input.controllable ? Math.max(-1, Math.min(1, input.steer)) : 0;
-    if (mods.reversed) want = -want;
+    const want = input.controllable ? Math.max(-1, Math.min(1, input.steer)) : 0;
     body.steer = approach(body.steer, want, STEER_RATE * dt);
 
     if (body.steer !== 0) {
@@ -205,8 +200,12 @@ export function stepCar(
   // There is no accelerator. A car that is being driven is always trying to
   // reach the top speed of whatever it is standing on.
   if (mods.spin !== 0) {
-    // Spun out. Still rolling, nowhere near racing speed, and no say in it.
-    forward = approach(forward, topSpeed * SPIN_SPEED_MUL, OFFROAD_BLEED * dt);
+    // Spun out, but not slowed: a mine takes the wheel away, and that is the
+    // whole punishment. It used to also drag the car down to a third of racing
+    // speed, which stacked a slow on top of a loss of control and turned one
+    // mine into most of a lap. Cornering drag does plenty on its own — a car
+    // rotating this fast is sideways, and sideways scrubs speed.
+    forward = approach(forward, topSpeed, CAR_ACCEL * mods.accelMul * dt);
   } else if (input.controllable) {
     forward =
       forward > topSpeed

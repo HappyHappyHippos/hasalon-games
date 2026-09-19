@@ -52,8 +52,17 @@ function body(overrides: Partial<TankBody> = {}): TankBody {
   return { x: CELL * 2.5, y: CELL * 1.5, angle: 0, speed: 0, ...overrides };
 }
 
-function input(overrides: Partial<TankMoveInput> = {}): TankMoveInput {
-  return { fwd: false, back: false, left: false, right: false, controllable: true, ...overrides };
+/**
+ * The tests read better as "hold right" than as "turn: 1", so the helper still
+ * takes the two directions and folds them onto the analogue axis the sim now
+ * consumes. `turn` can also be given directly, for the proportional cases.
+ */
+function input(
+  overrides: Partial<TankMoveInput> & { left?: boolean; right?: boolean } = {},
+): TankMoveInput {
+  const { left, right, ...rest } = overrides;
+  const turn = rest.turn ?? ((right ? 1 : 0) - (left ? 1 : 0));
+  return { fwd: false, back: false, turn, controllable: true, ...rest };
 }
 
 function run(b: TankBody, maze: Maze, ticks: number, i: TankMoveInput = input()): void {
